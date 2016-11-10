@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+    <title>Bootstrap Closure JS Unit Tests - bootstrap.Alert</title>
+    <meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.dom');
+goog.require('bootstrap.Alert');
+</script>
+<body>
+
+<div id="testzone"></div>
+
+<script>
+var dom = goog.dom;
+
+var Alert = bootstrap.Alert;
+
+var x;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_it() {
+    var zone = dom.getElement('testzone');
+
+    x = new Alert('<a class="close" data-dismiss="alert" href="#">&times;</a><strong>Warning!</strong> This is an alert.');
+    x.decorate(zone);
+};
+</script>
+
+</body>
+</html>
