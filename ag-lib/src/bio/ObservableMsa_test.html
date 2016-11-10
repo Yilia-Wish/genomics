@@ -1,0 +1,899 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - ag.bio.ObservableMsa</title>
+    <meta charset='utf-8'>
+</head>
+
+<script src='../goog/base.js'></script>
+<script src='../deps.js'></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.math.Coordinate');
+goog.require('ag.bio.BioString');
+goog.require('ag.bio.Subseq');
+goog.require('ag.bio.grammar');
+goog.require('ag.bio.Msa');
+goog.require('ag.bio.MsaSubseqChange');
+goog.require('ag.bio.ObservableMsa');
+goog.require('ag.core.ClosedIntRange');
+goog.require('ag.core.UnitRect');
+goog.require('ag.meta.SignalSpy');
+</script>
+<body>
+<script>
+// Aliases
+var grammar = ag.bio.grammar;
+var BioString = ag.bio.BioString;
+var ClosedIntRange = ag.core.ClosedIntRange;
+var Msa = ag.bio.Msa;
+var ObservableMsa = ag.bio.ObservableMsa;
+var Subseq = ag.bio.Subseq;
+var UnitRect = ag.core.UnitRect;
+var MsaSubseqChange = ag.bio.MsaSubseqChange;
+var SignalSpy = ag.meta.SignalSpy;
+var TrimExtOp = MsaSubseqChange.TrimExtOp;
+
+var Coordinate = goog.math.Coordinate;
+var SignalType = ObservableMsa.SignalType;
+
+function assertSubseqChangesEqual(a, b) {
+    assertEquals(a.length, b.length);
+    for (var i=0; i<a.length; i++)
+        assertTrue(a[i].eq(b[i]));
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_append() {
+    var seq1 = "ABCDEF";
+    var subseq1 = new Subseq("BC--DE", seq1);
+
+    var seq2 = "GHIJKL";
+    var subseq2 = new Subseq("GH--IJ", seq2);
+
+    var seq3 = "CDEF";
+    var subseq3 = new Subseq("--CD", seq3);
+
+    var msa = new ObservableMsa();
+
+    var spyRowsAboutToBeInserted = new SignalSpy(msa, SignalType.ROWS_ABOUT_TO_BE_INSERTED);
+    var spyRowsInserted = new SignalSpy(msa, SignalType.ROWS_INSERTED);
+    var spyArguments;
+
+    assertTrue(msa.append(subseq1));
+    assertTrue(msa.append(subseq2));
+    assertFalse(msa.append(subseq3));
+
+    assertEquals(2, spyRowsAboutToBeInserted.size());
+    assertEquals(2, spyRowsInserted.size());
+
+    spyArguments = spyRowsAboutToBeInserted.signals()[0];
+    var insertRange = spyArguments[0];
+    assertTrue(insertRange.eq(new ClosedIntRange(1, 1)));
+    assertTrue(insertRange.eq(spyRowsInserted.signals()[0][0]));
+    spyArguments = spyRowsAboutToBeInserted.signals()[1];
+    insertRange = spyArguments[0];
+    assertTrue(insertRange.eq(new ClosedIntRange(2, 2)));
+    assertTrue(insertRange.eq(spyRowsInserted.signals()[1][0]));
+    spyRowsInserted.clear();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_clear() {
+    var msa = new ObservableMsa();
+    var spyRowsAboutToBeRemoved = new SignalSpy(msa, SignalType.ROWS_ABOUT_TO_BE_REMOVED);
+    var spyRowsRemoved = new SignalSpy(msa, SignalType.ROWS_REMOVED);
+
+    msa.clear();
+    assertTrue(spyRowsAboutToBeRemoved.isEmpty());
+    assertTrue(spyRowsRemoved.isEmpty());
+
+    var seq = "ABCDEF";
+    var subseq = new Subseq("BC--DE", seq);
+
+    var seq2 = "GHIJKL";
+    var subseq2 = new Subseq("GH--IJ", seq2);
+
+    assertTrue(msa.append(subseq));
+    assertTrue(msa.append(subseq2));
+
+    msa.clear();
+
+    assertEquals(1, spyRowsAboutToBeRemoved.size());
+    assertEquals(1, spyRowsRemoved.size());
+    var range = spyRowsAboutToBeRemoved.signals()[0][0];
+    assertTrue(range.eq(new ClosedIntRange(1, 2)));
+    var range = spyRowsRemoved.signals()[0][0];
+    assertTrue(range.eq(new ClosedIntRange(1, 2)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_collapseLeft() {
+    var seq = "ABCDEF";
+
+    var subseq1 = new Subseq("A-BC-D-E", seq);
+    var subseq2 = new Subseq("-A-BCD--", seq);
+    var subseq3 = new Subseq("--A---BC", seq);
+    var subseq1a = new Subseq("A-BC-D-E", seq);
+    var subseq2a = new Subseq("-A-BCD--", seq);
+    var subseq3a = new Subseq("--A---BC", seq);
+
+    var oMsa = new ObservableMsa();
+    assertTrue(oMsa.append(subseq1));
+    assertTrue(oMsa.append(subseq2));
+    assertTrue(oMsa.append(subseq3));
+
+    var msa = new Msa();
+    assertTrue(msa.append(subseq1a));
+    assertTrue(msa.append(subseq2a));
+    assertTrue(msa.append(subseq3a));
+
+    var spyAboutToBeCollapsedLeft = new SignalSpy(oMsa, SignalType.ABOUT_TO_BE_COLLAPSED_LEFT);
+    var spyCollapsedLeft = new SignalSpy(oMsa, SignalType.COLLAPSED_LEFT);
+    var spySubseqsBorderChanged = new SignalSpy(oMsa, SignalType.SUBSEQS_CHANGED);
+    var spyArguments;
+
+    var collapseRect = UnitRect.createFromCoordinates(new Coordinate(4, 3), new Coordinate(1, 1));
+    var actualChanges = oMsa.collapseLeft(collapseRect);
+    var expectedChanges = msa.collapseLeft(collapseRect);
+    assertSubseqChangesEqual(expectedChanges, actualChanges);
+
+    assertEquals(1, spyAboutToBeCollapsedLeft.size());
+    assertEquals(1, spyCollapsedLeft.size());
+    spyArguments = spyAboutToBeCollapsedLeft.signals()[0];
+    assertTrue(spyArguments[0].eq(collapseRect.normalized()));
+    spyArguments = spyCollapsedLeft.signals()[0];
+    assertTrue(spyArguments[0].eq(collapseRect.normalized()));
+
+    assertEquals(1, spySubseqsBorderChanged.size());
+    assertSubseqChangesEqual(spySubseqsBorderChanged.signals()[0][0], expectedChanges);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_collapseRight() {
+    var seq = "ABCDEF";
+
+    var subseq1 = new Subseq("A-BC-D-E", seq);
+    var subseq2 = new Subseq("-A-BCD--", seq);
+    var subseq3 = new Subseq("--A---BC", seq);
+
+    var subseq1a = new Subseq("A-BC-D-E", seq);
+    var subseq2a = new Subseq("-A-BCD--", seq);
+    var subseq3a = new Subseq("--A---BC", seq);
+
+    var oMsa = new ObservableMsa();
+    assertTrue(oMsa.append(subseq1));
+    assertTrue(oMsa.append(subseq2));
+    assertTrue(oMsa.append(subseq3));
+
+    var msa = new Msa();
+    assertTrue(msa.append(subseq1a));
+    assertTrue(msa.append(subseq2a));
+    assertTrue(msa.append(subseq3a));
+
+    var spyAboutToBeCollapsedRight = new SignalSpy(oMsa, SignalType.ABOUT_TO_BE_COLLAPSED_RIGHT);
+    var spyCollapsedRight = new SignalSpy(oMsa, SignalType.COLLAPSED_RIGHT);
+    var spySubseqsBorderChanged = new SignalSpy(oMsa, SignalType.SUBSEQS_CHANGED);
+    var spyArguments;
+
+    var collapseRect = UnitRect.createFromCoordinates(new Coordinate(4, 3), new Coordinate(1, 1));
+    var actualChanges = oMsa.collapseRight(collapseRect);
+    var expectedChanges = msa.collapseRight(collapseRect);
+    assertSubseqChangesEqual(expectedChanges, actualChanges);
+
+    assertEquals(1, spyAboutToBeCollapsedRight.size());
+    assertEquals(1, spyCollapsedRight.size());
+    spyArguments = spyAboutToBeCollapsedRight.signals()[0];
+    assertTrue(spyArguments[0].eq(collapseRect.normalized()));
+    spyArguments = spyCollapsedRight.signals()[0];
+    assertTrue(spyArguments[0].eq(collapseRect.normalized()));
+
+    assertEquals(1, spySubseqsBorderChanged.size());
+    assertSubseqChangesEqual((spySubseqsBorderChanged.signals()[0][0]), expectedChanges);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_extendLeft() {
+    var seq = "ABCDEF";
+
+    var subseq = new Subseq("---C-DE--", seq);
+    var subseq2 = new Subseq("---C-DE--", seq);
+
+    var oMsa = new ObservableMsa();
+    var msa = new Msa();
+    assertTrue(msa.append(subseq));
+    assertTrue(oMsa.append(subseq2));
+
+    var spySubseqsBorderChanged = new SignalSpy(oMsa, SignalType.SUBSEQS_CHANGED);
+    var actualChanges = oMsa.extendLeft(4, new ClosedIntRange(1, 1));
+    assertEquals(0, actualChanges.length);
+    assertTrue(spySubseqsBorderChanged.isEmpty());
+
+    var expectedChanges = msa.extendLeft(1, new ClosedIntRange(1, 1));
+    actualChanges = oMsa.extendLeft(1, new ClosedIntRange(1, 1));
+    assertSubseqChangesEqual(expectedChanges, actualChanges);
+    assertEquals(1, spySubseqsBorderChanged.size());
+    assertSubseqChangesEqual(spySubseqsBorderChanged.signals()[0][0], expectedChanges);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_extendRight() {
+    var seq = "ABCDEFGH";
+
+    var subseq = new Subseq("---C-DE--", seq);
+    var subseq2 = new Subseq("---C-DE--", seq);
+
+    var oMsa = new ObservableMsa();
+    var msa = new Msa();
+    assertTrue(msa.append(subseq));
+    assertTrue(oMsa.append(subseq2));
+
+    var spySubseqsBorderChanged = new SignalSpy(oMsa, SignalType.SUBSEQS_CHANGED);
+    var actualChanges = oMsa.extendRight(1, new ClosedIntRange(1, 1));
+    assertEquals(0, actualChanges.length);
+    assertTrue(spySubseqsBorderChanged.isEmpty());
+
+    var expectedChanges = msa.extendRight(9, new ClosedIntRange(1, 1));
+    actualChanges = oMsa.extendRight(9, new ClosedIntRange(1, 1));
+    assertSubseqChangesEqual(expectedChanges, actualChanges);
+    assertEquals(1, spySubseqsBorderChanged.size());
+    assertSubseqChangesEqual(spySubseqsBorderChanged.signals()[0][0], expectedChanges);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_insert() {
+    var seq = "ABCDEF";
+    var seq2 = "GHIJKL";
+    var seq3 = "CDEF";
+
+    var subseq = new Subseq("BC--DE", seq);
+    var subseq2 = new Subseq("GH--IJ", seq2);
+    var subseq3 = new Subseq("--CDEF", seq3);
+
+    var msa = new ObservableMsa();
+
+    var spyRowsAboutToBeInserted = new SignalSpy(msa, SignalType.ROWS_ABOUT_TO_BE_INSERTED);
+    var spyRowsInserted = new SignalSpy(msa, SignalType.ROWS_INSERTED);
+    var spyArguments;
+
+    // Test: insert at beginning
+    assertTrue(msa.insert(subseq, 1));
+    assertTrue(msa.insert(subseq2, 1));
+    assertTrue(msa.insert(subseq3, 1));
+
+    assertEquals(3, spyRowsAboutToBeInserted.size());
+    assertEquals(3, spyRowsInserted.size());
+    spyArguments = spyRowsAboutToBeInserted.signals()[0];
+    var insertRange = spyArguments[0];
+    assertTrue(insertRange.eq(new ClosedIntRange(1, 1)));
+    assertTrue(insertRange.eq(spyRowsInserted.signals()[0][0]));
+    spyArguments = spyRowsAboutToBeInserted.signals()[1];
+    insertRange = spyArguments[0];
+    assertTrue(insertRange.eq(new ClosedIntRange(1, 1)));
+    assertTrue(insertRange.eq(spyRowsInserted.signals()[1][0]));
+    spyArguments = spyRowsAboutToBeInserted.signals()[2];
+    insertRange = spyArguments[0];
+    assertTrue(insertRange.eq(new ClosedIntRange(1, 1)));
+    assertTrue(insertRange.eq(spyRowsInserted.signals()[2][0]));
+    spyRowsInserted.clear();
+
+    msa.clear();
+
+    subseq = new Subseq("BC--DE", seq);
+    subseq2 = new Subseq("GH--IJ", seq2);
+    subseq3 = new Subseq("--CDEF", seq3);
+
+    // Test: insert in the middle
+    assertTrue(msa.append(subseq));
+    assertTrue(msa.append(subseq3));
+
+    spyRowsAboutToBeInserted.clear();
+    spyRowsInserted.clear();
+
+    assertTrue(msa.insert(subseq2, 2));
+    assertEquals(1, spyRowsAboutToBeInserted.size());
+    assertEquals(1, spyRowsInserted.size());
+    spyArguments = spyRowsAboutToBeInserted.signals()[0];
+    insertRange = spyArguments[0];
+    assertTrue(insertRange.eq(new ClosedIntRange(2, 2)));
+    assertTrue(insertRange.eq(spyRowsInserted.signals()[0][0]));
+    spyRowsAboutToBeInserted.clear();
+    spyRowsInserted.clear();
+
+    // Test: insert at the end
+    msa.clear();
+
+    subseq = new Subseq("BC--DE", seq);
+    subseq2 = new Subseq("GH--IJ", seq2);
+    subseq3 = new Subseq("--CDEF", seq3);
+
+    assertTrue(msa.insert(subseq, msa.rowCount()+1));
+    assertTrue(msa.insert(subseq2, msa.rowCount()+1));
+    assertTrue(msa.insert(subseq3, msa.rowCount()+1));
+
+    assertEquals(3, spyRowsAboutToBeInserted.size());
+    assertEquals(3, spyRowsInserted.size());
+    spyArguments = spyRowsAboutToBeInserted.signals()[0];
+    insertRange = spyArguments[0];
+    assertTrue(insertRange.eq(new ClosedIntRange(1, 1)));
+    assertTrue(insertRange.eq(spyRowsInserted.signals()[0][0]));
+    spyArguments = spyRowsAboutToBeInserted.signals()[1];
+    insertRange = spyArguments[0];
+    assertTrue(insertRange.eq(new ClosedIntRange(2, 2)));
+    assertTrue(insertRange.eq(spyRowsInserted.signals()[1][0]));
+    spyArguments = spyRowsAboutToBeInserted.signals()[2];
+    insertRange = spyArguments[0];
+    assertTrue(insertRange.eq(new ClosedIntRange(3, 3)));
+    assertTrue(insertRange.eq(spyRowsInserted.signals()[2][0]));
+    spyRowsInserted.clear();
+};
+
+function test_insert_multiple() {
+    var seq1 = "ABCDEF";
+    var subseqs = [];
+    for (var i=0; i<6; ++i)
+            subseqs.push(new Subseq(seq1));
+
+    var msa = new ObservableMsa();
+
+    var spyRowsAboutToBeInserted = new SignalSpy(msa, SignalType.ROWS_ABOUT_TO_BE_INSERTED);
+    var spyRowsInserted = new SignalSpy(msa, SignalType.ROWS_INSERTED);
+    var spyArguments;
+
+    assertTrue(msa.insert(subseqs, 1));
+    for (var i=0; i< 6; ++i)
+        assertTrue(msa.at(i+1) === subseqs[i]);
+
+    assertEquals(1, spyRowsAboutToBeInserted.size());
+    spyArguments = spyRowsAboutToBeInserted.signals()[0];
+    var insertRange = spyArguments[0];
+    assertTrue(insertRange.eq(new ClosedIntRange(1, 6)));
+    assertTrue(insertRange.eq(spyRowsInserted.signals()[0][0]));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_insertGapColumns() {
+    var seq1 = "ABCDEF";
+    var subseq = new Subseq(seq1);
+
+    var msa = new ObservableMsa();
+    assertTrue(msa.append(subseq));
+
+    var spyGapColumnsAboutToBeInserted = new SignalSpy(msa, SignalType.GAP_COLUMNS_ABOUT_TO_BE_INSERTED);
+    var spyGapColumnsInserted = new SignalSpy(msa, SignalType.GAP_COLUMNS_INSERTED);
+
+    // Test: inserting gap columns at any position with n = 0, does nothing
+    for (var i=1; i<= msa.columnCount()+1; ++i) {
+        msa.insertGapColumns(i, 0);
+        assertTrue(spyGapColumnsAboutToBeInserted.isEmpty());
+        assertTrue(spyGapColumnsInserted.isEmpty());
+    }
+
+    msa.insertGapColumns(1, 1);
+    assertEquals(1, spyGapColumnsAboutToBeInserted.size());
+    assertEquals(1, spyGapColumnsInserted.size());
+    assertTrue(new ClosedIntRange(1, 1).eq(spyGapColumnsAboutToBeInserted.signals()[0][0]));
+    assertTrue(new ClosedIntRange(1, 1).eq(spyGapColumnsInserted.signals()[0][0]));
+    spyGapColumnsAboutToBeInserted.clear();
+    spyGapColumnsInserted.clear();
+
+    msa.insertGapColumns(4, 3);
+    assertEquals(1, spyGapColumnsAboutToBeInserted.size());
+    assertEquals(1, spyGapColumnsInserted.size());
+    assertTrue(new ClosedIntRange(4, 6).eq(spyGapColumnsAboutToBeInserted.signals()[0][0]));
+    assertTrue(new ClosedIntRange(4, 6).eq(spyGapColumnsInserted.signals()[0][0]));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_levelLeft() {
+    var seq = "ABCDEFGH";
+    var subseq = new Subseq("--CD-EF--", seq);
+    var subseq2 = new Subseq("--CD-EF--", seq);
+
+    var msa = new Msa();
+    var oMsa = new ObservableMsa();
+    assertTrue(oMsa.append(subseq));
+    assertTrue(msa.append(subseq2));
+
+    var spySubseqsBorderChanged = new SignalSpy(oMsa, SignalType.SUBSEQS_CHANGED);
+    var actualChanges = oMsa.levelLeft(3, new ClosedIntRange(1, 1));
+    assertEquals(0, actualChanges.length);
+    assertTrue(spySubseqsBorderChanged.isEmpty());
+
+    var expectedChanges = msa.levelLeft(1, new ClosedIntRange(1, 1));
+    actualChanges = oMsa.levelLeft(1, new ClosedIntRange(1, 1));
+    assertSubseqChangesEqual(expectedChanges, actualChanges);
+    assertEquals(1, spySubseqsBorderChanged.size());
+    assertSubseqChangesEqual(spySubseqsBorderChanged.signals()[0][0], expectedChanges);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_levelRight() {
+    var seq = "ABCDEFGH";
+    var subseq = new Subseq("--CD-EF--", seq);
+    var subseq2 = new Subseq("--CD-EF--", seq);
+
+    var msa = new Msa();
+    var oMsa = new ObservableMsa();
+    assertTrue(oMsa.append(subseq));
+    assertTrue(msa.append(subseq2));
+
+    var spySubseqsBorderChanged = new SignalSpy(oMsa, SignalType.SUBSEQS_CHANGED);
+    var actualChanges = oMsa.levelRight(7, new ClosedIntRange(1, 1));
+    assertEquals(0, actualChanges.length);
+    assertTrue(spySubseqsBorderChanged.isEmpty());
+
+    var expectedChanges = msa.levelRight(5, new ClosedIntRange(1, 1));
+    actualChanges = oMsa.levelRight(5, new ClosedIntRange(1, 1));
+    assertSubseqChangesEqual(expectedChanges, actualChanges);
+    assertEquals(1, spySubseqsBorderChanged.size());
+    assertSubseqChangesEqual(spySubseqsBorderChanged.signals()[0][0], expectedChanges);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_moveRow() {
+    var seq1 = "ABCDEF";
+    var subseq1 = new Subseq("BC--DE", seq1);
+    var subseq2 = new Subseq("AB--CD", seq1);
+
+    var msa = new ObservableMsa();
+    assertTrue(msa.append(subseq1));
+    assertTrue(msa.append(subseq2));
+
+    var spyRowsAboutToBeMoved = new SignalSpy(msa, SignalType.ROWS_ABOUT_TO_BE_MOVED);
+    var spyRowsMoved = new SignalSpy(msa, SignalType.ROWS_MOVED);
+
+    msa.moveRow(1, 1);
+    msa.moveRow(2, 2);
+    assertTrue(spyRowsAboutToBeMoved.isEmpty());
+    assertTrue(spyRowsMoved.isEmpty());
+
+    msa.moveRow(1, 2);
+    assertTrue(new ClosedIntRange(1, 1).eq(spyRowsAboutToBeMoved.signals()[0][0]));
+    assertEquals(2, spyRowsAboutToBeMoved.signals()[0][1]);
+    assertTrue(new ClosedIntRange(1, 1).eq(spyRowsMoved.signals()[0][0]));
+    assertEquals(2, spyRowsMoved.signals()[0][1]);
+    spyRowsAboutToBeMoved.clear();
+    spyRowsMoved.clear();
+
+    msa.moveRow(2, 1);
+    assertTrue(new ClosedIntRange(2, 2).eq(spyRowsAboutToBeMoved.signals()[0][0]));
+    assertEquals(1, spyRowsAboutToBeMoved.signals()[0][1]);
+    assertTrue(new ClosedIntRange(2, 2).eq(spyRowsMoved.signals()[0][0]));
+    assertEquals(1, spyRowsMoved.signals()[0][1]);
+    spyRowsAboutToBeMoved.clear();
+    spyRowsMoved.clear();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_moveRowRange() {
+    var seq1 = "ABCDEF";
+    var subseq1 = new Subseq("BC--DE", seq1);
+    var subseq2 = new Subseq("AB--CD", seq1);
+    var subseq3 = new Subseq("AB--CD", seq1);
+
+    var msa = new ObservableMsa();
+    assertTrue(msa.append(subseq1));
+    assertTrue(msa.append(subseq2));
+    assertTrue(msa.append(subseq3));
+
+    var spyRowsAboutToBeMoved = new SignalSpy(msa, SignalType.ROWS_ABOUT_TO_BE_MOVED);
+    var spyRowsMoved = new SignalSpy(msa, SignalType.ROWS_MOVED);
+
+    msa.moveRowRange(new ClosedIntRange(1, 2), 1);
+    msa.moveRowRange(new ClosedIntRange(2, 3), 2);
+    msa.moveRowRange(new ClosedIntRange(1, 1), 1);
+    assertTrue(spyRowsAboutToBeMoved.isEmpty());
+    assertTrue(spyRowsMoved.isEmpty());
+
+    msa.moveRowRange(new ClosedIntRange(1, 2), 2);
+    assertTrue(new ClosedIntRange(1, 2).eq(spyRowsAboutToBeMoved.signals()[0][0]));
+    assertEquals(2, spyRowsAboutToBeMoved.signals()[0][1]);
+    assertTrue(new ClosedIntRange(1, 2).eq(spyRowsMoved.signals()[0][0]));
+    assertEquals(2, spyRowsMoved.signals()[0][1]);
+    spyRowsAboutToBeMoved.clear();
+    spyRowsMoved.clear();
+
+    msa.moveRowRange(new ClosedIntRange(3, 3), 2);
+    assertTrue(new ClosedIntRange(3, 3).eq(spyRowsAboutToBeMoved.signals()[0][0]));
+    assertEquals(2, spyRowsAboutToBeMoved.signals()[0][1]);
+    assertTrue(new ClosedIntRange(3, 3).eq(spyRowsMoved.signals()[0][0]));
+    assertEquals(2, spyRowsMoved.signals()[0][1]);
+    spyRowsAboutToBeMoved.clear();
+    spyRowsMoved.clear();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_moveRowRangeRelative() {
+    var seq1 = "ABCDEF";
+    var subseq1 = new Subseq("BC--DE", seq1);
+    var subseq2 = new Subseq("AB--CD", seq1);
+    var subseq3 = new Subseq("AB--CD", seq1);
+
+    var msa = new ObservableMsa();
+    assertTrue(msa.append(subseq1));
+    assertTrue(msa.append(subseq2));
+    assertTrue(msa.append(subseq3));
+
+    var spyRowsAboutToBeMoved = new SignalSpy(msa, SignalType.ROWS_ABOUT_TO_BE_MOVED);
+    var spyRowsMoved = new SignalSpy(msa, SignalType.ROWS_MOVED);
+
+    msa.moveRowRangeRelative(new ClosedIntRange(1, 2), 0);
+    msa.moveRowRangeRelative(new ClosedIntRange(2, 3), 0);
+    msa.moveRowRangeRelative(new ClosedIntRange(1, 1), 0);
+    assertTrue(spyRowsAboutToBeMoved.isEmpty());
+    assertTrue(spyRowsMoved.isEmpty());
+
+    msa.moveRowRangeRelative(new ClosedIntRange(1, 2), 1);
+    assertTrue(new ClosedIntRange(1, 2).eq(spyRowsAboutToBeMoved.signals()[0][0]));
+    assertEquals(2, spyRowsAboutToBeMoved.signals()[0][1]);
+    assertTrue(new ClosedIntRange(1, 2).eq(spyRowsMoved.signals()[0][0]));
+    assertEquals(2, spyRowsMoved.signals()[0][1]);
+    spyRowsAboutToBeMoved.clear();
+    spyRowsMoved.clear();
+
+    msa.moveRowRangeRelative(new ClosedIntRange(3, 3), -2);
+    assertTrue(new ClosedIntRange(3, 3).eq(spyRowsAboutToBeMoved.signals()[0][0]));
+    assertEquals(1, spyRowsAboutToBeMoved.signals()[0][1]);
+    assertTrue(new ClosedIntRange(3, 3).eq(spyRowsMoved.signals()[0][0]));
+    assertEquals(1, spyRowsMoved.signals()[0][1]);
+    spyRowsAboutToBeMoved.clear();
+    spyRowsMoved.clear();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_moveRowRelative() {
+    var seq1 = "ABCDEF";
+    var subseq1 = new Subseq("BC--DE", seq1);
+    var subseq2 = new Subseq("AB--CD", seq1);
+    var subseq3 = new Subseq("AB--CD", seq1);
+
+    var msa = new ObservableMsa();
+    assertTrue(msa.append(subseq1));
+    assertTrue(msa.append(subseq2));
+    assertTrue(msa.append(subseq3));
+
+    var spyRowsAboutToBeMoved = new SignalSpy(msa, SignalType.ROWS_ABOUT_TO_BE_MOVED);
+    var spyRowsMoved = new SignalSpy(msa, SignalType.ROWS_MOVED);
+
+    msa.moveRowRelative(1, 0);
+    msa.moveRowRelative(2, 0);
+    msa.moveRowRelative(3, 0);
+    assertTrue(spyRowsAboutToBeMoved.isEmpty());
+    assertTrue(spyRowsMoved.isEmpty());
+
+    msa.moveRowRelative(1, 2);
+    assertTrue(new ClosedIntRange(1, 1).eq(spyRowsAboutToBeMoved.signals()[0][0]));
+    assertEquals(3, spyRowsAboutToBeMoved.signals()[0][1]);
+    assertTrue(new ClosedIntRange(1, 1).eq(spyRowsMoved.signals()[0][0]));
+    assertEquals(3, spyRowsMoved.signals()[0][1]);
+    spyRowsAboutToBeMoved.clear();
+    spyRowsMoved.clear();
+
+    msa.moveRowRelative(3, -1);
+    assertTrue(new ClosedIntRange(3, 3).eq(spyRowsAboutToBeMoved.signals()[0][0]));
+    assertEquals(2, spyRowsAboutToBeMoved.signals()[0][1]);
+    assertTrue(new ClosedIntRange(3, 3).eq(spyRowsMoved.signals()[0][0]));
+    assertEquals(2, spyRowsMoved.signals()[0][1]);
+    spyRowsAboutToBeMoved.clear();
+    spyRowsMoved.clear();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_removeAt() {
+    var seq1 = "ABCDEF";
+    var subseq1 = new Subseq("BC--DE", seq1);
+    var subseq2 = new Subseq("AB--CD", seq1);
+    var subseq3 = new Subseq("AB--CD", seq1);
+    var subseq4 = new Subseq("AB--CD", seq1);
+
+    var msa = new ObservableMsa();
+    assertTrue(msa.append(subseq1));
+    assertTrue(msa.append(subseq2));
+    assertTrue(msa.append(subseq3));
+    assertTrue(msa.append(subseq4));
+
+    var spyRowsAboutToBeRemoved = new SignalSpy(msa, SignalType.ROWS_ABOUT_TO_BE_REMOVED);
+    var spyRowsRemoved = new SignalSpy(msa, SignalType.ROWS_REMOVED);
+
+    msa.removeAt(2);
+    assertEquals(1, spyRowsAboutToBeRemoved.size());
+    assertEquals(1, spyRowsRemoved.size());
+
+    assertTrue(new ClosedIntRange(2, 2).eq(spyRowsAboutToBeRemoved.signals()[0][0]));
+    assertTrue(new ClosedIntRange(2, 2).eq(spyRowsRemoved.signals()[0][0]));
+
+    spyRowsAboutToBeRemoved.clear();;
+    spyRowsRemoved.clear();
+
+    msa.removeAt(1);
+    assertTrue(new ClosedIntRange(1, 1).eq(spyRowsAboutToBeRemoved.signals()[0][0]));
+    assertTrue(new ClosedIntRange(1, 1).eq(spyRowsRemoved.signals()[0][0]));
+
+    spyRowsAboutToBeRemoved.clear();;
+    spyRowsRemoved.clear();
+    msa.removeAt(msa.rowCount());
+    assertTrue(new ClosedIntRange(2, 2).eq(spyRowsAboutToBeRemoved.signals()[0][0]));
+    assertTrue(new ClosedIntRange(2, 2).eq(spyRowsRemoved.signals()[0][0]));
+
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_removeRows() {
+    var seq = "ABCDEF";
+
+    var msa = new ObservableMsa();
+    var subseqs = [];
+    for (var i=0; i<6; ++i) {
+        subseqs[i] = new Subseq(seq);
+        assertTrue(msa.append(subseqs[i]));
+    }
+
+    var spyRowsAboutToBeRemoved = new SignalSpy(msa, SignalType.ROWS_ABOUT_TO_BE_REMOVED);
+    var spyRowsRemoved = new SignalSpy(msa, SignalType.ROWS_REMOVED);
+
+    msa.removeRows(new ClosedIntRange(2, 4));
+    assertTrue(new ClosedIntRange(2, 4).eq(spyRowsAboutToBeRemoved.signals()[0][0]));
+    assertTrue(new ClosedIntRange(2, 4).eq(spyRowsRemoved.signals()[0][0]));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_removeGapColumns() {
+    var seq = "ABCD";
+    var subseq = new Subseq(seq);
+
+    var msa = new ObservableMsa();
+    assertTrue(msa.append(subseq));
+
+    var spyGapColumnsRemoved = new SignalSpy(msa, SignalType.GAP_COLUMNS_REMOVED);
+    msa.removeGapColumns();
+    assertTrue(spyGapColumnsRemoved.isEmpty());
+
+    msa.clear();
+    subseq = new Subseq("--A--B--", seq);
+    msa.append(subseq);
+
+    msa.removeGapColumns();
+    assertEquals(1, spyGapColumnsRemoved.size());
+    var removedRanges = spyGapColumnsRemoved.signals()[0][0];
+    assertTrue(new ClosedIntRange(1, 2).eq(removedRanges[0]));
+    assertTrue(new ClosedIntRange(4, 5).eq(removedRanges[1]));
+    assertTrue(new ClosedIntRange(7, 8).eq(removedRanges[2]));
+    spyGapColumnsRemoved.clear();
+
+    msa.clear();
+    subseq = new Subseq("--A--B--", seq);
+    msa.append(subseq);
+    msa.removeGapColumns(new ClosedIntRange(2, 4));
+    assertEquals(1, spyGapColumnsRemoved.size());
+    removedRanges = spyGapColumnsRemoved.signals()[0][0];
+    assertTrue(new ClosedIntRange(2, 2).eq(removedRanges[0]));
+    assertTrue(new ClosedIntRange(4, 4).eq(removedRanges[1]));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setModified() {
+    var msa = new ObservableMsa();
+
+    assertTrue(msa.isModified() == false);
+
+    var spyModifiedChanged = new SignalSpy(msa, SignalType.MODIFIED_CHANGED);
+
+    msa.setModified(true);
+    assertTrue(msa.isModified());
+    assertEquals(1, spyModifiedChanged.size());
+    assertTrue(spyModifiedChanged.signals()[0][0]);
+
+    spyModifiedChanged.clear();
+    msa.setModified(false);
+    assertEquals(1, spyModifiedChanged.size());
+    assertFalse(spyModifiedChanged.signals()[0][0]);
+    assertTrue(msa.isModified() === false);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setSubseqStart() {
+    var seq = "ABCDEF";
+    var subseq = new Subseq("--CD--E--", seq);
+    var subseq2 = new Subseq("--CD--E--", seq);
+
+    var msa = new Msa();
+    var oMsa = new ObservableMsa();
+
+    assertTrue(msa.append(subseq));
+    assertTrue(oMsa.append(subseq2));
+
+    var spySubseqsBorderChanged = new SignalSpy(oMsa, SignalType.SUBSEQS_CHANGED);
+    assertTrue(oMsa.setSubseqStart(1, 3).row === 0);
+    assertTrue(spySubseqsBorderChanged.isEmpty());
+
+    var expectedChanges = msa.setSubseqStart(1, 5);
+    var actualChanges = oMsa.setSubseqStart(1, 5);
+    assertSubseqChangesEqual(expectedChanges, actualChanges);
+    assertEquals(1, spySubseqsBorderChanged.size());
+    assertSubseqChangesEqual(spySubseqsBorderChanged.signals()[0][0], [actualChanges]);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setSubseqStop() {
+    var seq = "ABCDEF";
+    var subseq = new Subseq("--CD--E--", seq);
+    var subseq2 = new Subseq("--CD--E--", seq);
+
+    var msa = new Msa();
+    var oMsa = new ObservableMsa();
+
+    assertTrue(msa.append(subseq));
+    assertTrue(oMsa.append(subseq2));
+
+    var spySubseqsBorderChanged = new SignalSpy(oMsa, SignalType.SUBSEQS_CHANGED);
+    assertTrue(oMsa.setSubseqStop(1, 5).row === 0);
+    assertTrue(spySubseqsBorderChanged.isEmpty());
+
+    var expectedChanges = msa.setSubseqStart(1, 1);
+    var actualChanges = oMsa.setSubseqStart(1, 1);
+    assertSubseqChangesEqual(expectedChanges, actualChanges);
+    assertEquals(1, spySubseqsBorderChanged.size());
+    assertSubseqChangesEqual(spySubseqsBorderChanged.signals()[0][0], [actualChanges]);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_slideRect() {
+    var seq = "ABCDEF";
+    var subseq = new Subseq("--CD--E--", seq);
+
+    var oMsa = new ObservableMsa();
+    assertTrue(oMsa.append(subseq));
+
+    var spyAboutToBeSlid = new SignalSpy(oMsa, SignalType.ABOUT_TO_BE_SLID);
+    var spySlid = new SignalSpy(oMsa, SignalType.SLID);
+    oMsa.slideRect(new UnitRect(3, 1, 2, 1), 0);
+    assertTrue(spyAboutToBeSlid.isEmpty());
+    assertTrue(spySlid.isEmpty());
+
+    oMsa.slideRect(new UnitRect(3, 1, 2, 1), -4);
+    assertEquals(1, spySlid.size());
+    assertTrue(new UnitRect(3, 1, 2, 1).eq(spySlid.signals()[0][0]));
+    assertEquals(-2, spySlid.signals()[0][1]);
+    assertTrue(new ClosedIntRange(1, 2).eq(spySlid.signals()[0][2]));
+    assertEquals("CD----E--", subseq.toString());
+    spySlid.clear();
+    assertEquals(1, spyAboutToBeSlid.size());
+    assertTrue(new UnitRect(3, 1, 2, 1).eq(spyAboutToBeSlid.signals()[0][0]));
+    assertEquals(-2, spyAboutToBeSlid.signals()[0][1]);
+    assertTrue(new ClosedIntRange(1, 2).eq(spyAboutToBeSlid.signals()[0][2]));
+    assertEquals("CD----E--", subseq.toString());
+    spyAboutToBeSlid.clear();
+
+
+    // Test: finalRange is not inverted even if msaRect is inverted
+    oMsa.clear();
+    subseq = new Subseq('--BCD--', seq);
+    var subseq2 = new Subseq("--BCD--", seq);
+    assertTrue(oMsa.append([subseq, subseq2]));
+
+    assertEquals(-2, oMsa.slideRect(UnitRect.createFromCoordinates(new Coordinate(5, 2), new Coordinate(3, 1)), -2));
+    assertEquals("BCD----", subseq.toString());
+    assertEquals("BCD----", subseq2.toString());
+    assertEquals(1, spySlid.size());
+    assertTrue(UnitRect.createFromCoordinates(new Coordinate(5, 2), new Coordinate(3, 1)).eq(spySlid.signals()[0][0]));
+    assertEquals(-2, spySlid.signals()[0][1]);
+    assertTrue(new ClosedIntRange(1, 3).eq(spySlid.signals()[0][2]));
+    spySlid.clear();
+    assertEquals(1, spyAboutToBeSlid.size());
+    assertTrue(UnitRect.createFromCoordinates(new Coordinate(5, 2), new Coordinate(3, 1)).eq(spyAboutToBeSlid.signals()[0][0]));
+    assertEquals(-2, spyAboutToBeSlid.signals()[0][1]);
+    assertTrue(new ClosedIntRange(1, 3).eq(spyAboutToBeSlid.signals()[0][2]));
+    spyAboutToBeSlid.clear();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_sort() {
+    var msa = new ObservableMsa();
+
+    var spyRowsAboutToBeSorted = new SignalSpy(msa, SignalType.ABOUT_TO_BE_SORTED);
+    var spyRowsSorted = new SignalSpy(msa, SignalType.SORTED);
+
+    msa.sort(function() {});
+
+    assertEquals(1, spyRowsAboutToBeSorted.size());
+    assertEquals(1, spyRowsSorted.size());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_takeRows() {
+    var seq = "ABCDEF";
+
+    var msa = new ObservableMsa();
+    var subseqs = [];
+    for (var i=0; i<6; ++i) {
+        subseqs[i] = new Subseq(seq);
+        assertTrue(msa.append(subseqs[i]));
+    }
+
+    var spyRowsAboutToBeRemoved = new SignalSpy(msa, SignalType.ROWS_ABOUT_TO_BE_REMOVED);
+    var spyRowsRemoved = new SignalSpy(msa, SignalType.ROWS_REMOVED);
+
+    var extraction = msa.takeRows(new ClosedIntRange(2, 4));
+    assertEquals(1, spyRowsAboutToBeRemoved.size());
+    assertTrue(new ClosedIntRange(2, 4).eq(spyRowsAboutToBeRemoved.signals()[0][0]));
+    assertTrue(new ClosedIntRange(2, 4).eq(spyRowsRemoved.signals()[0][0]));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_trimLeft() {
+    var seq1 = "ABCDEF";
+    var seq2 = seq1;
+
+    var subseq = new Subseq("-ABC-DE--", seq1);
+    var subseq2 = new Subseq("-ABC-DE--", seq2);
+
+    var oMsa = new ObservableMsa();
+    var msa = new Msa();
+    assertTrue(msa.append(subseq));
+    assertTrue(oMsa.append(subseq2));
+
+    var spySubseqsBorderChanged = new SignalSpy(oMsa, SignalType.SUBSEQS_CHANGED);
+    var actualChanges = oMsa.trimLeft(1, new ClosedIntRange(1, 1));
+    assertEquals(0, actualChanges.length);
+    assertTrue(spySubseqsBorderChanged.isEmpty());
+
+    var expectedChanges = msa.trimLeft(5, new ClosedIntRange(1, 1));
+    actualChanges = oMsa.trimLeft(5, new ClosedIntRange(1, 1));
+    assertSubseqChangesEqual(expectedChanges, actualChanges);
+    assertEquals(1, spySubseqsBorderChanged.size());
+    assertSubseqChangesEqual(spySubseqsBorderChanged.signals()[0][0], expectedChanges);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_trimRight() {
+    var seq1 = "ABCDEF";
+    var seq2 = seq1;
+
+    var subseq = new Subseq("-ABC-DE--", seq1);
+    var subseq2 = new Subseq("-ABC-DE--", seq2);
+
+    var oMsa = new ObservableMsa();
+    var msa = new Msa();
+    assertTrue(msa.append(subseq));
+    assertTrue(oMsa.append(subseq2));
+
+    var spySubseqsBorderChanged = new SignalSpy(oMsa, SignalType.SUBSEQS_CHANGED);
+    var actualChanges = oMsa.trimRight(8, new ClosedIntRange(1, 1));
+    assertEquals(0, actualChanges.length);
+    assertTrue(spySubseqsBorderChanged.isEmpty());
+
+    var expectedChanges = msa.trimRight(4, new ClosedIntRange(1, 1));
+    actualChanges = oMsa.trimRight(4, new ClosedIntRange(1, 1));
+    assertSubseqChangesEqual(expectedChanges, actualChanges);
+    assertEquals(1, spySubseqsBorderChanged.size());
+    assertSubseqChangesEqual(spySubseqsBorderChanged.signals()[0][0], expectedChanges);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_undo() {
+    var seq = "ABCDEF";
+    var subseq = new Subseq("---C-D---", seq);
+    var subseq2 = new Subseq("---C-D---", seq);
+
+    var oMsa = new ObservableMsa();
+    var msa = new Msa();
+    assertTrue(msa.append(subseq));
+    assertTrue(oMsa.append(subseq2));
+
+    var actualChanges = oMsa.extendRight(8, new ClosedIntRange(1, 1));
+    var expectedChanges = msa.extendRight(8, new ClosedIntRange(1, 1));
+
+    var spySubseqsBorderChanged = new SignalSpy(oMsa, SignalType.SUBSEQS_CHANGED);
+
+    var inverseChanges = oMsa.undo(actualChanges);
+    var inverseExpectedChanges = msa.undo(expectedChanges);
+    assertSubseqChangesEqual(inverseExpectedChanges, inverseChanges);
+
+    assertEquals(1, spySubseqsBorderChanged.size());
+    assertSubseqChangesEqual(spySubseqsBorderChanged.signals()[0][0], inverseExpectedChanges);
+};
+
+</script>
+</body>
+</html>

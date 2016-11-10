@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.ui.LineEdit</title>
+	<meta charset="utf-8">
+	<link rel="stylesheet" href="/css/reset/meyer-min.css">
+	<link rel="stylesheet" href="/js/ag/css/ui.css">
+<style type="text/css">
+</style>
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.dom');
+goog.require('ag.meta.SignalSpy');
+goog.require('ag.ui.LineEdit');
+</script>
+<body>
+
+<div>
+	<input id="lineedit">
+</div>
+
+<script>
+var dom = goog.dom;
+
+var SignalSpy = ag.meta.SignalSpy;
+var LineEdit = ag.ui.LineEdit;
+
+var x;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_it() {
+	var input = dom.getElement('lineedit');
+
+	x = new LineEdit();
+	x.decorate(input);
+	x.setLabel('Type here');
+
+	var spy = new SignalSpy(x, LineEdit.SignalType.TEXT_CHANGED);
+	x.setValue('abc');
+	assertEquals(spy.size(), 1);
+	assertEquals(spy.signals()[0][0], 'abc');
+};
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1720 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.core.UnitRectSet</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.object');
+goog.require('goog.math.Coordinate');
+goog.require('ag.core.ClosedIntRange');
+goog.require('ag.core.UnitRect');
+goog.require('ag.core.UnitRectSet');
+goog.require('ag.core.UnitRectReducer');
+</script>
+<body>
+<script>
+// Aliases
+var object = goog.object;
+var Coordinate = goog.math.Coordinate;
+
+var ClosedIntRange = ag.core.ClosedIntRange;
+var UnitRect = ag.core.UnitRect;
+var UnitRectSet = ag.core.UnitRectSet;
+var unitRectReducer = ag.core.UnitRectReducer.getInstance;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Global test data
+
+// Several of the following test cases will be utilize the following base unit rects
+// that covers a plus sign:
+//    X
+// Y  XY Y
+// _  X
+var baseRects = [
+	new UnitRect(0, -1, 1, 3),
+	new UnitRect(-1, 0, 3, 1)
+];
+
+var testUnitRectArray = [
+	new UnitRect(0, 0),
+	new UnitRect(-3, 9, -4, 5),
+	new UnitRect(9, -2, 8, 4),
+	new UnitRect(5, 5, 2, 1),
+	new UnitRect(-5, 4, 9, 2)	
+];
+
+var testUnitRectArrayArray = [
+	[],
+	[new UnitRect(0, 0)],
+	[new UnitRect(-3, 9, -4, 5), new UnitRect(9, -2, 8, 4)],
+	[new UnitRect(5, 5, 2, 1), new UnitRect(3, 1, 10, -5), new UnitRect(8, 15, -20, -18)]		
+];
+
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_constructor() {
+	var x = new UnitRectSet();
+	assertEquals(x.rectangles().length, 0);
+
+	// Test: input of single rect
+	var rect = new UnitRect(0, 0);
+	x = new UnitRectSet(rect);
+	assertEquals(x.rectangles().length, 1);
+	assertTrue(x.rectangles()[0].eq(rect));
+
+	// Test: constructor with UnitRectArray
+	var rects = [rect, new UnitRect(0, 0, 3, 2) ];
+	x = new UnitRectSet(rects);
+	var actualCoverage = UnitRect.coverage(x.rectangles());
+	var expectedCoverage = UnitRect.coverage(unitRectReducer().reduce(rects));
+	assertHashEquals(actualCoverage, expectedCoverage);
+
+	// Ensure that rect is not shared with the table set
+	rect = new UnitRect(-2, -2, -3, -5);
+	x = new UnitRectSet(rect);
+	assertFalse(x.rectangles()[0] === rect);
+	assertTrue(x.rectangles()[0].isNormal());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_eq() {
+	var x = new UnitRectSet();
+	var y = new UnitRectSet();
+	assertTrue(x.eq(x));
+	assertTrue(x.eq(y));
+
+	y = new UnitRectSet(new UnitRect(0, 0));
+	assertFalse(x.eq(y));
+	assertFalse(y.eq(x));
+
+	x.merge(new UnitRect());
+	assertTrue(x.eq(y));
+	assertTrue(y.eq(x));
+
+	y.clear();
+	assertFalse(x.eq(y));
+	assertFalse(y.eq(x));
+
+	x = new UnitRectSet(new UnitRect(0, 0, 3, 1));
+	y = new UnitRectSet([new UnitRect(0, 0), new UnitRect(1, 0), new UnitRect(2, 0)]);
+	assertTrue(x.eq(y));
+	assertTrue(y.eq(x));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_area() {
+	var x = new UnitRectSet();
+	assertEquals(x.area(), 0);
+
+	x.merge(new UnitRect(0, 0, 2, 1));
+	assertEquals(x.area(), 2);
+
+	x.clear();
+	assertEquals(x.area(), 0);
+
+	x.merge([new UnitRect(0, 0, 2, 1), new UnitRect(1, 0, 2, 1)]);
+	assertEquals(x.area(), 3);	
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_boundingRect() {
+	// Test empty rectangles should return null
+	var x = new UnitRectSet();
+	assertNull(x.boundingRect());
+
+	var cases = [
+		[[new UnitRect(0, 0)],
+		 new UnitRect(0, 0)],
+
+		[[new UnitRect(0, 0), new UnitRect(1, 0)],
+		 new UnitRect(0, 0, 2, 1)],
+
+		[[new UnitRect(0, 0, 3, 5), new UnitRect(1, 1)],
+		 new UnitRect(0, 0, 3, 5)],
+
+		[[new UnitRect(0, 0), new UnitRect(-21, -5, 5, 7)],
+		 new UnitRect(-21, -5, 22, 7)]
+	];
+
+	for (var i=0; i<cases.length; i++) {
+		var rects = cases[i][0];
+		var expect = cases[i][1];
+
+		x = new UnitRectSet(rects);
+		var actual = x.boundingRect();
+		assertTrue(actual.eq(expect));
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_clear() {
+	var x = new UnitRectSet(new UnitRect(3, -3, 8, -9));
+	assertEquals(x.rectangles().length, 1);
+	x.clear();
+	assertTrue(x.isEmpty());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_clone() {
+	var rects = [new UnitRect(0, 0)];
+	var x = new UnitRectSet(rects);
+	var y = x.clone();
+	assertTrue(x !== y);
+	assertTrue(x.rectangles() !== y.rectangles());
+	assertEquals(y.rectangles().length, x.rectangles().length);
+	assertTrue(x.rectangles()[0].eq(y.rectangles()[0]));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_containsAndContainsCoordinate() {
+	var windowRects = new UnitRect(0, 0, 3, 3).difference(new UnitRect(1, 1));
+	var wind = new UnitRectSet(windowRects);
+
+	for (var i=-1; i< 5; i++) {
+		for (var j=-1; j<5; j++) {
+			var contains = (i >= 0 && i <= 2 && j >= 0 && j <= 2 && !(i === 1 && j === 1));
+			assertEquals(wind.contains(i, j), contains);
+			assertEquals(wind.containsCoordinate(new Coordinate(i, j)), contains);
+		}
+	}	
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_containsSet() {
+	var windowRects = new UnitRect(0, 0, 3, 3).difference(new UnitRect(1, 1));
+	var wind = new UnitRectSet(windowRects);
+
+	for (var i=-1; i< 4; i++) {
+		for (var j=-1; j<4; j++) {
+			var wind2 = wind.clone();
+			wind2.shift(i, j);
+			assertEquals(wind.containsSet(wind2), i === 0 && j === 0);
+		}
+	}	
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_containsUnitRect() {
+	var windowRects = new UnitRect(0, 0, 3, 3).difference(new UnitRect(1, 1));
+	var wind = new UnitRectSet(windowRects);
+
+	assertTrue(wind.containsUnitRect(new UnitRect(0, 0, 1, 3)));
+	assertTrue(wind.containsUnitRect(new UnitRect(2, 2, -1, -2)));
+	assertTrue(wind.containsUnitRect(new UnitRect(2, 0, -2, 1)));
+	assertTrue(wind.containsUnitRect(new UnitRect(0, 2, 1, -3)));
+
+	assertFalse(wind.containsUnitRect(new UnitRect(0, 0, 2, 2)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_differenceSimpleAndSubtract() {
+	// Simple tests first
+	var testRows = [
+		// Non-intersecting
+		new UnitRect(4, 4),
+		new UnitRect(8, -7, -2, 5),
+
+		// Corners
+		new UnitRect(1, 1, 3, 3),	// Lower right corner
+		new UnitRect(-1, 1, 3, 3),  // Lower left corner
+		new UnitRect(-1, -1, 4, 4),	// Top left corner
+		new UnitRect(1, -1, 3, 3),  // Top right corner
+
+		// Non-normal corners 
+		// new UnitRect(4, 1, -3, 3),
+		new UnitRect(1, 1, -3, -3),
+		new UnitRect(1, 1, -3, 3),
+
+		// fully inside
+		new UnitRect(1, 1),
+
+		// Fully encompassing
+		new UnitRect(-1, -1, 6, 6),
+
+		// Fully covering a specific side
+		new UnitRect(-1, -1, 6, 3),		// Top
+		new UnitRect(1, -1, 3, 7),		// Right
+		new UnitRect(-1, 1, 6, 3),		// Bottom
+		new UnitRect(-1, -1, 4, 8),		// Left
+
+		// Overlap middle sides of box
+		new UnitRect(1, -1, 3, 1),		// Top middle
+		new UnitRect(1, 1, 3, 1),		// Right middle
+		new UnitRect(1, 1, 1, 3),		// Bottom middle
+		new UnitRect(-1, 1, 3, 1)		// Left middle
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var input = testRows[i];
+		var x = new UnitRectSet();
+
+		// nothing - X should equal nothing
+		var result = x.difference(input);
+		assertTrue(result.isEmpty());
+
+		// ** Subtraction **
+		x.subtract(input);
+		assertTrue(x.isEmpty());
+
+		// Now attempt to difference something
+		var rect = new UnitRect(0, 0, 3, 3);
+		x = new UnitRectSet(rect);
+		result = x.difference(input);
+		var actualCoverage = UnitRect.coverage(result.rectangles());		
+		var expectedCoverage = UnitRect.coverage(rect.difference(input));
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		// ** Subtraction **
+		x.subtract(input);
+		actualCoverage = UnitRect.coverage(x.rectangles());
+		assertHashEquals(actualCoverage, expectedCoverage);
+	}
+};
+
+function test_differenceAdvancedAndSubtract() {
+	var starter = new UnitRect(0, 0, 3, 3).difference(new UnitRect(1, 1));
+	var x = new UnitRectSet(starter);
+
+	var subtrahend = new UnitRect(0, 0, 3, 3);
+	var testRows = [
+		// No overlap
+		{position: [-5, -5], expect: x.rectangles()},
+		// Exact overlap
+		{position: [0, 0], expect: []},
+
+		// Top Row overlap
+		{position: [-2, -2], expect: [new UnitRect(1, 0, 2, 1),
+									  new UnitRect(0, 1, 1, 2),
+									  new UnitRect(2, 1, 1, 2),
+									  new UnitRect(1, 2)]},
+
+		{position: [-1, -2], expect: [new UnitRect(0, 1, 1, 2),
+									  new UnitRect(1, 2),
+									  new UnitRect(2, 0, 1, 3)]},
+
+		{position: [0, -2], expect: [new UnitRect(0, 1, 1, 2),
+									 new UnitRect(1, 2),
+									 new UnitRect(2, 1, 1, 2)]},
+
+		{position: [1, -2], expect: [new UnitRect(0, 0, 1, 3),
+									 new UnitRect(1, 2),
+									 new UnitRect(2, 1, 1, 2)]},
+
+		{position: [2, -2], expect: [new UnitRect(0, 0, 1, 3),
+									 new UnitRect(1, 0),
+									 new UnitRect(1, 2),
+									 new UnitRect(2, 1, 1, 2)]},
+
+		// Top and middle row overlap
+		{position: [-2, -1], expect: [new UnitRect(0, 2),
+									  new UnitRect(1, 0),
+									  new UnitRect(1, 2),
+									  new UnitRect(2, 0, 1, 3)]},
+
+		{position: [-1, -1], expect: [new UnitRect(0, 2),
+									  new UnitRect(1, 2),
+									  new UnitRect(2, 0, 1, 3)]},
+
+		{position: [0, -1], expect: [new UnitRect(0, 2),
+									 new UnitRect(1, 2),
+									 new UnitRect(2, 2)]},
+
+		{position: [1, -1], expect: [new UnitRect(0, 0, 1, 3),
+									 new UnitRect(1, 2),
+									 new UnitRect(2, 2)]},
+
+		{position: [2, -1], expect: [new UnitRect(0, 0, 1, 3),
+									 new UnitRect(1, 0),
+									 new UnitRect(1, 2),
+									 new UnitRect(2, 2)]},
+
+		// All rows overlapping
+		{position: [-2, 0], expect: [new UnitRect(1, 0),
+									 new UnitRect(1, 2),
+									 new UnitRect(2, 0, 1, 3)]},
+
+		{position: [-1, 0], expect: [new UnitRect(2, 0, 1, 3)]},
+
+		{position: [0, 0], expect: []},
+
+		{position: [1, 0], expect: [new UnitRect(0, 0, 1, 3)]},
+
+		{position: [2, 0], expect: [new UnitRect(0, 0, 1, 3),
+									new UnitRect(1, 0),
+									new UnitRect(1, 2)]},
+
+		// Middle and bottom row overlap
+		{position: [-2, 1], expect: [new UnitRect(0, 0),
+									 new UnitRect(1, 0),
+									 new UnitRect(1, 2),
+									 new UnitRect(2, 0, 1, 3)]},
+
+		{position: [-1, 1], expect: [new UnitRect(0, 0),
+									 new UnitRect(1, 0),
+									 new UnitRect(2, 0, 1, 3)]},
+
+		{position: [0, 1], expect: [new UnitRect(0, 0),
+									new UnitRect(1, 0),
+									new UnitRect(2, 0)]},
+
+		{position: [1, 1], expect: [new UnitRect(0, 0, 1, 3),
+									new UnitRect(1, 0),
+									new UnitRect(2, 0)]},
+
+		{position: [2, 1], expect: [new UnitRect(0, 0, 1, 3),
+									new UnitRect(1, 0),
+									new UnitRect(1, 2),
+									new UnitRect(2, 0)]},
+
+		// Bottom row overlap
+		{position: [-2, 2], expect: [new UnitRect(0, 0, 1, 2),
+									 new UnitRect(1, 0),
+									 new UnitRect(1, 2),
+									 new UnitRect(2, 0, 1, 3)]},
+
+		{position: [-1, 2], expect: [new UnitRect(0, 0, 1, 2),
+									 new UnitRect(1, 0),
+									 new UnitRect(2, 0, 1, 3)]},
+
+		{position: [0, 2], expect: [new UnitRect(0, 0, 1, 2),
+									new UnitRect(1, 0),
+									new UnitRect(2, 0, 1, 2)]},
+
+		{position: [1, 2], expect: [new UnitRect(0, 0, 1, 3),
+									new UnitRect(1, 0),
+									new UnitRect(2, 0, 1, 2)]},
+
+		{position: [2, 2], expect: [new UnitRect(0, 0, 1, 3),
+									new UnitRect(1, 0),
+									new UnitRect(1, 2),
+									new UnitRect(2, 0, 1, 2)]}
+	];
+
+	for (var i=0; i< testRows.length; i++) {
+		var testRow = testRows[i];
+		var rect = subtrahend.clone();
+	    rect.moveLeft(testRow.position[0]);
+		rect.moveTop(testRow.position[1]);
+
+		var result = x.difference(rect);
+		var expectedCoverage = UnitRect.coverage(testRow.expect);
+		var actualCoverage = UnitRect.coverage(result.rectangles());
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		// ** Subtraction **
+		var y = x.clone();
+		y.subtract(rect);
+		actualCoverage = UnitRect.coverage(y.rectangles());
+		assertHashEquals(actualCoverage, expectedCoverage);
+	}
+};
+
+// This method tests the subtraction of a UnitRectSet by another UnitRectSet
+function test_differenceWindowPlusSign() {
+	var plusSignRects = [new UnitRect(1, 0, 1, 3), new UnitRect(0, 1, 3, 1)];
+	var plusSign = new UnitRectSet(plusSignRects);
+
+	var windowRects = new UnitRect(0, 0, 3, 3).difference(new UnitRect(1, 1));
+	var wind = new UnitRectSet(windowRects);
+
+	// plusMinusWind = plus sign difference window
+	// windMinusPlus = window difference plus sign
+	var testRows = [
+		// Top Row overlap
+		{position: [-2, -2], plusMinusWind: plusSign.rectangles(),
+							 windMinusPlus: wind.rectangles()},
+		{position: [-1, -2], plusMinusWind: [new UnitRect(0, 1),
+											 new UnitRect(1, 1, 1, 2),
+											 new UnitRect(2, 1)],
+							windMinusPlus: [new UnitRect(0, 1, 1, 2), new UnitRect(1, 0), new UnitRect(1, 2), new UnitRect(2, 0, 1, 3)]},
+		{position: [0, -2], plusMinusWind: [new UnitRect(0, 1),
+											new UnitRect(1, 1, 1, 2),
+											new UnitRect(2, 1)],
+							windMinusPlus: [new UnitRect(0, 0, 1, 3), new UnitRect(1, 2), new UnitRect(2, 0, 1, 3)]},
+		{position: [1, -2], plusMinusWind: [new UnitRect(0, 1),
+											new UnitRect(1, 1, 1, 2),
+											new UnitRect(2, 1)],
+						 	windMinusPlus: [new UnitRect(0, 0, 1, 3), new UnitRect(1, 0), new UnitRect(1, 2), new UnitRect(2, 1, 1, 2)]},
+		{position: [2, -2], plusMinusWind: plusSign.rectangles(),
+							windMinusPlus: wind.rectangles()},
+
+		// Top and middle row overlap
+		{position: [-2, -1], plusMinusWind: [new UnitRect(1, 0, 1, 3), new UnitRect(2, 1)],
+							 windMinusPlus: [new UnitRect(0, 1, 1, 2), new UnitRect(1, 0), new UnitRect(1, 2), new UnitRect(2, 0, 1, 3)]},
+		{position: [-1, -1], plusMinusWind: [new UnitRect(1, 2), new UnitRect(2, 1)],
+							 windMinusPlus: [new UnitRect(0, 2), new UnitRect(1, 2), new UnitRect(2, 0, 1, 3)]},
+		{position: [0, -1], plusMinusWind: [new UnitRect(1, 0), new UnitRect(1, 2)],
+						    windMinusPlus: [new UnitRect(0, 1, 1, 2), new UnitRect(1, 2), new UnitRect(2, 1, 1, 2)]},
+		{position: [1, -1], plusMinusWind: [new UnitRect(0, 1), new UnitRect(1, 2)],
+							windMinusPlus: [new UnitRect(0, 0, 1, 3), new UnitRect(1, 2), new UnitRect(2, 2)]},
+		{position: [2, -1], plusMinusWind: [new UnitRect(0, 1), new UnitRect(1, 0, 1, 3)],
+							windMinusPlus: [new UnitRect(0, 0, 1, 3), new UnitRect(1, 0), new UnitRect(1, 2), new UnitRect(2, 1, 1, 2)]},
+
+		// All rows overlapping
+		{position: [-2, 0], plusMinusWind: [new UnitRect(1, 0, 1, 3), new UnitRect(2, 1)],
+						    windMinusPlus: [new UnitRect(0, 0), new UnitRect(0, 2), new UnitRect(1, 0), new UnitRect(1, 2), new UnitRect(2, 0, 1, 3)]},
+		{position: [-1, 0], plusMinusWind: [new UnitRect(0, 1), new UnitRect(2, 1)],
+							windMinusPlus: [new UnitRect(1, 0), new UnitRect(1, 2), new UnitRect(2, 0, 1, 3)]},
+		{position: [0, 0], plusMinusWind: [new UnitRect(1, 1)],
+						   windMinusPlus: [new UnitRect(0, 0), new UnitRect(0, 2), new UnitRect(2, 0), new UnitRect(2, 2)]},
+		{position: [1, 0], plusMinusWind: [new UnitRect(0, 1), new UnitRect(2, 1)],
+						   windMinusPlus: [new UnitRect(0, 0, 1, 3), new UnitRect(1, 0), new UnitRect(1, 2)]},
+		{position: [2, 0], plusMinusWind: [new UnitRect(0, 1), new UnitRect(1, 0, 1, 3)],
+						   windMinusPlus: [new UnitRect(0, 0, 1, 3), new UnitRect(1, 0), new UnitRect(1, 2), new UnitRect(2, 0), new UnitRect(2, 2)]},
+
+		// Middle and bottom row overlap
+		{position: [-2, 1], plusMinusWind: [new UnitRect(1, 0, 1, 3), new UnitRect(2, 1)],
+							windMinusPlus: [new UnitRect(0, 0, 1, 2), new UnitRect(1, 0), new UnitRect(1, 2), new UnitRect(2, 0, 1, 3)]},
+		{position: [-1, 1], plusMinusWind: [new UnitRect(1, 0), new UnitRect(2, 1)],
+							windMinusPlus: [new UnitRect(0, 0), new UnitRect(1, 0), new UnitRect(2, 0, 1, 3)]},
+		{position: [0, 1], plusMinusWind: [new UnitRect(1, 0), new UnitRect(1, 2)],
+						   windMinusPlus: [new UnitRect(0, 0, 1, 2), new UnitRect(1, 0), new UnitRect(2, 0, 1, 2)]},
+		{position: [1, 1], plusMinusWind: [new UnitRect(0, 1), new UnitRect(1, 0)],
+						   windMinusPlus: [new UnitRect(0, 0, 1, 3), new UnitRect(1, 0), new UnitRect(2, 0)]},
+		{position: [2, 1], plusMinusWind: [new UnitRect(0, 1), new UnitRect(1, 0, 1, 3)],
+						   windMinusPlus: [new UnitRect(0, 0, 1, 3), new UnitRect(1, 0), new UnitRect(1, 2), new UnitRect(2, 0, 1, 2)]},
+
+		// Bottom row overlap
+		{position: [-2, 2], plusMinusWind: plusSign.rectangles(),
+							windMinusPlus: wind.rectangles()},
+		{position: [-1, 2], plusMinusWind: [new UnitRect(0, 1), new UnitRect(1, 0, 1, 2), new UnitRect(2, 1)],
+							windMinusPlus: [new UnitRect(0, 0, 1, 2), new UnitRect(1, 0), new UnitRect(1, 2), new UnitRect(2, 0, 1, 3)]},
+		{position: [0, 2], plusMinusWind: [new UnitRect(0, 1), new UnitRect(1, 0, 1, 2), new UnitRect(2, 1)],
+						   windMinusPlus: [new UnitRect(0, 0, 1, 3), new UnitRect(1, 0), new UnitRect(2, 0, 1, 3)]},
+		{position: [1, 2], plusMinusWind: [new UnitRect(0, 1), new UnitRect(1, 0, 1, 2), new UnitRect(2, 1)],
+						   windMinusPlus: [new UnitRect(0, 0, 1, 3), new UnitRect(1, 0), new UnitRect(1, 2), new UnitRect(2, 0, 1, 2)]},
+		{position: [2, 2], plusMinusWind: plusSign.rectangles(),
+						   windMinusPlus: wind.rectangles()}
+	];
+
+	for (var i=0; i< testRows.length; i++) {
+		var testRow = testRows[i];
+
+		// ----------------------
+		// Plus sign minus window
+		// Prepare the window rect set
+		var tempRects = windowRects.clone();
+		for (var j=0; j< tempRects.length; j++) {
+			tempRects[j].moveLeft(tempRects[j].left() + testRow.position[0]);
+			tempRects[j].moveTop(tempRects[j].top() + testRow.position[1]);
+		}
+		var movedWind = new UnitRectSet(tempRects);
+		var result = plusSign.difference(movedWind);
+		var expectedCoverage = UnitRect.coverage(testRow.plusMinusWind);
+		var actualCoverage = UnitRect.coverage(result.rectangles());
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		// ** Subtraction **
+		var y = plusSign.clone();
+		y.subtract(movedWind);
+		actualCoverage = UnitRect.coverage(y.rectangles());
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		// ----------------------
+		// Window minus plus sign
+		tempRects = plusSignRects.clone();
+		for (var j=0; j< tempRects.length; j++) {
+			tempRects[j].moveLeft(tempRects[j].left() + testRow.position[0]);
+			tempRects[j].moveTop(tempRects[j].top() + testRow.position[1]);
+		}
+		var movedPlusSign = new UnitRectSet(tempRects);
+		var result = wind.difference(movedPlusSign);
+		var expectedCoverage = UnitRect.coverage(testRow.windMinusPlus);
+		var actualCoverage = UnitRect.coverage(result.rectangles());
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		// ** Subtraction **
+		var y = wind.clone();
+		y.subtract(movedPlusSign);
+		actualCoverage = UnitRect.coverage(y.rectangles());
+		assertHashEquals(actualCoverage, expectedCoverage);
+	}	
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_horizontalRanges() {
+	// a) (0, 0) -> (2, 2)
+	// b) (4, 1) -> (6, 5)  * Inverted for test
+	// c) (1, 4) -> (3, 7)
+	var rects = [new UnitRect(0, 0, 3, 3), new UnitRect(6, 5, -3, -5), new UnitRect(1, 4, 3, 4)];
+	var s = new UnitRectSet(rects);
+
+	var testRows = [
+		[-1, []],
+		[0, [0, 1, 2]],
+		[1, [0, 1, 2, 4, 5, 6]],
+		[2, [0, 1, 2, 4, 5, 6]],
+		[3, [4, 5, 6]],
+		[4, [1, 2, 3, 4, 5, 6]],
+		[5, [1, 2, 3, 4, 5, 6]],
+		[6, [1, 2, 3]],
+		[7, [1, 2, 3]],
+		[8, []],
+		[null, [0, 1, 2, 3, 4, 5, 6]]
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var testRow = testRows[i];
+		var y = testRow[0];
+		var expectHash = {};
+		for (var j=0; j<testRow[1].length; j++)
+			expectHash[testRow[1][j]] = 1;
+
+		var result = s.horizontalRanges(y);
+		var actualCoverage = ClosedIntRange.coverage(result.ranges());
+		assertHashEquals(actualCoverage, expectHash);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_insertColumnSpacing() {
+	// Should do nothing if there is nothing in the set
+	var x = new UnitRectSet();
+	x.insertColumnSpacing(3);
+	x.insertColumnSpacing(0);
+	x.insertColumnSpacing(1, 5);
+
+	assertTrue(x.isEmpty());
+
+	// Now attempt to insert some column
+	var baseRect = new UnitRect(-2, -2, 5, 5);
+
+	// Test that inserting 0 spacer columns does nothing
+	for (var i=baseRect.x1 - 3; i< baseRect.x2 + 3; i++) {
+		x = new UnitRectSet(baseRect);
+		x.insertColumnSpacing(i, 0);		
+		assertEquals(x.rectangles().length, 1);
+		assertTrue(x.rectangles()[0].eq(baseRect));
+	}
+
+	// Test that default insert column count is 1
+	x = new UnitRectSet(new UnitRect(0, 0, 2, 2));
+	x.insertColumnSpacing(0);
+	assertTrue(x.eq(new UnitRectSet(new UnitRect(1, 0, 2, 2))));
+
+	var testRows = [
+		{insertColumn: baseRect.x1 - 2, nSpacers: 1, expect: new UnitRect(-1, -2, 5, 5)},
+		{insertColumn: baseRect.x1,     nSpacers: 1, expect: new UnitRect(-1, -2, 5, 5)},
+		{insertColumn: 0,				nSpacers: 1, expect: [new UnitRect(-2, -2, 2, 5), new UnitRect(1, -2, 3, 5)]},
+		{insertColumn: baseRect.x2,     nSpacers: 1, expect: [new UnitRect(-2, -2, 4, 5), new UnitRect(3, -2, 1, 5)]},
+		{insertColumn: baseRect.x2 + 1, nSpacers: 1, expect: baseRect},
+
+		{insertColumn: baseRect.x1,     nSpacers: 3, expect: new UnitRect(1, -2, 5, 5)},
+		{insertColumn: baseRect.x1 + 1, nSpacers: 2, expect: [new UnitRect(-2, -2, 1, 5), new UnitRect(1, -2, 4, 5)]},
+		{insertColumn: baseRect.x2 + 3, nSpacers: 6, expect: baseRect}
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var testRow = testRows[i];
+		var insertColumn = testRow.insertColumn;
+		var numSpacerRows = testRow.nSpacers;
+		var expect = new UnitRectSet(testRow.expect);
+
+		var x = new UnitRectSet(baseRect);
+		x.insertColumnSpacing(insertColumn, numSpacerRows);
+		assertTrue(x.eq(expect));
+	}
+
+	// Test that multiple rects are shifted
+	x = new UnitRectSet([new UnitRect(0, 0, 2, 2), new UnitRect(1, 4, 3, 2)]);
+	var xx = x.clone();
+	var y = x.clone();
+	xx.insertColumnSpacing(-2, 3);
+	y.shift(3, 0);
+	assertTrue(xx.eq(y));
+
+	x = new UnitRectSet([new UnitRect(0, 0, 2, 2), new UnitRect(1, 4, 3, 2)]);
+	x.merge(new UnitRect(5, 0, 2, 7));
+	x.insertColumnSpacing(1, 2);
+	y = new UnitRectSet([new UnitRect(0, 0, 1, 2), new UnitRect(3, 0, 1, 2), new UnitRect(7, 0, 2, 7),
+					  new UnitRect(3, 4, 3, 2)]);
+	assertTrue(x.eq(y));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_insertRowSpacing() {
+	// Should do nothing if there is nothing in the set
+	var x = new UnitRectSet();
+	x.insertRowSpacing(3);
+	x.insertRowSpacing(0);
+	x.insertRowSpacing(-1, 22);
+
+	assertTrue(x.isEmpty());
+
+	// Now attempt to insert some row
+	var baseRect = new UnitRect(-2, -2, 5, 5);
+
+	// Test that inserting 0 spacer rows does nothing
+	for (var i=baseRect.y1 - 3; i< baseRect.y2 + 3; i++) {
+		x = new UnitRectSet(baseRect);
+		x.insertRowSpacing(i, 0);		
+		assertEquals(x.rectangles().length, 1);
+		assertTrue(x.rectangles()[0].eq(baseRect));
+	}
+
+	// Test that default insert count is 1
+	x = new UnitRectSet(new UnitRect(0, 0, 2, 2));
+	x.insertRowSpacing(0);
+	assertTrue(x.eq(new UnitRectSet(new UnitRect(0, 1, 2, 2))));
+
+	var testRows = [
+		{insertRow: baseRect.y1 - 2, nSpacers: 1, expect: new UnitRect(-2, -1, 5, 5)},
+		{insertRow: baseRect.y1,     nSpacers: 1, expect: new UnitRect(-2, -1, 5, 5)},
+		{insertRow: 0,				 nSpacers: 1, expect: [new UnitRect(-2, -2, 5, 2), new UnitRect(-2, 1, 5, 3)]},
+		{insertRow: baseRect.y2,     nSpacers: 1, expect: [new UnitRect(-2, -2, 5, 4), new UnitRect(-2, 3, 5, 1)]},
+		{insertRow: baseRect.y2 + 1, nSpacers: 1, expect: baseRect},
+
+		{insertRow: baseRect.y1,     nSpacers: 3, expect: new UnitRect(-2, 1, 5, 5)},
+		{insertRow: baseRect.y1 + 1, nSpacers: 2, expect: [new UnitRect(-2, -2, 5, 1), new UnitRect(-2, 1, 5, 4)]},
+		{insertRow: baseRect.y2 + 3, nSpacers: 6, expect: baseRect}
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var testRow = testRows[i];
+		var insertRow = testRow.insertRow;
+		var numSpacerRows = testRow.nSpacers;
+		var expect = new UnitRectSet(testRow.expect);
+
+		var x = new UnitRectSet(baseRect);
+		x.insertRowSpacing(insertRow, numSpacerRows);
+		assertTrue(x.eq(expect));
+	}
+
+	// Test that multiple rects are shifted
+	x = new UnitRectSet([new UnitRect(0, 0, 2, 2), new UnitRect(1, 4, 3, 2)]);
+	var xx = x.clone();
+	var y = x.clone();
+	xx.insertRowSpacing(-2, 3);
+	y.shift(0, 3);
+	assertTrue(xx.eq(y));
+
+	x = new UnitRectSet([new UnitRect(0, 0, 2, 2), new UnitRect(1, 4, 3, 2)]);
+	x.merge(new UnitRect(5, 0, 2, 7));
+	x.insertRowSpacing(1, 2);
+	y = new UnitRectSet([new UnitRect(0, 0, 2, 1), new UnitRect(5, 0, 2, 1),
+					  new UnitRect(0, 3, 2, 1), new UnitRect(5, 3, 2, 6),
+					  new UnitRect(1, 6, 3, 2)]);
+	assertTrue(x.eq(y));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_intersectionSimpleAndIntersects() {
+	// Simple tests first
+	var testRows = [
+		// Non-intersecting
+		new UnitRect(4, 4),
+		new UnitRect(8, -7, -2, 5),
+
+		// Corners
+		new UnitRect(1, 1, 3, 3),	// Lower right corner
+		new UnitRect(-1, 1, 3, 3),  // Lower left corner
+		new UnitRect(-1, -1, 4, 4),	// Top left corner
+		new UnitRect(1, -1, 3, 3),  // Top right corner
+
+		// Non-normal corners 
+		// new UnitRect(4, 1, -3, 3),
+		new UnitRect(1, 1, -3, -3),
+		new UnitRect(1, 1, -3, 3),
+
+		// fully inside
+		new UnitRect(1, 1),
+
+		// Fully encompassing
+		new UnitRect(-1, -1, 6, 6),
+
+		// Fully covering a specific side
+		new UnitRect(-1, -1, 6, 3),		// Top
+		new UnitRect(1, -1, 3, 7),		// Right
+		new UnitRect(-1, 1, 6, 3),		// Bottom
+		new UnitRect(-1, -1, 4, 8),		// Left
+
+		// Overlap middle sides of box
+		new UnitRect(1, -1, 3, 1),		// Top middle
+		new UnitRect(1, 1, 3, 1),		// Right middle
+		new UnitRect(1, 1, 1, 3),		// Bottom middle
+		new UnitRect(-1, 1, 3, 1)		// Left middle
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var input = testRows[i];
+		var x = new UnitRectSet();
+
+		// nothing - X should equal nothing
+		var result = x.intersection(input);
+		assertTrue(result.isEmpty());
+		assertFalse(x.intersects(input));
+
+		// Now attempt to difference something
+		var rect = new UnitRect(0, 0, 3, 3);
+		x = new UnitRectSet(rect);
+		result = x.intersection(input);
+		var actualCoverage = UnitRect.coverage(result.rectangles());
+		var expectedIntersection = rect.intersection(input);
+		var expectedCoverage = (expectedIntersection) ? UnitRect.coverage([expectedIntersection]) : {};		
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		if (object.isEmpty(expectedCoverage)) {
+			assertFalse(x.intersects(input));
+			assertTrue(result.isEmpty());
+		}
+		else {
+			assertTrue(x.intersects(input));
+			assertFalse(result.isEmpty());
+		}
+
+		// ------------------------------------
+		// Now attempt the reverse intersection
+		x = new UnitRectSet(input);
+		result = x.intersection(rect);
+		var actualCoverage = UnitRect.coverage(result.rectangles());
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		if (object.isEmpty(expectedCoverage)) {
+			assertFalse(x.intersects(rect));
+			assertTrue(result.isEmpty());
+		}
+		else {
+			assertTrue(x.intersects(rect));
+			assertFalse(result.isEmpty());
+		}
+	}
+};
+
+function test_intersectionAdvancedAndIntersects() {
+	var starter = new UnitRect(0, 0, 3, 3).difference(new UnitRect(1, 1));
+
+	var intersecter = new UnitRect(0, 0, 3, 3);
+	var testRows = [
+		// No overlap
+		{position: [-5, -5], expect: []},
+		// Exact overlap
+		{position: [0, 0], expect: starter.clone()},
+
+		// Top Row overlap
+		{position: [-2, -2], expect: [new UnitRect(0, 0)]},
+		{position: [-1, -2], expect: [new UnitRect(0, 0, 2, 1)]},
+		{position: [0, -2], expect: [new UnitRect(0, 0, 3, 1)]},
+		{position: [1, -2], expect: [new UnitRect(1, 0, 2, 1)]},
+		{position: [2, -2], expect: [new UnitRect(2, 0)]},
+
+		// Top and middle row overlap
+		{position: [-2, -1], expect: [new UnitRect(0, 0, 1, 2)]},
+		{position: [-1, -1], expect: [new UnitRect(0, 0, 1, 2),
+									  new UnitRect(1, 0)]},
+		{position: [0, -1], expect: [new UnitRect(0, 0, 1, 2),
+									 new UnitRect(1, 0),
+									 new UnitRect(2, 0, 1, 2)]},
+		{position: [1, -1], expect: [new UnitRect(1, 0),
+									 new UnitRect(2, 0, 1, 2)]},
+		{position: [2, -1], expect: [new UnitRect(2, 0, 1, 2)]},
+
+		// All rows overlapping
+		{position: [-2, 0], expect: [new UnitRect(0, 0, 1, 3)]},
+		{position: [-1, 0], expect: [new UnitRect(0, 0, 1, 3),
+			 						 new UnitRect(1, 0),
+			 						 new UnitRect(1, 2)]},
+		{position: [0, 0], expect: [new UnitRect(0, 0, 1, 3),
+			 						new UnitRect(1, 0),
+			 						new UnitRect(1, 2),
+			 						new UnitRect(2, 0, 1, 3)]},
+		{position: [1, 0], expect: [new UnitRect(1, 0),
+									new UnitRect(1, 2),
+									new UnitRect(2, 0, 1, 3)]},
+		{position: [2, 0], expect: [new UnitRect(2, 0, 1, 3)]},
+
+		// Middle and bottom row overlap
+		{position: [-2, 1], expect: [new UnitRect(0, 1, 1, 2)]},
+		{position: [-1, 1], expect: [new UnitRect(0, 1, 1, 2),
+									 new UnitRect(1, 2)]},
+		{position: [0, 1], expect: [new UnitRect(0, 1, 1, 2),
+									new UnitRect(1, 2),
+									new UnitRect(2, 1, 1, 2)]},
+		{position: [1, 1], expect: [new UnitRect(1, 2),
+									new UnitRect(2, 1, 1, 2)]},
+		{position: [2, 1], expect: [new UnitRect(2, 1, 1, 2)]},
+
+		// Bottom row overlap
+		{position: [-2, 2], expect: [new UnitRect(0, 2)]},
+		{position: [-1, 2], expect: [new UnitRect(0, 2, 2, 1)]},
+		{position: [0, 2], expect: [new UnitRect(0, 2, 3, 1)]},
+		{position: [1, 2], expect: [new UnitRect(1, 2, 2, 1)]},
+		{position: [2, 2], expect: [new UnitRect(2, 2)]}
+	];
+
+	for (var i=0; i< testRows.length; i++) {
+		var testRow = testRows[i];
+		var rect = intersecter.clone();
+	    rect.moveLeft(testRow.position[0]);
+		rect.moveTop(testRow.position[1]);
+
+		var x = new UnitRectSet();
+
+		// nothing - X should equal nothing
+		var result = x.intersection(rect);
+		assertTrue(result.isEmpty());
+		assertFalse(x.intersects(rect));
+
+		// Starter 
+		x = new UnitRectSet(starter);
+		var result = x.intersection(rect);
+		var expectedCoverage = UnitRect.coverage(testRow.expect);
+		var actualCoverage = UnitRect.coverage(result.rectangles());
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		if (object.isEmpty(expectedCoverage)) {
+			assertFalse(x.intersects(rect));
+			assertTrue(result.isEmpty());
+		}
+		else {
+			assertTrue(x.intersects(rect));
+			assertFalse(result.isEmpty());
+		}
+
+		// ------------------------------------
+		// Now attempt the reverse intersection
+		x = new UnitRectSet(rect);
+		var result = x.intersection(starter);
+		var actualCoverage = UnitRect.coverage(result.rectangles());
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		if (object.isEmpty(expectedCoverage)) {
+			assertFalse(x.intersects(starter));
+			assertTrue(result.isEmpty());
+		}
+		else {
+			assertTrue(x.intersects(starter));
+			assertFalse(result.isEmpty());
+		}
+	}
+};
+
+function test_intersectionWindowPlusSign() {
+	var plusSignRects = [new UnitRect(1, 0, 1, 3), new UnitRect(0, 1, 3, 1)];
+	var plusSign = new UnitRectSet(plusSignRects);
+
+	var windowRects = new UnitRect(0, 0, 3, 3).difference(new UnitRect(1, 1));
+
+	// Plus sign remains fixed with its top left at (0, 0)
+	// Position = wind position
+	var testRows = [
+		// Top Row overlap
+		{position: [-2, -2], expect: []},
+		{position: [-1, -2], expect: [new UnitRect(1, 0)]},
+		{position: [0, -2], expect: [new UnitRect(1, 0)]},
+		{position: [1, -2], expect: [new UnitRect(1, 0)]},
+		{position: [2, -2], expect: []},
+
+		// Top and middle row overlap
+		{position: [-2, -1], expect: [new UnitRect(0, 1)]},
+		{position: [-1, -1], expect: [new UnitRect(0, 1), new UnitRect(1, 0, 1, 2)]},
+		{position: [0, -1], expect: [new UnitRect(0, 1, 3, 1)]},
+		{position: [1, -1], expect: [new UnitRect(1, 0, 1, 2), new UnitRect(2, 1)]},
+		{position: [2, -1], expect: [new UnitRect(2, 1)]},
+
+		// All rows overlapping
+		{position: [-2, 0], expect: [new UnitRect(0, 1)]},
+		{position: [-1, 0], expect: [new UnitRect(1, 0, 1, 3)]},
+		{position: [0, 0], expect: [new UnitRect(0, 1), new UnitRect(1, 0), new UnitRect(1, 2), new UnitRect(2, 1)]},
+		{position: [1, 0], expect: [new UnitRect(1, 0, 1, 3)]},
+		{position: [2, 0], expect: [new UnitRect(2, 1)]},
+
+		// Middle and bottom row overlap
+		{position: [-2, 1], expect: [new UnitRect(0, 1)]},
+		{position: [-1, 1], expect: [new UnitRect(0, 1), new UnitRect(1, 1, 1, 2)]},
+		{position: [0, 1], expect: [new UnitRect(0, 1, 3, 1)]},
+		{position: [1, 1], expect: [new UnitRect(1, 1, 1, 2), new UnitRect(2, 1)]},
+		{position: [2, 1], expect: [new UnitRect(2, 1)]},
+
+		// Bottom row overlap
+		{position: [-2, 2], expect: []},
+		{position: [-1, 2], expect: [new UnitRect(1, 2)]},
+		{position: [0, 2], expect: [new UnitRect(1, 2)]},
+		{position: [1, 2], expect: [new UnitRect(1, 2)]},
+		{position: [2, 2], expect: []}
+	];
+
+	for (var i=0; i< testRows.length; i++) {
+		var testRow = testRows[i];
+
+		var tempRects = windowRects.clone();
+		for (var j=0; j< tempRects.length; j++) {
+			tempRects[j].moveLeft(tempRects[j].left() + testRow.position[0]);
+			tempRects[j].moveTop(tempRects[j].top() + testRow.position[1]);
+		}
+		var movedWind = new UnitRectSet(tempRects);
+
+		var result = plusSign.intersection(movedWind);
+		var expectedCoverage = UnitRect.coverage(testRow.expect);
+		var actualCoverage = UnitRect.coverage(result.rectangles());
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		if (object.isEmpty(expectedCoverage)) {
+			assertFalse(plusSign.intersects(movedWind));
+			assertTrue(result.isEmpty());
+		}
+		else {
+			assertTrue(plusSign.intersects(movedWind));
+			assertFalse(result.isEmpty());
+		}
+
+		// ------------------------------------
+		// Now attempt the reverse intersection
+		var result = movedWind.intersection(plusSign);
+		var actualCoverage = UnitRect.coverage(result.rectangles());
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		if (object.isEmpty(expectedCoverage)) {
+			assertFalse(movedWind.intersects(plusSign));
+			assertTrue(result.isEmpty());
+		}
+		else {
+			assertTrue(movedWind.intersects(plusSign));
+			assertFalse(result.isEmpty());
+		}
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_inverseAndInvertSimple() {
+	// Test: inverse of nothing should be nothing
+	var x = new UnitRectSet();
+	assertTrue(x.inverse().isEmpty());
+	x.invert();
+	assertTrue(x.isEmpty());
+
+	var testRows = [
+		// --------------------------------
+		// Suite: base of nothing against X
+		// Single rectangle
+		{base: null,
+		 input: new UnitRect(0, 0, 1, 2),
+		 expect: {'0,0': 1, '0,1': 1}},
+
+		// UnitRectArray with partial overlap
+		{base: null,
+		 input: [new UnitRect(0, 0), new UnitRect(0, 0, 2, 1)],
+		 expect: {'0,0': 1, '1,0': 1}},
+
+		// UnitRectSet with partial overlap
+		{base: null,
+		 input: new UnitRectSet([new UnitRect(0, 0, 2, 1), new UnitRect(1, 0, 2, 1)]),
+		 expect: {'0,0': 1, '1,0': 1, '2,0': 1}},
+
+		// ---------------------------------
+		// Suite: single rect base against X; no overlap
+		// Single rectangle
+		{base: new UnitRect(0, 0, 2, 1),
+		 input: new UnitRect(4, 0),
+		 expect: {'0,0': 1, '1,0': 1, '4,0': 1}},
+
+		// UnitRectArray with partial overlap
+		{base: new UnitRect(0, 0, 2, 1),
+		 input: [new UnitRect(4, 0), new UnitRect(4, 0, 2, 1)],
+		 expect: {'0,0': 1, '1,0': 1, '4,0': 1, '5,0': 1}},
+
+		// UnitRectSet with partial overlap
+		{base: new UnitRect(0, 0, 2, 1),
+		 input: new UnitRectSet([new UnitRect(4, 0, 2, 1), new UnitRect(5, 0, 2, 1)]),
+		 expect: {'0,0': 1, '1,0': 1, '4,0': 1, '5,0': 1, '6,0': 1}},
+
+		// ---------------------------------
+		// Suite: single rect base against X; full overlap
+		// Single rectangle
+		{base: new UnitRect(0, 0, 2, 1),
+		 input: new UnitRect(0, 0, 2, 1),
+		 expect: {}},
+
+		// UnitRectArray with partial overlap
+		{base: new UnitRect(0, 0, 2, 1),
+		 input: [new UnitRect(0, 0), new UnitRect(1, 0)],
+		 expect: {}},
+
+		// UnitRectSet with partial overlap
+		{base: new UnitRect(0, 0, 2, 1),
+		 input: new UnitRectSet(new UnitRect(0, 0, 2, 1)),
+		 expect: {}},
+
+		// ---------------------------------
+		// Suite: single rect base against X; partial overlap
+		// Single rectangle
+		{base: new UnitRect(0, 0, 2, 1),
+		 input: new UnitRect(0, 0, 1, 2),
+		 expect: {'1,0': 1, '0,1': 1}},
+
+		// UnitRectArray with partial overlap
+		{base: new UnitRect(0, 0, 2, 1),
+		 input: [new UnitRect(0, 0), new UnitRect(0, 1)],
+		 expect: {'1,0': 1, '0,1': 1}},
+
+		// UnitRectSet with partial overlap
+		{base: new UnitRect(0, 0, 2, 1),
+		 input: new UnitRectSet([new UnitRect(0, -1, 1, 2), new UnitRect(0, 0, 1, 2)]),
+		 expect: {'0,-1': 1, '1,0': 1, '0,1': 1}},
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var testRow = testRows[i];
+		var x = new UnitRectSet(testRow.base);
+
+		var result = x.inverse(testRow.input);
+
+		var actualCoverage = UnitRect.coverage(result.rectangles());
+		assertHashEquals(actualCoverage, testRow.expect);
+
+		x.invert(testRow.input);
+		actualCoverage = UnitRect.coverage(x.rectangles());
+		assertHashEquals(actualCoverage, testRow.expect);
+	}
+};
+
+function test_inverseAndInvertWindowPlusSign() {
+	var plusSignRects = [new UnitRect(1, 0, 1, 3), new UnitRect(0, 1, 3, 1)];
+	var plusSign = new UnitRectSet(plusSignRects);
+
+	// Inverting the plus sign itself
+	assertHashEquals(UnitRect.coverage(plusSign.inverse().rectangles()),
+					 {'0,0': 1, '2,0': 1, '0,2': 1, '2,2': 1});
+
+	var windowRects = new UnitRect(0, 0, 3, 3).difference(new UnitRect(1, 1));
+
+	// Plus sign remains fixed with its top left at (0, 0)
+	// Position = wind position
+	var testRows = [
+		// ---------------
+		// Top Row overlap
+		{position: [-2, -2], expect: ['-2,-2', '-1,-2', '0,-2',
+									  '-2,-1',          '0,-1',
+									  '-2,0',  '-1,0',  '0,0',   '1,0',
+									  	 				'0,1',   '1,1', '2,1',
+									  	 				         '1,2']},
+
+		{position: [-1, -2], expect: ['-1,-2', '0,-2',  '1,-2',
+									  '-1,-1',          '1,-1',
+									  '-1,0',  '0,0',   /* - */
+							   				   '0,1',   '1,1', '2,1',
+									  	 		        '1,2']},
+
+		{position: [0, -2], expect:  ['0,-2', '1,-2',   '2,-2',
+									  '0,-1',           '2,-1',
+									  '0,0',  /* - */   '2,0',
+							   	      '0,1',   '1,1',   '2,1',
+									           '1,2']},
+
+		{position: [1, -2], expect:  [         '1,-2',  '2,-2',  '3,-2',
+									           '1,-1',           '3,-1',
+									           /* - */  '2,0',   '3,0',
+							   	      '0,1',   '1,1',   '2,1',
+									           '1,2']},
+
+		{position: [2, -2], expect:  [                  '2,-2',  '3,-2',  '4,-2',
+									                    '2,-1',           '4,-1',
+									           '1,0',   '2,0',   '3,0',   '4,0',
+							   	      '0,1',   '1,1',   '2,1',
+									           '1,2']},
+
+		// Top and middle row overlap
+		{position: [-2, -1], expect: ['-2,-1', '-1,-1', '0,-1',
+									  '-2,0',           '0,0',    '1,0',
+									  '-2,1',  '-1,1',  /* - */   '1,1',  '2,1',
+									  	 				          '1,2']},
+
+		{position: [-1, -1], expect: ['-1,-1', '0,-1',  '1,-1',
+									  '-1,0',           /* - */
+									  '-1,1',  /* - */  /* - */   '2,1',
+									  		            '1,2']},
+
+		{position: [0, -1], expect: ['0,-1', '1,-1',  '2,-1',
+									 '0,0',  '1,0',   '2,0',
+									 /* - */  /* - */ /* - */
+									   	     '1,2']},
+
+		{position: [1, -1], expect: [        '1,-1', '2,-1',  '3,-1',
+									         /* - */          '3,0',
+									 '0,1',  /* - */ /* - */  '3,1',
+									   	     '1,2']},
+
+		{position: [2, -1], expect: [                '2,-1',  '3,-1',  '4,-1',
+									         '1,0',  '2,0',            '4,0',
+									 '0,1',  '1,1',  /* - */  '3,1',   '4,1',
+									   	     '1,2']},
+
+		// All rows overlapping
+		{position: [-2, 0], expect: ['-2,0', '-1,0',  '0,0',  '1,0',
+									 '-2,1',          /* - */ '1,1',  '2,1',
+									 '-2,2', '-1,2',  '0,2',  '1,2']},
+
+		{position: [-1, 0], expect: ['-1,0', '0,0',  /* - */
+									 '-1,1', '0,1',  /* - */ '2,1',
+									 '-1,2', '0,2'   /* - */ ]},
+
+		{position: [0, 0], expect: ['0,0',  /* - */  '2,0',
+									 /* - */ '1,1',   /* - */
+									 '0,2',  /* - */  '2,2']},
+
+	    {position: [1,0], expect: [        /* - */  '2,0',  '3,0',
+	                               '0,1',  /* - */  '2,1',  '3,1',
+	                                       /* - */  '2,2',  '3,2']},
+
+	    {position: [2,0], expect: [        '1,0',   '2,0',  '3,0',  '4,0',
+	                               '0,1',  '1,1',   /* - */         '4,1',
+	                                       '1,2',   '2,2',  '3,2',  '4,2']},
+
+
+		// Middle and bottom row overlap
+		{position: [-2, 1], expect: [                        '1,0',
+		                             '-2,1', '-1,1', /* - */ '1,1', '2,1',
+		                             '-2,2',         '0,2',  '1,2',
+		                             '-2,3', '-1,3', '0,3']},
+
+		{position: [-1, 1], expect: [                '1,0',
+		                             '-1,1', /* - */ /* - */ '2,1',
+		                             '-1,2',         /* - */
+		                             '-1,3', '0,3',  '1,3']},
+
+		{position: [0, 1], expect:  [        '1,0',
+		                             /* - */ /* - */ /* - */
+		                             '0,2',  '1,2', '2,2',
+		                             '0,3',  '1,3', '2,3']},
+
+		{position: [1, 1], expect:  [        '1,0',
+		                             '0,1',  /* - */ /* - */ '3,1',
+		                                     /* - */         '3,2',
+		                                     '1,3',  '2,3',  '3,3']},
+
+		{position: [2, 1], expect:  [        '1,0',
+		                             '0,1',  '1,1',  /* - */ '3,1', '4,1',
+		                                     '1,2',  '2,2',         '4,2',
+		                                             '2,3',  '3,3', '4,3']},
+
+		// Bottom row overlap
+		{position: [-2, 2], expect: [                        '1,0',
+		                                             '0,1',  '1,1',  '2,1',
+		                             '-2,2', '-1,2', '0,2',  '1,2',
+		                             '-2,3',         '0,3',
+		                             '-2,4', '-1,4', '0,4']},
+
+		{position: [-1, 2], expect: [                '1,0',
+		                                     '0,1',  '1,1', '2,1',
+		                             '-1,2', '0,2',  /* - */
+		                             '-1,3',         '1,3',
+		                             '-1,4', '0,4',  '1,4']},
+
+		{position: [0, 2], expect:  [        '1,0',
+		                             '0,1',  '1,1',  '2,1',
+		                             '0,2',  /* - */ '2,2',
+		                             '0,3',          '2,3',
+		                             '0,4',  '1,4',  '2,4']},
+
+		{position: [1, 2], expect:  [        '1,0',
+		                             '0,1',  '1,1',  '2,1',
+		                                     /* - */ '2,2', '3,2',
+		                                     '1,3',         '3,3',
+		                                     '1,4',  '2,4', '3,4']},
+
+		{position: [2, 2], expect:  [        '1,0',
+		                             '0,1',  '1,1',  '2,1',
+		                                     '1,2',  '2,2', '3,2', '4,2',
+		                                             '2,3',        '4,3',
+		                                             '2,4', '3,4', '4,4']}
+	];
+
+	for (var i=0; i< testRows.length; i++) {
+		var testRow = testRows[i];
+
+		var tempRects = windowRects.clone();
+		for (var j=0; j< tempRects.length; j++) {
+			tempRects[j].moveLeft(tempRects[j].left() + testRow.position[0]);
+			tempRects[j].moveTop(tempRects[j].top() + testRow.position[1]);
+		}
+		var movedWind = new UnitRectSet(tempRects);
+
+		// Make the expect hash
+		var expectedCoverage = {};
+		for (var j=0; j<testRow.expect.length; j++)
+			expectedCoverage[testRow.expect[j]] = 1;
+		var result = plusSign.inverse(movedWind);
+		var actualCoverage = UnitRect.coverage(result.rectangles());
+		assertHashEquals(actualCoverage, expectedCoverage);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_isEmpty() {
+	var x = new UnitRectSet();
+	assertTrue(x.isEmpty());
+	x = new UnitRectSet(baseRects);
+	assertFalse(x.isEmpty());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_merge() {
+	// Test: individual UnitRect
+	for (var i=0; i<testUnitRectArray.length; i++) {
+		var inputRect = testUnitRectArray[i];
+		var x = new UnitRectSet(baseRects);
+
+		x.merge(inputRect);
+		var actualCoverage = UnitRect.coverage(x.rectangles());
+
+		var combinedRects = baseRects.clone();
+		combinedRects.push(inputRect);
+		var reducedExpectRects = unitRectReducer().reduce(combinedRects);
+		var expectedCoverage = UnitRect.coverage(reducedExpectRects);
+		assertHashEquals(actualCoverage, expectedCoverage);
+	}
+
+	// Test: UnitRectArrays and other UnitRectSets
+	for (var i=0; i<testUnitRectArrayArray.length; i++) {
+		var inputRects = testUnitRectArrayArray[i];
+		var x = new UnitRectSet(baseRects);
+
+		x.merge(inputRects);
+		var actualCoverage = UnitRect.coverage(x.rectangles());
+
+		var combinedRects = baseRects.concat(inputRects);
+		var reducedExpectRects = unitRectReducer().reduce(combinedRects);
+		var expectedCoverage = UnitRect.coverage(reducedExpectRects);
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		// Also test another union with another UnitRectSet
+		x = new UnitRectSet(baseRects);
+		x.merge(new UnitRectSet(inputRects));
+		actualCoverage = UnitRect.coverage(x.rectangles());
+		assertHashEquals(actualCoverage, expectedCoverage);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_moveRows() {
+	var x = new UnitRectSet();
+	x.moveRows(0, 0, 3);
+	x.moveRows(0, 2, -3);
+	x.moveRows(-3, 5, 20);
+	assertTrue(x.isEmpty());
+
+	x = new UnitRectSet(new UnitRect(0, 0, 2, 2));
+	var y = x.clone();
+
+	// Test move within a set
+	x.moveRows(0, 0, 1);
+	assertTrue(x.eq(y));
+
+	// Move below self (positive)
+	x.moveRows(0, 0, 2);
+	y = new UnitRectSet([new UnitRect(0, 0, 2, 1), new UnitRect(0, 2, 2, 1)]);
+	assertTrue(x.eq(y));
+
+	// Move above self (negative direction)
+	x = new UnitRectSet(new UnitRect(0, 0, 2, 2));
+	x.moveRows(0, 0, -2);
+	y = new UnitRectSet([new UnitRect(0, -2, 2, 1), new UnitRect(0, 1, 2, 1)]);
+	assertTrue(x.eq(y));
+
+	// Try it with a range
+	x = new UnitRectSet(new UnitRect(0, 0, 2, 2));
+	x.moveRows(0, 1, -2);
+	y = new UnitRectSet(new UnitRect(0, -2, 2, 2));
+	assertTrue(x.eq(y));
+
+	// Try it with a partially overlapping range
+	x = new UnitRectSet(new UnitRect(0, 0, 2, 2));
+	x.moveRows(-1, 0, 5);
+	y = new UnitRectSet([new UnitRect(0, -1, 2, 1), new UnitRect(0, 6, 2, 1)]);
+	assertTrue(x.eq(y));
+
+	// Move the entire range
+	x = new UnitRectSet(new UnitRect(0, 0, 2, 2));
+	x.moveRows(-2, 4, 6);
+	y = new UnitRectSet(new UnitRect(0, 8, 2, 2));
+	assertTrue(x.eq(y));
+
+	// Take from one range and insert into another
+	x = new UnitRectSet([new UnitRect(0, 0, 2, 3), new UnitRect(1, 4, 3, 3)]);
+	x.moveRows(4, 5, 1);
+	y = new UnitRectSet([new UnitRect(0, 0, 2, 1), new UnitRect(1, 1, 3, 2),
+						 new UnitRect(0, 3, 2, 2), new UnitRect(1, 6, 3, 1)]);
+	assertTrue(x.eq(y));
+};	
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_optimize() {
+	// Test: optimizing nothing should not do anything different
+	var x = new UnitRectSet();
+	x.optimize();
+	assertTrue(x.isEmpty());	
+
+	// Test: optimizing a single rectangle should do nothing
+	x = new UnitRectSet(new UnitRect(0, 0));
+	x.optimize();
+	assertEquals(x.rectangles().length, 1);
+	assertTrue(x.rectangles()[0].eq(new UnitRect(0, 0)));
+
+	// Test: 2 - one rect one top of another (case 1)
+	var testRows = [
+		// Case 1
+		{input: [new UnitRect(0, 2, 2, 2), new UnitRect(0, 0, 2, 2)],
+		 expect: new UnitRect(0, 0, 2, 4)},
+
+		// Case 2
+		{input: [new UnitRect(0, 0, 2, 2), new UnitRect(0, 2, 2, 2)],
+		 expect: new UnitRect(0, 0, 2, 4)},
+
+		// Case 3
+		{input: [new UnitRect(2, 0, 2, 2), new UnitRect(0, 0, 2, 2)],
+		 expect: new UnitRect(0, 0, 4, 2)},
+
+		// Case 4
+		{input: [new UnitRect(0, 0, 2, 2), new UnitRect(2, 0, 2, 2)],
+		 expect: new UnitRect(0, 0, 4, 2)}
+	];
+
+	for (var i=0; i< testRows.length; i++) {
+		var testRow = testRows[i];
+		x = new UnitRectSet(testRow.input);
+		assertEquals(x.rectangles().length, testRow.input.length);
+		x.optimize();
+		assertEquals(x.rectangles().length, 1);
+		assertTrue(x.rectangles()[0].eq(testRow.expect));
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_removeColumns() {
+	// Removing from empty set does nothing
+	var x = new UnitRectSet();
+	for (var i=-3; i< 4; i++)
+		x.removeColumns(i, i*i);
+	assertTrue(x.isEmpty());
+
+	var baseRect = new UnitRect(-1, -1, 3, 3);
+
+	// Remove 0 columns from non-empty set should do nothing
+	for (var i=baseRect.x1 - 2; i< baseRect.x2 + 2; i++) {
+		x = new UnitRectSet(baseRect);
+		x.removeColumns(i, 0);
+		assertEquals(x.rectangles().length, 1);
+		assertTrue(x.rectangles()[0].eq(baseRect));
+	}
+
+	// Test that default remove count is 1
+	x = new UnitRectSet(new UnitRect(0, 0, 2, 2));
+	x.removeColumns(0);
+	assertTrue(x.eq(new UnitRectSet(new UnitRect(0, 0, 1, 2))));
+
+	var testRows = [
+		{startColumn: baseRect.x1 - 2, count: 1, expect: new UnitRect(-2, -1, 3, 3)},
+		{startColumn: baseRect.x1,     count: 1, expect: new UnitRect(-1, -1, 2, 3)},
+		{startColumn: 0,			   count: 1, expect: new UnitRect(-1, -1, 2, 3)},
+		{startColumn: baseRect.x2,     count: 1, expect: new UnitRect(-1, -1, 2, 3)},
+		{startColumn: baseRect.x2 + 1, count: 1, expect: baseRect},
+
+		{startColumn: baseRect.x1 - 1, count: 3, expect: new UnitRect(-2, -1, 1, 3)},
+		{startColumn: baseRect.x1 + 1, count: 2, expect: new UnitRect(-1, -1, 1, 3)},
+		{startColumn: baseRect.x2 + 3, count: 6, expect: baseRect}
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var testRow = testRows[i];
+		var startColumn = testRow.startColumn;
+		var numToRemove = testRow.count;
+		var expect = new UnitRectSet(testRow.expect);
+
+		var x = new UnitRectSet(baseRect);
+		x.removeColumns(startColumn, numToRemove);
+		assertTrue(x.eq(expect));
+	}
+
+	// Test that multiple rects are shifted
+	x = new UnitRectSet([new UnitRect(0, 0, 2, 2), new UnitRect(1, 4, 3, 2)]);
+	var xx = x.clone();
+	var y = x.clone();
+	xx.removeColumns(-2, 2);
+	y.shift(-2, 0);
+	assertTrue(xx.eq(y));
+
+	x = new UnitRectSet([new UnitRect(0, 0, 2, 2), new UnitRect(1, 4, 3, 2)]);
+	x.merge(new UnitRect(5, 0, 2, 7));
+	x.removeColumns(1, 2);
+	y = new UnitRectSet([new UnitRect(0, 0, 1, 2), new UnitRect(3, 0, 2, 7),
+					  new UnitRect(1, 4, 1, 2)]);
+	assertTrue(x.eq(y));
+
+	// Remove entirely
+	x.removeColumns(-5, 20);
+	assertTrue(x.isEmpty());
+
+	// --
+	//    XXX
+	x = new UnitRectSet(new UnitRect(0, 0, 3, 1));
+	x.removeColumns(-2, 2);
+	assertTrue(x.eq(new UnitRectSet(new UnitRect(-2, 0, 3, 1))));
+
+	// ---
+	//   XXX
+	x = new UnitRectSet(new UnitRect(0, 0, 3, 1));
+	x.removeColumns(-2, 3);
+	assertTrue(x.eq(new UnitRectSet(new UnitRect(-2, 0, 2, 1))));
+
+	// -----
+	//   XXX
+	x = new UnitRectSet(new UnitRect(0, 0, 3, 1));
+	x.removeColumns(-2, 5);
+	assertTrue(x.isEmpty());
+
+	//   ----
+	// XXX
+	x = new UnitRectSet(new UnitRect(0, 0, 3, 1));
+	x.removeColumns(2, 3);
+	assertTrue(x.eq(new UnitRectSet(new UnitRect(0, 0, 2, 1))));
+
+	//  -
+	// XXX
+	x = new UnitRectSet(new UnitRect(0, 0, 3, 1));
+	x.removeColumns(1);
+	assertTrue(x.eq(new UnitRectSet(new UnitRect(0, 0, 2, 1))));
+
+	//    --
+	// XXX
+	x = new UnitRectSet(new UnitRect(0, 0, 3, 1));
+	x.removeColumns(3, 2);
+	assertTrue(x.eq(new UnitRectSet(new UnitRect(0, 0, 3, 1))));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_removeRows() {
+	// Removing from empty set does nothing
+	var x = new UnitRectSet();
+	for (var i=-3; i< 4; i++)
+		x.removeRows(i, i*i);
+	assertTrue(x.isEmpty());
+
+	var baseRect = new UnitRect(-1, -1, 3, 3);
+
+	// Remove 0 rows from non-empty set should do nothing
+	for (var i=baseRect.y1 - 2; i< baseRect.y2 + 2; i++) {
+		x = new UnitRectSet(baseRect);
+		x.removeRows(i, 0);
+		assertEquals(x.rectangles().length, 1);
+		assertTrue(x.rectangles()[0].eq(baseRect));
+	}
+
+	// Test that default remove count is 1
+	x = new UnitRectSet(new UnitRect(0, 0, 2, 2));
+	x.removeRows(0);
+	assertTrue(x.eq(new UnitRectSet(new UnitRect(0, 0, 2, 1))));
+
+	var testRows = [
+		{startRow: baseRect.y1 - 2, count: 1, expect: new UnitRect(-1, -2, 3, 3)},
+		{startRow: baseRect.y1,     count: 1, expect: new UnitRect(-1, -1, 3, 2)},
+		{startRow: 0,				count: 1, expect: new UnitRect(-1, -1, 3, 2)},
+		{startRow: baseRect.y2,     count: 1, expect: new UnitRect(-1, -1, 3, 2)},
+		{startRow: baseRect.y2 + 1, count: 1, expect: baseRect},
+
+		{startRow: baseRect.y1 - 1, count: 3, expect: new UnitRect(-1, -2, 3, 1)},
+		{startRow: baseRect.y1 + 1, count: 2, expect: new UnitRect(-1, -1, 3, 1)},
+		{startRow: baseRect.y2 + 3, count: 6, expect: baseRect}
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var testRow = testRows[i];
+		var startRow = testRow.startRow;
+		var numToRemove = testRow.count;
+		var expect = new UnitRectSet(testRow.expect);
+
+		var x = new UnitRectSet(baseRect);
+		x.removeRows(startRow, numToRemove);
+		assertTrue(x.eq(expect));
+	}
+
+	// Test that multiple rects are shifted
+	x = new UnitRectSet([new UnitRect(0, 0, 2, 2), new UnitRect(1, 4, 3, 2)]);
+	var xx = x.clone();
+	var y = x.clone();
+	xx.removeRows(-2, 2);
+	y.shift(0, -2);
+	assertTrue(xx.eq(y));
+
+	x = new UnitRectSet([new UnitRect(0, 0, 2, 2), new UnitRect(1, 4, 3, 2)]);
+	x.merge(new UnitRect(5, 0, 2, 7));
+	x.removeRows(1, 2);
+	y = new UnitRectSet([new UnitRect(0, 0, 2, 1), new UnitRect(5, 0, 2, 5),
+					  new UnitRect(1, 2, 3, 2)]);
+	assertTrue(x.eq(y));
+
+	// Remove entirely
+	x.removeRows(-5, 20);
+	assertTrue(x.isEmpty());
+
+
+	// |
+	// |
+	//    X
+	//    X
+	//    X
+	x = new UnitRectSet(new UnitRect(0, 0, 1, 3));
+	x.removeRows(-2, 2);
+	assertTrue(x.eq(new UnitRectSet(new UnitRect(0, -2, 1, 3))));
+
+	// |
+	// |
+	// |  X
+	//    X
+	//    X
+	x = new UnitRectSet(new UnitRect(0, 0, 1, 3));
+	x.removeRows(-2, 3);
+	assertTrue(x.eq(new UnitRectSet(new UnitRect(0, -2, 1, 2))));
+
+	// |
+	// |
+	// |  X
+	// |  X
+	// |  X
+	x = new UnitRectSet(new UnitRect(0, 0, 1, 3));
+	x.removeRows(-2, 5);
+	assertTrue(x.isEmpty());
+
+	//    X
+	//    X
+	// |  X
+	// |
+	// |
+	x = new UnitRectSet(new UnitRect(0, 0, 1, 3));
+	x.removeRows(2, 3);
+	assertTrue(x.eq(new UnitRectSet(new UnitRect(0, 0, 1, 2))));
+
+	//    X
+	// |  X
+	//    X
+	x = new UnitRectSet(new UnitRect(0, 0, 1, 3));
+	x.removeRows(1);
+	assertTrue(x.eq(new UnitRectSet(new UnitRect(0, 0, 1, 2))));
+
+	//    X
+	//    X
+	//    X
+	// |
+	// |
+	x = new UnitRectSet(new UnitRect(0, 0, 1, 3));
+	x.removeRows(3, 2);
+	assertTrue(x.eq(new UnitRectSet(new UnitRect(0, 0, 1, 3))));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function shiftRects(rects, deltaX, deltaY) {
+	for (var i=0; i<rects.length; i++) {
+		var rect = rects[i];
+		rect.shift(deltaX, deltaY);
+	}
+}
+
+function test_shift() {
+	var windowRects = new UnitRect(0, 0, 3, 3).difference(new UnitRect(1, 1));
+	var wind = new UnitRectSet(windowRects);
+
+	var testRows = [
+		[0, 0],
+		[2, 0],
+		[0, 2],
+		[2, 2],
+		[-2, 0],
+		[0, -2],
+		[-2, -2],
+		[2, -2],
+		[-2, 2]
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var deltaX = testRows[i][0];
+		var deltaY = testRows[i][1];
+
+		var newRects = windowRects.clone();
+		var wind2 = wind.clone();
+
+		wind2.shift(deltaX, deltaY);
+		shiftRects(newRects, deltaX, deltaY);
+		var actualCoverage = UnitRect.coverage(wind2.rectangles());
+		var expectedCoverage = UnitRect.coverage(newRects);
+		assertHashEquals(actualCoverage, expectedCoverage);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_union_UnitRect() {
+	for (var i=0; i<testUnitRectArray.length; i++) {
+		var inputRect = testUnitRectArray[i];
+		var x = new UnitRectSet(baseRects);
+
+		var result = x.union(inputRect);
+		var actualCoverage = UnitRect.coverage(result.rectangles());
+
+		var combinedRects = baseRects.clone();
+		combinedRects.push(inputRect);
+		var reducedExpectRects = unitRectReducer().reduce(combinedRects);
+		var expectedCoverage = UnitRect.coverage(reducedExpectRects);
+		assertHashEquals(actualCoverage, expectedCoverage);
+	}
+};
+
+function test_union_UnitRectArrayAndUnitRectSet() {
+	for (var i=0; i<testUnitRectArrayArray.length; i++) {
+		var inputRects = testUnitRectArrayArray[i];
+		var x = new UnitRectSet(baseRects);
+
+		var result = x.union(inputRects);
+		var actualCoverage = UnitRect.coverage(result.rectangles());
+
+		var combinedRects = baseRects.concat(inputRects);
+		var reducedExpectRects = unitRectReducer().reduce(combinedRects);
+		var expectedCoverage = UnitRect.coverage(reducedExpectRects);
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		// Also test another union with another UnitRectSet
+		result = x.union(new UnitRectSet(inputRects));
+		actualCoverage = UnitRect.coverage(result.rectangles());
+		assertHashEquals(actualCoverage, expectedCoverage);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_verticalRanges() {
+	// a) (0, 0) -> (2, 2)
+	// b) (4, 1) -> (6, 5)  * Inverted in test
+	// c) (1, 4) -> (3, 7)
+	var rects = [new UnitRect(0, 0, 3, 3), new UnitRect(6, 5, -3, -5), new UnitRect(1, 4, 3, 4)];
+	var s = new UnitRectSet(rects);
+
+	var testRows = [
+		[-1, []],
+		[0, [0, 1, 2]],
+		[1, [0, 1, 2, 4, 5, 6, 7]],
+		[2, [0, 1, 2, 4, 5, 6, 7]],
+		[3, [4, 5, 6, 7]],
+		[4, [1, 2, 3, 4, 5]],
+		[5, [1, 2, 3, 4, 5]],
+		[6, [1, 2, 3, 4, 5]],
+		[7, []],
+		[null, [0, 1, 2, 3, 4, 5, 6, 7]]
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var testRow = testRows[i];
+		var x = testRow[0];
+		var expectHash = {};
+		for (var j=0; j<testRow[1].length; j++)
+			expectHash[testRow[1][j]] = 1;
+
+		var result = s.verticalRanges(x);
+		var actualCoverage = ClosedIntRange.coverage(result.ranges());
+		assertHashEquals(actualCoverage, expectHash);
+	}
+};
+
+
+</script>
+</body>
+</html>

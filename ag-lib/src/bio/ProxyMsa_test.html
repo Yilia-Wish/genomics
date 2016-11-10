@@ -1,0 +1,107 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - ag.bio.ProxyMsa</title>
+    <meta charset='utf-8'>
+</head>
+
+<script src='../goog/base.js'></script>
+<script src='../deps.js'></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.math.Coordinate');
+goog.require('ag.bio.BioString');
+goog.require('ag.bio.Subseq');
+goog.require('ag.bio.grammar');
+goog.require('ag.bio.Msa');
+goog.require('ag.bio.ProxyMsa');
+goog.require('ag.bio.MsaSubseqChange');
+goog.require('ag.bio.ObservableMsa');
+goog.require('ag.core.ClosedIntRange');
+goog.require('ag.core.UnitRect');
+goog.require('ag.meta.SignalSpy');
+</script>
+<body>
+<script>
+// Aliases
+var grammar = ag.bio.grammar;
+var BioString = ag.bio.BioString;
+var ClosedIntRange = ag.core.ClosedIntRange;
+var Msa = ag.bio.Msa;
+var ObservableMsa = ag.bio.ObservableMsa;
+var ProxyMsa = ag.bio.ProxyMsa;
+var Subseq = ag.bio.Subseq;
+var UnitRect = ag.core.UnitRect;
+var MsaSubseqChange = ag.bio.MsaSubseqChange;
+var SignalSpy = ag.meta.SignalSpy;
+var TrimExtOp = MsaSubseqChange.TrimExtOp;
+
+var Coordinate = goog.math.Coordinate;
+var SignalType = ObservableMsa.SignalType;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_mapToSource() {
+    var msa = new ObservableMsa();
+    msa.append(new Subseq('ABC'));
+    msa.append(new Subseq('DEF'));
+    msa.append(new Subseq('GHI'));
+    msa.append(new Subseq('JKL'));
+    msa.append(new Subseq('MNO'));
+
+    var x = new ProxyMsa();
+    x.setSourceMsa(msa);
+
+    x.setRowsVisible(new ClosedIntRange(1), false);
+    x.setRowsVisible(new ClosedIntRange(3, 4), false);
+
+    assertEquals(2, x.rowCount());
+    assertEquals(2, x.mapToSource(1));
+    assertEquals('DEF', x.at(1).toString());
+    assertEquals(5, x.mapToSource(2));
+    assertEquals('MNO', x.at(2).toString());
+
+    msa.append(new Subseq('PQF'));
+    assertEquals(3, x.rowCount());
+    assertEquals(5, x.mapToSource(2));
+    assertEquals(6, x.mapToSource(3));
+
+    x.setRowsVisible(new ClosedIntRange(6), false);
+    assertEquals(2, x.rowCount());
+    assertEquals(5, x.mapToSource(2));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_mapFromSource() {
+    var msa = new ObservableMsa();
+    msa.append(new Subseq('ABC'));
+    msa.append(new Subseq('DEF'));
+    msa.append(new Subseq('GHI'));
+    msa.append(new Subseq('JKL'));
+    msa.append(new Subseq('MNO'));
+
+    var x = new ProxyMsa();
+    x.setSourceMsa(msa);
+
+    x.setRowsVisible(new ClosedIntRange(1), false);
+    x.setRowsVisible(new ClosedIntRange(3, 4), false);
+
+    assertEquals(2, x.rowCount());
+    assertEquals(0, x.mapFromSource(1));
+    assertEquals(1, x.mapFromSource(2));
+    assertEquals(0, x.mapFromSource(3));
+    assertEquals(0, x.mapFromSource(4));
+    assertEquals(2, x.mapFromSource(5));
+
+    msa.append(new Subseq('PQF'));
+    assertEquals(3, x.rowCount());
+    assertEquals(2, x.mapFromSource(5));
+    assertEquals(3, x.mapFromSource(6));
+
+    x.setRowsVisible(new ClosedIntRange(6), false);
+    assertEquals(2, x.rowCount());
+    assertEquals(0, x.mapFromSource(6));
+};
+
+</script>
+</body>
+</html>

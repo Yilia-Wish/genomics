@@ -1,0 +1,190 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.model.ModelIndex</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.model.AbstractItemModel');
+goog.require('ag.model.MockItemModel');
+</script>
+<body>
+<script>
+// Aliases
+var AbstractItemModel = ag.model.AbstractItemModel;
+var MockItemModel = ag.model.MockItemModel;
+var ModelIndex = ag.model.ModelIndex;
+
+var DataRole = AbstractItemModel.DataRole;
+
+var model;
+
+// --------------------------------------------------------------------------------------------------------------------
+function setUp() {
+	model = new MockItemModel();
+};
+
+function tearDown() {
+	model = null;
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	var x = new ModelIndex();
+	assertEquals(x.row(), -1);
+	assertEquals(x.column(), -1);
+	assertNull(x.model());
+	assertNull(x.internalData());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: create_
+function test_create_() {
+	var x = ModelIndex.create_(3);
+	assertEquals(x.row(), 3);
+	assertEquals(x.column(), -1);
+	assertNull(x.model());
+	assertNull(x.internalData());
+
+	x = ModelIndex.create_(2, 6);
+	assertEquals(x.row(), 2);
+	assertEquals(x.column(), 6);
+	assertNull(x.model());
+	assertNull(x.internalData());
+
+	// Not exactly correct to use an array for the model parameter, but for testing purposes it does the job.
+	x = ModelIndex.create_(0, 0, null);
+	assertEquals(x.row(), 0);
+	assertEquals(x.column(), 0);
+	assertNull(x.model());
+	assertNull(x.internalData());
+
+	x = ModelIndex.create_(1, 3, null, 65);
+	assertEquals(x.row(), 1);
+	assertEquals(x.column(), 3);
+	assertNull(x.model());
+	assertEquals(x.internalData(), 65);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: test_columnAndRow
+function test_columnAndRow() {
+	for (var i=0; i< model.rowCount(); i++) {
+		for (var j=0; j< model.columnCount(); j++) {
+			var x = model.index(i, j);
+			assertEquals(x.column(), j);
+			assertEquals(x.row(), i);
+		}
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: eq
+function test_eq() {
+	var x = new ModelIndex();
+	assertTrue(x.eq(x));
+
+	x = model.index(0, 0);
+	assertTrue(x.isValid());
+	y = model.index(0, 0);
+	assertTrue(x.eq(y));
+	assertTrue(y.eq(x));
+
+	var model2 = new MockItemModel();
+	var xx = model2.index(0, 0);
+	assertFalse(xx.eq(x));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: data
+function test_data() {
+	var x = new ModelIndex();
+	assertNull(x.data());
+	assertNull(x.data(DataRole.kDisplay));
+	assertNull(x.data(DataRole.kEdit));
+
+	x = model.index(0, 0);
+	assertEquals(x.data(), 0);
+	assertEquals(x.data(DataRole.kDisplay), 0);
+	assertEquals(x.data(DataRole.kEdit), 'edit-0');
+
+	x = model.index(-5, 2);
+	assertFalse(x.isValid());
+	assertNull(x.data());
+	assertNull(x.data(DataRole.kDisplay));
+	assertNull(x.data(DataRole.kEdit));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_dataForColumn() {
+	var x = model.index(0, 0);
+	assertEquals(x.dataForColumn(0), 0);
+	assertEquals(x.dataForColumn(0, DataRole.kDisplay), 0);
+	assertEquals(x.dataForColumn(0, DataRole.kEdit), 'edit-0');
+
+	assertEquals(x.dataForColumn(1), 'Luke');
+	assertEquals(x.dataForColumn(1, DataRole.kDisplay), 'Luke');
+	assertEquals(x.dataForColumn(1, DataRole.kEdit), 'edit-Luke');
+
+	assertEquals(x.dataForColumn(2), 32);
+	assertEquals(x.dataForColumn(2, DataRole.kDisplay), 32);
+	assertEquals(x.dataForColumn(2, DataRole.kEdit), 'edit-32');
+
+	x = model.index(-5, 2);
+	assertFalse(x.isValid());
+	assertNull(x.dataForColumn(0));
+	assertNull(x.dataForColumn(0, DataRole.kDisplay));
+	assertNull(x.dataForColumn(0, DataRole.kEdit));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: isValid
+function test_isValid() {
+	var x = new ModelIndex();
+	assertFalse(x.isValid());
+
+	x = model.index(0, 0);
+	assertTrue(x.isValid());
+
+	x = model.index(-1, -1);
+	assertFalse(x.isValid());
+
+	x = model.index(model.rowCount(), model.columnCount() - 1);
+	assertFalse(x.isValid());
+
+	x = model.index(model.rowCount()-1, model.columnCount()-1);
+	assertTrue(x.isValid());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: sibling
+function test_sibling() {
+	var x = new ModelIndex();
+
+	// An invalid index does not produce valid sibling indices
+	var y = x.sibling(4);
+	assertEquals(y.column(), -1);
+
+	x = model.index(0, 0);
+	y = x.sibling(0);
+	assertEquals(x, y);
+
+	y = x.sibling(1);
+	assertFalse(x === y);
+	assertTrue(y.isValid());
+	assertEquals(y.column(), 1);
+	assertEquals(y.row(), 0);
+
+	y = x.sibling(-3);
+	assertEquals(y.column(), -1);
+	assertFalse(y.isValid());
+};
+
+</script>
+</body>
+</html>

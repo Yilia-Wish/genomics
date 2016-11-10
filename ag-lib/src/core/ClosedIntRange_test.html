@@ -1,0 +1,393 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.core.ClosedIntRange</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.math.Coordinate');
+goog.require('goog.math.Size');
+goog.require('ag.core.ClosedIntRange');
+</script>
+<body>
+<script>
+var ClosedIntRange = ag.core.ClosedIntRange;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_constructor() {
+	var x = new ClosedIntRange(5);
+	assertEquals(x.begin, 5);
+	assertEquals(x.begin, x.end);
+
+	x = new ClosedIntRange(-3, 5);
+	assertEquals(x.begin, -3);
+	assertEquals(x.end, 5);
+
+	x = new ClosedIntRange(10, -10);
+	assertEquals(x.begin, 10);
+	assertEquals(x.end, -10);
+
+	x = new ClosedIntRange(-3);
+	assertEquals(x.begin, -3);
+	assertEquals(x.end, -3);
+
+	x = new ClosedIntRange(0);
+	assertEquals(x.begin, 0);
+	assertEquals(x.end, 0);
+};
+
+function test_createFromValues() {
+	var x = ClosedIntRange.createUsingLength();
+	assertEquals(x.begin, 0);
+	assertEquals(x.end, 0);
+
+	x = ClosedIntRange.createUsingLength(5);
+	assertEquals(x.begin, 5);
+	assertEquals(x.begin, x.end);
+
+	x = ClosedIntRange.createUsingLength(-3, 5);
+	assertEquals(x.begin, -3);
+	assertEquals(x.end, 1);
+
+	x = ClosedIntRange.createUsingLength(10, -10);
+	assertEquals(x.begin, 10);
+	assertEquals(x.end, 1);
+
+	x = ClosedIntRange.createUsingLength(-3);
+	assertEquals(x.begin, -3);
+	assertEquals(x.end, -3);
+
+	x = ClosedIntRange.createUsingLength(0);
+	assertEquals(x.begin, 0);
+	assertEquals(x.end, 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_coverage() {
+	var testRows = [
+		// Test: empty array
+		{input: [],
+		 expect: {}},
+
+		// Test: single basic range
+		{input: [ClosedIntRange.createUsingLength(0, 2)],
+		 expect: {0: 1, 1: 1}},
+
+		// Test: two overlapping ranges
+		{input: [ClosedIntRange.createUsingLength(0, 2), ClosedIntRange.createUsingLength(0, 2)],
+		 expect: {0: 2, 1: 2}},
+
+		// Test: A  A  X  X  X
+		{input: [ClosedIntRange.createUsingLength(0, 2), ClosedIntRange.createUsingLength(2, 3)],
+		 expect: {0: 1, 1: 1, 2: 1, 3: 1, 4: 1}},
+
+		// Test: partial overlap
+		{input: [ClosedIntRange.createUsingLength(0, 2), ClosedIntRange.createUsingLength(1, 2)],
+		 expect: {0: 1, 1: 2, 2: 1}},
+
+		// Test: three overlaps
+		{input: [ClosedIntRange.createUsingLength(2, -3), ClosedIntRange.createUsingLength(1, 3), ClosedIntRange.createUsingLength(2, 3)],
+		 expect: {0: 1, 1: 2, 2: 3, 3: 2, 4: 1}},
+
+		// Test: next but not touching
+		{input: [ClosedIntRange.createUsingLength(0, 2), ClosedIntRange.createUsingLength(5, 2)],
+		 expect: {0: 1, 1: 1, 5: 1, 6: 1}}
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var testRow = testRows[i];
+		assertHashEquals(ClosedIntRange.coverage(testRow.input), testRow.expect);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// operators
+function test_eq() {
+	var x = ClosedIntRange.createUsingLength();
+	var y = ClosedIntRange.createUsingLength();
+	assertFalse(x === y);
+	assertTrue(x.eq(y));
+
+	x.begin = 5;
+	assertFalse(x.eq(y));
+	y.begin = 5;
+	assertTrue(x.eq(y));
+
+	x = ClosedIntRange.createUsingLength(1, 3);
+	y = ClosedIntRange.createUsingLength(3, -3);
+	assertFalse(x.eq(y));
+};
+
+function test_lt() {
+	var x = ClosedIntRange.createUsingLength();
+	var y = ClosedIntRange.createUsingLength();
+
+	assertFalse(x.lt(y));
+
+	x.begin = -3;
+	assertTrue(x.lt(y));
+	assertFalse(y.lt(x));
+
+	y.end = -10;
+	assertFalse(x.lt(y));
+	assertTrue(y.lt(x));
+};
+
+function test_ne() {
+	var x = ClosedIntRange.createUsingLength();
+	var y = ClosedIntRange.createUsingLength();
+	assertFalse(x === y);
+	assertFalse(x.ne(y));
+
+	x.begin = 5;
+	assertTrue(x.ne(y));
+	y.begin = 5;
+	assertFalse(x.ne(y));
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_clone() {
+	var x = ClosedIntRange.createUsingLength(3, 5);
+	var y = x.clone();
+	assertFalse(x === y);
+	assertEquals(y.begin, x.begin);
+	assertEquals(y.end, x.end);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_adjust() {
+	var testRows = [
+		[3, 5, 8],
+		[-3, 5, -3],
+		[5, 1, 8]
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var testRow = testRows[i];
+		var x = ClosedIntRange.createUsingLength(testRow[0], testRow[1]);
+		x.adjust(testRow[2]);
+		assertEquals(x.begin, testRow[0] + testRow[2]);
+		assertEquals(x.end, testRow[0] + testRow[1] - 1 + testRow[2]);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_contains() {
+	var x = ClosedIntRange.createUsingLength(3, 5);
+	var y = new ClosedIntRange(x.end, x.begin);
+	for (var i=0; i<9; i++) {
+		assertEquals(x.contains(i), i >= 3 && i <= 7);
+		assertEquals(y.contains(i), i >= 3 && i <= 7);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_containsRange() {
+	var x = ClosedIntRange.createUsingLength(0, 3);
+	assertTrue(x.containsRange(ClosedIntRange.createUsingLength(0, 3)));
+	assertTrue(x.containsRange(ClosedIntRange.createUsingLength(1)));
+
+	assertFalse(x.containsRange(ClosedIntRange.createUsingLength(0, 4)));
+	assertFalse(x.containsRange(ClosedIntRange.createUsingLength(-1, 3)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_difference() {
+	var a = new ClosedIntRange(0, 5);
+	var testRows = [
+		// Test: no intersection
+		{b: new ClosedIntRange(10, 12),
+		 expect: [a]},
+
+		// Test: b completely overlaps a
+		{b: a,
+		 expect: []},
+
+		// --------------------------------
+		// Suite: end overlaps - 1 range returned
+		// Test: b overlaps left end
+		{b: new ClosedIntRange(-3, 2),
+		 expect: [new ClosedIntRange(3, 5)]},
+
+		// Test: b overlaps right end
+		{b: new ClosedIntRange(3, 7),
+		 expect: [new ClosedIntRange(0, 2)]},
+
+		// --------------------------------
+		// Test: b overlaps middle - 2 ranges returned
+		{b: new ClosedIntRange(2, 3),
+		 expect: [new ClosedIntRange(0, 1),
+		 		  new ClosedIntRange(4, 5)]}
+	];
+
+	for (var i=0; i< testRows.length; i++) {
+		var b = testRows[i].b;
+		var expect = testRows[i].expect;
+
+		var result = a.difference(b);
+
+		assertEquals(result.length, expect.length);
+		for (var j=0; j<result.length; j++)
+			assertTrue(expect[j].eq(result[j]));
+
+		// Non-normal on either side should give the same result
+		// 1) Normal a, inverted b
+		var c = b.clone();
+		var tmp = c.begin;
+		c.begin = c.end;
+		c.end = tmp;
+		result = a.difference(c);
+		assertEquals(result.length, expect.length);
+		for (var j=0; j<result.length; j++)
+			assertTrue(expect[j].eq(result[j]));
+
+		// 2) Inverted a, Normal b
+		var aa = a.clone();
+		tmp = aa.begin;
+		aa.begin = aa.end;
+		aa.end = tmp;
+		result = aa.difference(b);
+		assertEquals(result.length, expect.length);
+		for (var j=0; j<result.length; j++)
+			assertTrue(expect[j].eq(result[j]));
+
+		// 3) Inverted a, inverted b
+		result = aa.difference(c);
+		assertEquals(result.length, expect.length);
+		for (var j=0; j<result.length; j++)
+			assertTrue(expect[j].eq(result[j]));
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_intersection() {
+	var baseRange = ClosedIntRange.createUsingLength();
+
+	var testRows = [
+		// Test: two default ranges
+		[baseRange, baseRange, baseRange],
+		[baseRange, ClosedIntRange.createUsingLength(0, 3), baseRange],
+		// Test: two completely overlapping ranges
+		[ClosedIntRange.createUsingLength(2, 3), ClosedIntRange.createUsingLength(2, 3), ClosedIntRange.createUsingLength(2, 3)],
+		// Test: two touching ranges, but not overlapping
+		[ClosedIntRange.createUsingLength(0, 2), ClosedIntRange.createUsingLength(2, 2), null],
+		// Test: overlap by one unit
+		[ClosedIntRange.createUsingLength(0, 2), ClosedIntRange.createUsingLength(1, 2), ClosedIntRange.createUsingLength(1)],
+		// Test: range inside range
+		[ClosedIntRange.createUsingLength(0, 10), ClosedIntRange.createUsingLength(5, 2), ClosedIntRange.createUsingLength(5, 2)],
+
+		// Test: non-normal ranges
+		[ClosedIntRange.createUsingLength(5, -3), ClosedIntRange.createUsingLength(5, -3), ClosedIntRange.createUsingLength(3, 3)]
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var testRow = testRows[i];
+		var r1 = testRow[0];
+		var r2 = testRow[1];
+		var r3 = testRow[2];
+
+		if (r3) {
+			assertTrue(r1.intersection(r2).eq(r3));
+			assertTrue(r2.intersection(r1).eq(r3));
+		}
+		else {
+			assertNull(r1.intersection(r2));
+			assertNull(r2.intersection(r1));
+		}
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_invert() {
+	var x = new ClosedIntRange(5, 8);
+	x.invert();
+	assertEquals(8, x.begin);
+	assertEquals(5, x.end);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_isNormal() {
+	var x = ClosedIntRange.createUsingLength();
+	assertTrue(x.isNormal());
+
+	x = ClosedIntRange.createUsingLength(0);
+	assertTrue(x.isNormal());
+
+	x.end = x.begin - 1;
+	assertFalse(x.isNormal());
+
+	x.end = x.begin;
+	assertTrue(x.isNormal());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_length() {
+	var x = ClosedIntRange.createUsingLength();
+	assertEquals(x.length(), 1);
+
+	x = ClosedIntRange.createUsingLength(3, 5);
+	assertEquals(x.length(), 5);
+	x.begin = 0;
+	assertEquals(x.length(), 8);
+	x.end = 1;
+	assertEquals(x.length(), 2);
+
+	x = ClosedIntRange.createUsingLength(0, -2);
+	assertEquals(x.length(), -2);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_moveBegin() {
+	var x = ClosedIntRange.createUsingLength(0, 5);
+	x.moveBegin(-2);
+	assertEquals(x.begin, -2);
+	assertEquals(x.end, 2);
+
+	x.moveBegin(2);
+	assertEquals(x.begin, 2);
+	assertEquals(x.end, 6);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_moveEnd() {
+	var x = ClosedIntRange.createUsingLength(0, 5);
+	x.moveEnd(-2);
+	assertEquals(x.end, -2);
+	assertEquals(x.begin, -6);
+
+	x.moveEnd(2);
+	assertEquals(x.end, 2);
+	assertEquals(x.begin, -2);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_normalized() {
+	var normalRange = ClosedIntRange.createUsingLength(-1, 3);
+
+	assertTrue(ClosedIntRange.createUsingLength(1, -3).normalized().eq(normalRange));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setLength() {
+    var x = ClosedIntRange.createUsingLength();
+
+    for (var i=-50; i< 50; ++i) {
+    	if (i === 0)
+    		continue;
+        x.setLength(i);
+        assertEquals(x.length(), (i != -1) ? i : 1);
+        assertTrue(x.begin === 0);
+        var expectEnd = (i < 0) ? i+1 : i-1;
+        assertEquals(x.end, expectEnd);
+    }
+};
+
+
+</script>
+</body>
+</html>

@@ -1,0 +1,397 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.core.UnitRect</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.math.Coordinate');
+goog.require('goog.math.Size');
+goog.require('ag.core.UnitRect');
+goog.require('ag.core.UnitRectReducer');
+</script>
+<body>
+<script>
+// Aliases
+var Coordinate = goog.math.Coordinate;
+var Size = goog.math.Size;
+
+var UnitRect = ag.core.UnitRect;
+var UnitRectArray = ag.core.UnitRectArray;
+var UnitRectReducer = ag.core.UnitRectReducer;
+
+var x;
+
+// --------------------------------------------------------------------------------------------------------------------
+function setUp() {
+	x = UnitRectReducer.getInstance();
+};
+
+function tearDown() {
+	x = null;
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Utility functions
+/**
+ * @param {UnitRectArray} rects
+ * @return {number}
+ */
+function area(rects) {
+	var totalArea = 0;
+	for (var i=0; i<rects.length; i++)
+		totalArea += rects[i].area();
+	return totalArea;
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Test: reduce
+function test_reduce() {
+	var cases = [
+		// Empty input
+		{input: [], expect: {}},
+
+		// Single rectangle: X
+		{input: [new UnitRect(0, 0, 1, 1)],
+		 expect: {'0,0': 1} },
+
+		// Two non-overlapping rectangles
+		// X  _  O
+		{input: [new UnitRect(0, 0, 1, 1),
+				 new UnitRect(2, 0, 1, 1)],
+		 expect: {'0,0': 1,
+				  '2,0': 1}},
+
+		// Two rectangles exactly over each other
+		// XO
+		{input: [new UnitRect(0, 0),
+				 new UnitRect(0, 0)],
+		 expect: {'0,0': 1}},
+
+		// Two horizontally overlapping rectangles
+		// X  XO O
+		{input: [new UnitRect(0, 0, 2, 1),
+				 new UnitRect(1, 0, 2, 1)],
+		 expect: {'0,0': 1,
+		 		  '1,0': 1,
+		 		  '2,0': 1}},
+
+		// Two vertically overlapping rectangles
+		// X
+		// XO
+		// O
+		{input: [new UnitRect(0, 0, 1, 2),
+				 new UnitRect(0, 1, 1, 2)],
+		 expect: {'0,0': 1,
+		 		  '0,1': 1,
+		 		  '0,2': 1}},		 	
+
+		// X  X
+		// X  XO O
+		//     O O
+		{input: [new UnitRect(0, 0, 2, 2),
+				 new UnitRect(1, 1, 2, 2)],
+		 expect: {'0,0': 1,
+				  '1,0': 1,
+				  '0,1': 1,
+				  '1,1': 1,
+				  '2,1': 1,
+				  '1,2': 1,
+				  '2,2': 1}},
+
+	    // Variant on the above
+	    // _  X  X
+	    // O  XO X
+	    // O  O
+		{input: [new UnitRect(1, 0, 2, 2),
+				 new UnitRect(0, 1, 2, 2)],
+		 expect: {'1,0': 1,
+				  '2,0': 1,
+				  '0,1': 1,
+				  '1,1': 1,
+				  '2,1': 1,
+				  '0,2': 1,
+				  '1,2': 1}},
+
+		// XYZ YZ  Z
+		// YZ  Y   Z
+		// Z   Z   Z
+		{input: [new UnitRect(0, 0),
+				 new UnitRect(0, 0, 2, 2),
+				 new UnitRect(0, 0, 3, 3)],
+		 expect: {'0,0': 1,
+		 	 	  '1,0': 1,
+		 	 	  '2,0': 1,
+		 	 	  '0,1': 1,
+		 	 	  '1,1': 1,
+		 	 	  '2,1': 1,
+		 	 	  '0,2': 1,
+		 	 	  '1,2': 1,
+		 	 	  '2,2': 1}},
+
+		//    X
+		// Y  XY Y
+		//    X
+		{input: [new UnitRect(1, 0, 1, 3),
+				 new UnitRect(0, 1, 3, 1)],
+		 expect: {'1,0': 1,
+				  '0,1': 1,
+				  '1,1': 1,
+				  '2,1': 1,
+				  '1,2': 1}},
+
+		// X  X
+		// XY XY Y
+		// X  X
+		// XZ XZ
+		// X  X
+		// XA X
+		{input: [new UnitRect(0, 0, 2, 6),
+				 new UnitRect(0, 1, 3, 1),
+				 new UnitRect(0, 3, 2, 1),
+				 new UnitRect(0, 5, 1, 1)],
+		 expect: {'0,0': 1,
+		 		  '1,0': 1,
+				  '0,1': 1,
+				  '1,1': 1,
+				  '2,1': 1,
+				  '0,2': 1,
+				  '1,2': 1,
+				  '0,3': 1,
+				  '1,3': 1,
+				  '0,4': 1,
+				  '1,4': 1,
+				  '0,5': 1,
+				  '1,5': 1
+				}},
+
+		// XY X  X
+		// Y  _  Z
+		// YA A  AZ
+		{input: [new UnitRect(0, 0, 3, 1),
+				 new UnitRect(0, 0, 1, 3),
+				 new UnitRect(2, 1, 1, 2),
+				 new UnitRect(0, 2, 3, 1)],
+		 expect: {'0,0': 1,
+		 		  '1,0': 1,
+		 		  '2,0': 1,
+		 		  '0,1': 1,
+		 		  '2,1': 1,
+		 		  '0,2': 1,
+		 		  '1,2': 1,
+		 		  '2,2': 1}},
+
+		// XY  X   X
+		// Y   B   BZ  B
+		// YA  AB  ABZ B
+		//     B   B   B
+		{input: [new UnitRect(0, 0, 3, 1),
+				 new UnitRect(0, 0, 1, 3),
+				 new UnitRect(2, 1, 1, 2),
+				 new UnitRect(0, 2, 3, 1),
+				 new UnitRect(1, 1, 3, 3)],
+		 expect: {'0,0': 1,
+		 		  '1,0': 1,
+		 		  '2,0': 1,
+		 		  '0,1': 1,
+		 		  '1,1': 1,
+		 		  '2,1': 1,
+		 		  '3,1': 1,
+		 		  '0,2': 1,
+		 		  '1,2': 1,
+		 		  '2,2': 1,
+		 		  '3,2': 1,
+		 		  '1,3': 1,
+		 		  '2,3': 1,
+		 		  '3,3': 1}},
+
+		// X   XA  X   X
+		// XB  XAB XB  X
+		// X   XA  X   X
+		{input: [new UnitRect(0, 0, 4, 3),
+			     new UnitRect(1, 0, 1, 3),
+			     new UnitRect(0, 1, 3, 1)],
+		 expect: {'0,0': 1,
+		 		  '1,0': 1,
+		 		  '2,0': 1,
+		 		  '3,0': 1,
+		 		  '0,1': 1,
+		 		  '1,1': 1,
+		 		  '2,1': 1,
+		 		  '3,1': 1,
+		 		  '0,2': 1,
+		 		  '1,2': 1,
+		 		  '2,2': 1,
+		 		  '3,2': 1}},
+
+	    // Tests: positive uniqueTopAmount of mergeOverlappingYRanges_
+		// X   X   X
+		// X   XA  XA  A
+		// X   XA  XAB AB  B
+		//      A   AB AB  B
+		//           B  B  B
+		{input: [new UnitRect(0, 0, 3, 3),
+				 new UnitRect(1, 1, 3, 3),
+				 new UnitRect(2, 2, 3, 3)],
+		 expect: {'0,0': 1,
+		 		  '1,0': 1,
+		 		  '2,0': 1,
+
+		 		  '0,1': 1,
+		 		  '1,1': 1,
+		 		  '2,1': 1,
+		 		  '3,1': 1,
+
+		 		  '0,2': 1,
+		 		  '1,2': 1,
+		 		  '2,2': 1,
+		 		  '3,2': 1,
+		 		  '4,2': 1,
+
+		 		  '1,3': 1,
+		 		  '2,3': 1,
+		 		  '3,3': 1,
+		 		  '4,3': 1,
+
+		 		  '2,4': 1,
+		 		  '3,4': 1,
+		 		  '4,4': 1}},
+
+	    // Tests: zero uniqueBottomAmount of mergeOverlappingYRanges_
+		//      A   A  A   
+		//      A   AB AB  B
+		// X   XA  XAB AB  B
+		// X   X   X B  B  B
+		// X   X   X
+		{input: [new UnitRect(0, 2, 3, 3),  // X
+				 new UnitRect(1, 0, 3, 3),  // A
+				 new UnitRect(2, 1, 3, 3)], // B
+		 expect: {'0,4': 1,
+		 		  '1,4': 1,
+		 		  '2,4': 1,
+
+		 		  '0,3': 1,
+		 		  '1,3': 1,
+		 		  '2,3': 1,
+		 		  '3,3': 1,
+		 		  '4,3': 1,
+
+		 		  '0,2': 1,
+		 		  '1,2': 1,
+		 		  '2,2': 1,
+		 		  '3,2': 1,
+		 		  '4,2': 1,
+
+		 		  '1,1': 1,
+		 		  '2,1': 1,
+		 		  '3,1': 1,
+		 		  '4,1': 1,
+
+		 		  '1,0': 1,
+		 		  '2,0': 1,
+		 		  '3,0': 1}},
+
+	    // Tests: same terminus of mergeOverlappingYRanges_
+		// X   X   X
+		// X   XA  XA  A  A
+		// X   XA  XAB AB AB
+		//      A   AB AB AB
+		//           B  B  B
+		{input: [new UnitRect(0, 0, 3, 3),
+				 new UnitRect(1, 1, 4, 3),
+				 new UnitRect(2, 2, 3, 3)],
+		 expect: {'0,0': 1,
+		 		  '1,0': 1,
+		 		  '2,0': 1,
+
+		 		  '0,1': 1,
+		 		  '1,1': 1,
+		 		  '2,1': 1,
+		 		  '3,1': 1,
+		 		  '4,1': 1,
+
+		 		  '0,2': 1,
+		 		  '1,2': 1,
+		 		  '2,2': 1,
+		 		  '3,2': 1,
+		 		  '4,2': 1,
+
+		 		  '1,3': 1,
+		 		  '2,3': 1,
+		 		  '3,3': 1,
+		 		  '4,3': 1,
+
+		 		  '2,4': 1,
+		 		  '3,4': 1,
+		 		  '4,4': 1}},
+
+	    // Test: positive uniqueBottomAmount of mergeOverlappingYRanges_
+		//           B  B  B
+		//      A   AB AB  B
+		// X   XA  XAB AB  B
+		// X   XA  XA  A
+		// X   X   X
+		{input: [new UnitRect(0, 2, 3, 3),
+				 new UnitRect(1, 1, 3, 3),
+				 new UnitRect(2, 0, 3, 3)],
+		 expect: {'0,4': 1,
+		 		  '1,4': 1,
+		 		  '2,4': 1,
+
+		 		  '0,3': 1,
+		 		  '1,3': 1,
+		 		  '2,3': 1,
+		 		  '3,3': 1,
+
+		 		  '0,2': 1,
+		 		  '1,2': 1,
+		 		  '2,2': 1,
+		 		  '3,2': 1,
+		 		  '4,2': 1,
+
+		 		  '1,1': 1,
+		 		  '2,1': 1,
+		 		  '3,1': 1,
+		 		  '4,1': 1,
+
+		 		  '2,0': 1,
+		 		  '3,0': 1,
+		 		  '4,0': 1}},
+
+		// Tests: equivalent terminii, but yRange end < last yRange end
+		// X   XAB AB
+		// X   XA  A
+		{input: [new UnitRect(0, 0, 2, 2),  // X
+				 new UnitRect(1, 0, 2, 2),  // A
+				 new UnitRect(1, 0, 2, 1)], // B
+		 expect: {'0,0': 1,
+				  '1,0': 1,
+				  '2,0': 1,
+				  '0,1': 1,
+				  '1,1': 1,
+				  '2,1': 1}},
+
+		// ----------------------------------
+		// Test: non-normal input
+		{input: [new UnitRect(3, 3, -3, -2)],
+		 expect: {'1,2': 1,
+				  '2,2': 1,
+				  '3,2': 1,
+				  '1,3': 1,
+				  '2,3': 1,
+				  '3,3': 1}}
+	];
+
+	for (var i=0; i<cases.length; i++) {
+		var result = x.reduce(cases[i].input);
+		var resultCoverage = UnitRect.coverage(result);
+		assertHashEquals(resultCoverage, cases[i].expect);
+	}
+}
+
+</script>
+</html>

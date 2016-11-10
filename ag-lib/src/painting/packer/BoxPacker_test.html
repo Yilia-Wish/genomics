@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.painting.BoxPacker</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../../goog/base.js"></script>
+<script src="../../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.math.Coordinate');
+goog.require('goog.math.Size');
+goog.require('ag.painting.packer.BoxPacker');
+goog.require('ag.painting.packer.Page');
+goog.require('ag.painting.packer.Block');
+goog.require('ag.painting.packer.Line');
+</script>
+<body>
+<script>
+// Aliases
+var Coordinate = goog.math.Coordinate;
+var Size = goog.math.Size;
+
+var BoxPacker = ag.painting.packer.BoxPacker;
+var Page = ag.painting.packer.Page;
+var Block = ag.painting.packer.Block;
+var Line = ag.painting.packer.Line;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	var x = new BoxPacker();
+	assertEquals(x.sideLength(), 512);
+
+	x = new BoxPacker(234);
+	assertEquals(x.sideLength(), 234);	
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: createBlock
+function test_createBlock() {
+	var x = new BoxPacker(100);
+
+	// Test fully encompassing block requests
+	var s = new Size(100, 100);
+	var b = x.createBlock(s);
+	assertTrue(Size.equals(s, b.size));
+	assertEquals(b.page, 0);
+	assertEquals(b.origin.x, 0);
+	assertEquals(b.origin.y, 0);
+
+	var b2 = x.createBlock(s);
+	assertTrue(Size.equals(s, b2.size));
+	assertEquals(b2.page, 1);
+	assertEquals(b2.origin.x, 0);
+	assertEquals(b2.origin.y, 0);
+
+	assertEquals(x.pageCount(), 2);
+
+	// Test multiple requests of same size
+	x.reset();
+	s = new Size(45, 40);
+	b = x.createBlock(s);
+	assertTrue(Size.equals(s, b.size));
+	assertEquals(b.page, 0);
+	assertEquals(b.origin.x, 0);
+	assertEquals(b.origin.y, 0);
+	b = x.createBlock(s);
+	assertTrue(Size.equals(s, b.size));
+	assertEquals(b.page, 0);
+	assertEquals(b.origin.x, 45);
+	assertEquals(b.origin.y, 0);
+	b = x.createBlock(s);
+	assertEquals(b.page, 0);
+	assertEquals(b.origin.x, 0);
+	assertEquals(b.origin.y, 40 * BoxPacker.EXTRA_HEIGHT_FACTOR_);
+	b = x.createBlock(s);
+	assertEquals(b.page, 0);
+	assertEquals(b.origin.x, 45);
+	assertEquals(b.origin.y, 40 * BoxPacker.EXTRA_HEIGHT_FACTOR_);
+	b = x.createBlock(s);
+	assertEquals(b.page, 1);
+	assertEquals(b.origin.x, 0);
+	assertEquals(b.origin.y, 0);
+
+	// Test multiple requests of different sizes
+	x.reset();
+	s = new Size(50, 50);
+	x.createBlock(s);
+	b = x.createBlock(new Size(10, 10));
+	assertEquals(b.page, 0);
+	assertEquals(b.origin.x, 0);
+	assertTrue(Math.abs(b.origin.y - 50 * BoxPacker.EXTRA_HEIGHT_FACTOR_) < .0001);
+	b = x.createBlock(s);
+	assertEquals(b.page, 0);
+	assertEquals(b.origin.x, 50);
+	assertEquals(b.origin.y, 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: reset
+function test_reset() {
+	var x = new BoxPacker(10);
+	assertEquals(x.pageCount(), 0);
+	var b = x.createBlock(new Size(8, 8));
+	var b2 = x.createBlock(new Size(5, 6));
+	assertEquals(x.pageCount(), 2);
+	x.reset();
+	assertEquals(x.pageCount(), 0);
+};
+
+</script>
+</body>
+</html>

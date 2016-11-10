@@ -1,0 +1,600 @@
+goog.provide('ag.ui.HeaderView');
+
+goog.require('goog.array');
+goog.require('goog.asserts');
+goog.require('goog.dom');
+goog.require('goog.dom.classes');
+goog.require('goog.dom.TagName');
+goog.require('goog.events');
+goog.require('goog.events.EventType');
+goog.require('goog.style');
+
+goog.require('ag.meta.MetaObject');
+goog.require('ag.statemachine.State');
+goog.require('ag.ui');
+goog.require('ag.ui.AbstractItemView');
+goog.require('ag.ui.HeaderViewMachine');
+goog.require('ag.ui.HeaderViewMachine.ClickingColumnState');
+goog.require('ag.ui.HeaderViewMachine.ResizingColumnState');
+goog.require('ag.ui.HeaderViewMachine.HeaderViewMouseTransition');
+
+// --------------------------------------------------------------------------------------------------------------------
+/**
+ * Renders either a horizontal or vertical header view as an HTML table
+ * wrapped in a DIV, with one header item per table header cell.
+ *
+ * Horizontal header example:
+ *
+ *   <div class="ag-headerView horizontal">
+ *     <table class="ag-headerView-table">
+ *       <thead class="ag-headerView-head">
+ *         <tr class="ag-headerView-row">
+ *           <th class="ag-headerView-cell">ID</th>
+ *           <th class="ag-headerView-cell">Name</th>
+ *           ...
+ *         </tr>
+ *       </thead>
+ *     </table>
+ *   </div>
+ *
+ * Vertical header example:
+ *
+ *   <div class="ag-headerView vertical">
+ *     <table class="ag-headerView-table">
+ *       <thead class="ag-headerView-head">
+ *         <tr class="ag-headerView-row">
+ *           <th class="ag-headerView-cell">1.</th>
+ *         </tr>
+ *         <tr class="ag-headerView-row">
+ *           <th class="ag-headerView-cell">2.</th>
+ *         </tr>
+ *         ...
+ *       </thead>
+ *     </table>
+ *   </div>
+ *
+ * The main element div is given a user-defined width. The child table's total size varies as the sections are resized
+ * and provide for scrolling as necessary.
+ *
+ * Only supports resizing of columns, not rows.
+ *
+ * @constructor
+ * @extends {ag.ui.AbstractItemView}
+ * @param {ag.ui.Orientation} orientation
+ * @param
+ * @param
+ */
+ag.ui.HeaderView = function(orientation, optRenderer, optDomHelper) {
+	goog.base(this, optRenderer || ag.ui.HeaderViewRenderer.getInstance(), optDomHelper);
+
+	// --------------------------------------------------------------------------------------------------------------------
+	// Private members
+	/**
+	 * @type {boolean}
+	 * @private
+	 */
+	this.clickable_ = ag.ui.HeaderView.Defaults.kClickable;
+
+	/**
+	 * @type {Array.<number>}
+	 * @private
+	 */
+	this.columnWidths_ = null;
+
+	/**
+	 * @type {number|null}
+	 * @private
+	 */
+	this.defaultSectionSize_ = null;
+
+	/**
+	 * @type {ag.ui.HeaderView.HeaderViewMachine}
+	 * @private
+	 */
+	this.machine_ = null;
+
+	/**
+	 * @type {ag.ui.HeaderView.ClickingColumnState}
+	 * @private
+	 */
+	this.clickingColumnState_ = null;
+
+	/**
+	 * @type {number}
+	 * @private
+	 */
+	this.minimumSectionSize_ = ag.ui.HeaderView.Defaults.kMinimumSectionSize;
+
+	/**
+	 * @type {ag.ui.Orientation}
+	 * @private
+	 */
+	this.orientation_ = orientation;
+
+	/**
+	 * One for each section.
+	 *
+	 * @type {Array.<ag.ui.ResizeMode>}
+	 * @private
+	 */
+	this.resizeModes_ = null;
+
+	/**
+	 * @type {HTMLElement}
+	 * @private
+	 */
+	this.thead_ = null;
+
+
+	// --------------------------------------------------------------------------------------------------------------------
+	// Initialization
+	if (this.orientation_ === Orientation.kHorizontal) {
+		this.defaultSectionSize_ = ag.ui.HeaderView.Defaults.kColumnWidth;
+		this.columnWidths_ = [];
+		this.resizeModes_ = [];
+	}
+
+	this.setupMachine_();
+	this.machine_.start();
+};
+goog.inherits(ag.ui.HeaderView, ag.ui.AbstractItemView);
+
+/**********************************************************************************************/ goog.scope(function() {
+// Aliases
+var array = goog.array;
+var assert = goog.asserts.assert;
+var classes = goog.dom.classes;
+var dom = goog.dom;
+var events = goog.events;
+var style = goog.style;
+
+var Control = goog.ui.Control;
+var EventType = goog.events.EventType;
+var TagName = goog.dom.TagName;
+
+var AbstractState = ag.statemachine.AbstractState;
+var HeaderView = ag.ui.HeaderView;
+var ClickingColumnState = ag.ui.HeaderViewMachine.ClickingColumnState;
+var HeaderViewMachine = ag.ui.HeaderViewMachine;
+var HeaderViewMouseTransition = ag.ui.HeaderViewMachine.HeaderViewMouseTransition;
+var Orientation = ag.ui.Orientation;
+var ResizeMode = ag.ui.ResizeMode;
+var ResizingColumnState = ag.ui.HeaderViewMachine.ResizingColumnState;
+var State = ag.statemachine.State;
+
+var metaObject = ag.meta.MetaObject.getInstance;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Constants
+/** @enum {string} */
+HeaderView.Css = {
+	RootClass: goog.getCssName('ag-headerView'),
+	Vertical: goog.getCssName('vertical'),
+	Horizontal: goog.getCssName('horizontal'),
+	Table: goog.getCssName('ag-headerView-table'),
+	Head: goog.getCssName('ag-headerView-head'),
+	Row: goog.getCssName('ag-headerView-row'),
+	Cell: goog.getCssName('ag-headerView-cell'),
+
+	ResizeHover: goog.getCssName('resize-hover')
+};
+
+var Css = HeaderView.Css;
+
+/** @enum {number} */
+HeaderView.Constants = {
+	ResizeHandleWidth: 9,
+	HalfResizeHandleWidth: 4		// (9 - 1) / 2
+};
+
+/** @enum {number|boolean} */
+HeaderView.Defaults = {
+	kClickable: true,
+	kColumnWidth: 100,
+	kMinimumSectionSize: 20
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Signals
+/** @enum {string} */
+HeaderView.SignalType = {
+	SECTION_CLICKED: goog.events.getUniqueId('section-clicked'),
+	SECTION_RESIZED: goog.events.getUniqueId('section-resized')
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Public functions
+/** @return {number} */
+HeaderView.prototype.count = function() {
+	if (!this.model_)
+		return 0;
+
+	return (this.orientation_ === Orientation.kHorizontal) ? this.model_.columnCount() : this.model_.rowCount();
+};
+
+/** @return {number} */
+HeaderView.prototype.defaultSectionSize = function() {
+	return this.defaultSectionSize_;
+};
+
+/** @return {boolean} */
+HeaderView.prototype.isClickable = function() {
+	return this.clickable_;
+};
+
+/** @return {number} */
+HeaderView.prototype.minimumSectionSize = function() {
+	return this.minimumSectionSize_;
+};
+
+/** @return {number} */
+HeaderView.prototype.offset = function() {
+	if (!this.isInDocument())
+		return 0;
+
+	var table = this.headerTable_();
+	if (this.orientation_ === Orientation.kHorizontal)
+		return table.scrollLeft;
+
+	return table.scrollTop;
+};
+
+/** @return {Orientation} */
+HeaderView.prototype.orientation = function() {
+	return this.orientation_;
+};
+
+/**
+ * Does not support resizing for rows.
+ *
+ * @param {number} logicalIndex
+ * @return {ResizeMode}
+ */
+HeaderView.prototype.resizeMode = function(logicalIndex) {
+	if (this.orientation_ === Orientation.kHorizontal)
+		return this.resizeModes_[logicalIndex];
+
+	return ResizeMode.kFixed;
+};
+
+/**
+ * @param {number} logicalIndex
+ * @param {number} pixels
+ */
+HeaderView.prototype.resizeSection = function(logicalIndex, pixels) {
+	if (!this.thead_)
+		return;
+
+	if (this.orientation_ === Orientation.kVertical)
+		return;
+
+	if (this.resizeModes_[logicalIndex] === ResizeMode.kFixed)
+		return;
+
+	// Start here when returning!
+	var oldWidth = this.columnWidths_[logicalIndex];
+	var newWidth = Math.max(this.minimumSectionSize_, pixels);
+	if (newWidth === oldWidth)
+		return;
+
+	var theadRow = this.thead_.firstChild;
+	if (!theadRow)
+		return;
+
+	assert(section >= 0 && section < theadRow.cells.length);
+	var cell = theadRow.cells[section];
+	cell.style.width = newWidth + 'px';
+	metaObject().emit(this, HeaderView.SignalType.SECTION_RESIZED, newWidth, oldWidth);
+};
+
+/**
+ * @param {number} logicalIndex
+ * @return {number}
+ */
+HeaderView.prototype.sectionSize = function(logicalIndex) {
+	if (this.orientation_ === Orientation.kHorizontal)
+		return this.columnWidths_[logicalIndex];
+
+	return 0;
+};
+
+/**
+ * @param {boolean} clickable
+ */
+HeaderView.prototype.setClickable = function(clickable) {
+	this.clickable_ = clickable;
+};
+
+/**
+ * @param {number}
+ */
+HeaderView.prototype.setDefaultSectionSize = function(defaultSize) {
+	assert(defaultSize > 0);
+	this.defaultSectionSize_ = defaultSize;
+};
+
+/**
+ * @param {number} minimumSectionSize
+ */
+HeaderView.prototype.setMinimumSectionSize = function(minimumSectionSize) {
+	assert(minimumSectionSize > 0);
+	if (this.orientation_ === Orientation.kVertical)
+		return;
+
+	this.minimumSectionSize_ = minimumSectionSize;
+	for (var i=0, z=this.columnWidths_.length; i<z; i++) {
+		var currentWidth = this.columnWidths_[i];
+		if (currentWidth < minimumSectionSize)
+			resizeSection(i, minimumSectionSize);
+	}
+};
+
+/**
+ * @param {number} logicalIndex
+ * @param {ResizeMode} mode
+ */
+HeaderView.prototype.setResizeMode = function(logicalIndex, mode) {
+	if (this.orientation_ === Orientation.kHorizontal)
+		this.resizeModes_[logicalIndex] = mode;
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Protected functions
+/**
+ * @protected
+ * @override
+ */
+HeaderView.prototype.modelChanged = function() {
+	this.offset_ = 0;
+	this.sortOrder_ = null;
+	this.sortSection_ = null;
+	this.showSortIndicator_ = false;
+	this.resetResizeModes_();
+
+	if (this.isInDocument())
+		this.getRenderer().setHeaderContents(this, this.headerData_());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Private functions
+/**
+ * Pulls the header data from the model and returns it as an array of strings. Normally, could simply push
+ * entire request to the model regardless of the orientation, but since there is no vertical orientation
+ * header data support in the underlying model, we emulate that functionality here (actually, verticalHeaderData_).
+ *
+ * @return {Array.<string>}
+ * @private
+ */
+HeaderView.prototype.headerData_ = function() {
+	if (!this.model())
+		return [];
+
+	if (this.orientation_ === Orientation.kHorizontal)
+		return this.horizontalHeaderData_();
+
+	return this.verticalHeaderData_();
+};
+
+/**
+ * @return {Array.<string>}
+ * @private
+ */
+HeaderView.prototype.horizontalHeaderData_ = function() {
+	assert(this.model());
+	var model = this.model();
+
+	var headers = [];
+	for (var i=0, z=model.columnCount(); i<z; i++)
+		headers.push(model.headerData(i));
+
+	return headers;
+};
+
+/**
+ * Resets all resize modes to interactive for all rows/columns.
+ *
+ * @private
+ */
+HeaderView.prototype.resetResizeModes_ = function() {
+	array.clear(this.resizeModes_);
+	var model = this.model();
+	if (!model)
+		return;
+
+	var n = (this.orientation_ === Orientation.kHorizontal) ? model.columnCount() : model.rowCount();
+	for (var i=0; i<n; i++)
+		this.resizeModes_.push(ResizeMode.kInteractive);
+};
+
+/**
+ * TODO: Add vertical header data to AbstractItemModel
+ *
+ * @return {Array.<string>}
+ * @private
+ */
+HeaderView.prototype.verticalHeaderData_ = function() {
+	assert(this.model());
+	var model = this.model();
+
+	var headers = [];
+	for (var i=1, z=model.rowCount(); i<=z; i++)
+		headers.push(i + '.');
+	return headers;
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Control specific functions
+HeaderView.prototype.enterDocument = function() {
+	goog.base(this, 'enterDocument');
+
+	// Initialize the HTML header data
+	this.getRenderer().setHeaderContents(this, this.headerData_());
+
+	// Attach to signals
+	if (this.orientation_ === Orientation.kHorizontal)
+		events.listen(document.body, EventType.MOUSEMOVE, this.onDocumentBodyMouseMove_, true /* capture */, this);
+};
+
+HeaderView.prototype.exitDocument = function() {
+	goog.base(this, 'exitDocument');
+
+	this.getRenderer().clearHeaderContents(this);
+
+	// Attach to signals
+	if (this.orientation_ === kHorizontal)
+		events.unlisten(document.body, EventType.MOUSEMOVE, this.onDocumentBodyMouseMove_, true /* capture */, this);
+};
+
+/**
+ * Overrides {@link Control#getCaption} to return the empty string, since HeaderView's don't have text captions.
+ * @return {string}
+ * @override
+ */
+HeaderView.prototype.getCaption = function() {
+	return '';
+};
+
+/**
+ */
+HeaderView.prototype.handleMouseDown = function(event) {
+	this.machine_.postEvent(event);
+
+	// If a mouse down event occurs on this element, observe mouse up for the entire document
+	events.listen(document.body, events.EventType.MOUSEUP, this.onBodyMouseUp_, false /* capture */, this);
+};
+
+/**
+ */
+HeaderView.prototype.handleMouseOut = function(event) {
+	console.log('Mouse out');
+	this.machine_.postEvent(event);
+};
+
+/**
+ */
+HeaderView.prototype.onBodyMouseUp_ = function(event) {
+	this.machine_.postEvent(event);
+
+	// If a mouse down event occurs on this element, detach from body mouse up observation
+	events.unlisten(document.body, events.EventType.MOUSEUP, this.onBodyMouseUp_, false /* capture */, this);
+};
+
+/**
+ */
+HeaderView.prototype.handleMouseOver = function(event) {
+	this.machine_.postEvent(event);
+};
+
+/**
+ * There is no specific action associated with the tableview (e.g. when the user double-clicks or presses enter).
+ * No-op.
+ */
+HeaderView.prototype.performActionInternal = function(event) {};
+
+/**
+ * Overrides {@link Control#setCaption} to be a no-op, since HeaderView's don't have text captions.
+ * @param {string} caption
+ * @override
+ */
+HeaderView.prototype.setCaption = function(caption) {};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Custom events
+/**
+ * Reactions to handle:
+ * 1) Simply hovering the mouse without any button - is it over a resize handle area?
+ * 2) Has the user pressed the mouse button and actively resizing a column?
+ * @param {BrowserEvent} event
+ */
+HeaderView.prototype.onDocumentBodyMouseMove_ = function(event) {
+	assert(this.orientation_ === Orientation.kHorizontal);
+
+	this.machine_.postEvent(event);
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Private functions
+HeaderView.prototype.setupMachine_ = function() {
+	var idle = new State('Idle');
+	var clickingColumn = new ClickingColumnState('Clicking');
+	this.clickingColumnState_ = clickingColumn;
+	var resizeReady = new State('Resize ready');
+	var resizing = new ResizingColumnState('Resizing');
+
+	this.machine_ = new HeaderViewMachine(this);
+	this.machine_.addState(idle);
+	this.machine_.addState(clickingColumn);
+	this.machine_.addState(resizeReady);
+	this.machine_.addState(resizing);
+	this.machine_.setInitialState(idle);
+
+	var t = new HeaderViewMouseTransition(EventType.MOUSEDOWN, false);
+	t.setTargetState(clickingColumn);
+	idle.addTransition(t);
+
+	t = new HeaderViewMouseTransition(EventType.MOUSEUP);
+	t.setTargetState(idle);
+	clickingColumn.addTransition(t);
+
+	t = new HeaderViewMouseTransition(EventType.MOUSEOUT);
+	t.setTargetState(idle);
+	clickingColumn.addTransition(t);
+
+	t = new HeaderViewMouseTransition(EventType.MOUSEMOVE, true);
+	t.setTargetState(resizeReady);
+	idle.addTransition(t);
+
+	t = new HeaderViewMouseTransition(EventType.MOUSEDOWN);
+	t.setTargetState(resizing);
+	resizeReady.addTransition(t);
+
+	t = new HeaderViewMouseTransition(EventType.MOUSEUP, true);
+	t.setTargetState(resizeReady);
+	resizing.addTransition(t);
+
+	t = new HeaderViewMouseTransition(EventType.MOUSEUP, false);
+	t.setTargetState(resizeReady);
+	resizing.addTransition(t);
+
+	t = new HeaderViewMouseTransition(EventType.MOUSEMOVE, false);
+	t.setTargetState(idle);
+	resizeReady.addTransition(t);
+
+	// Update the CSS status relative to the states
+	metaObject().connect(clickingColumn, ClickingColumnState.SignalType.COLUMN_CHANGED, this, this.onClickingColumnChanged_);
+	metaObject().connect(clickingColumn, AbstractState.SignalType.EXITED, this, this.onClickingColumnStateExit_);
+
+	metaObject().connect(resizeReady, AbstractState.SignalType.ENTERED, this, this.onResizeReadyStateEnter_);
+	metaObject().connect(idle, AbstractState.SignalType.ENTERED, this, this.onIdleStateEnter_);
+};
+
+HeaderView.prototype.onIdleStateEnter_ = function() {
+	this.getRenderer().setResizeHoverState(this, false);
+};
+
+HeaderView.prototype.onResizeReadyStateEnter_ = function() {
+	this.getRenderer().setResizeHoverState(this, true);	
+};
+
+HeaderView.prototype.onClickingColumnChanged_ = function(currentColumn) {
+	// Adjust CSS rendering while click is midstream
+	console.log('Midstream section click change: ' + currentColumn);
+};
+
+HeaderView.prototype.onClickingColumnStateExit_ = function() {
+	var column = this.clickingColumnState_.column();
+	if (column !== -1) {
+		metaObject().emit(this, HeaderView.SignalType.SECTION_CLICKED, column);
+		console.log('Section clicked: ' + column);
+	}
+};
+
+HeaderView.prototype.headerTable_ = function() {
+	assert(this.isInDocument());
+	return this.getElement().firstChild;
+};
+
+/*******************************************************************************************************************/});

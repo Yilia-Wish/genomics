@@ -1,0 +1,721 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.model.SortFilterProxyModel</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.model.AbstractItemModel');
+goog.require('ag.model.SortFilterProxyModel');
+goog.require('ag.model.MockItemModel');
+goog.require('ag.model.MockFilterProxyModel');
+goog.require('ag.meta.SignalSpy');
+</script>
+<body>
+<script>
+// Aliases
+var AbstractItemModel = ag.model.AbstractItemModel;
+var MockItemModel = ag.model.MockItemModel;
+var MockFilterProxyModel = ag.model.MockFilterProxyModel;
+var SignalSpy = ag.meta.SignalSpy;
+var SortFilterProxyModel = ag.model.SortFilterProxyModel;
+var ModelIndex = ag.model.ModelIndex;
+var PersistentModelIndex = ag.model.PersistentModelIndex;
+
+var Columns = MockItemModel.Columns;
+var DataRole = AbstractItemModel.DataRole;
+var FilterType = MockFilterProxyModel.FilterType;
+var SortOrder = AbstractItemModel.SortOrder;
+var SignalType = AbstractItemModel.SignalType;
+
+var x;
+var sourceModel;
+
+// --------------------------------------------------------------------------------------------------------------------
+function setUp() {
+	sourceModel = new MockItemModel();
+	x = new SortFilterProxyModel();
+};
+
+function tearDown() {
+	x.dispose();
+	x = null;
+	sourceModel.dispose();
+	sourceModel = null;
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	assertEquals(x.sortColumn(), 0);
+	assertEquals(x.sortOrder(), SortOrder.kAsc);
+	assertEquals(x.sortRole(), DataRole.kDisplay);
+
+	assertFalse(x.dynamicSortFilterEnabled());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: dataChanged
+function test_dataChanged() {
+	x.setSourceModel(sourceModel);
+
+	var spyDataChanged = new SignalSpy(x, SignalType.DATA_CHANGED);
+
+	// Case 1: data changed without any dynamic sort
+	assertFalse(x.dynamicSortFilterEnabled());
+	checkValidSort('0123');
+	var sourceIndex = sourceModel.index(1, Columns.NAME);
+	var proxyIndex = x.mapFromSource(sourceIndex);
+	assertTrue(sourceIndex.isValid());
+	assertTrue(proxyIndex.isValid());
+	assertEquals(sourceIndex.data(), proxyIndex.data());
+
+	assertTrue(sourceModel.setData(sourceIndex, 'Alpha'));
+	assertEquals(sourceIndex.data(), 'Alpha');
+	assertEquals(sourceIndex.data(), proxyIndex.data());
+
+	assertEquals(spyDataChanged.size(), 1);
+	assertTrue(spyDataChanged.signals()[0][0].eq(proxyIndex));
+	spyDataChanged.clear();
+
+	// Case 2: data changed with dynamic sort enabled, but on column that is not the active sort column
+	sourceModel.reset();
+	x.sort(Columns.NAME);
+	x.setDynamicSortEnabled();
+	checkValidSort('3102');
+
+	sourceIndex = sourceModel.index(2, Columns.AGE);
+	proxyIndex = x.mapFromSource(sourceIndex);
+	assertEquals(proxyIndex.row(), 3);
+
+	assertTrue(proxyIndex.data() !== 100);
+	assertTrue(sourceModel.setData(sourceIndex, 100));
+	checkValidSort('3102');
+	assertEquals(proxyIndex.data(), 100);
+
+	assertEquals(spyDataChanged.size(), 1);
+	assertTrue(spyDataChanged.signals()[0][0].eq(proxyIndex));
+	spyDataChanged.clear();
+
+	// Case 3: data changed with dynamic sort enabled, but on the sort column
+	sourceModel.reset();
+	assertEquals(x.sortColumn(), Columns.NAME);
+	assertTrue(x.dynamicSortFilterEnabled());
+
+	sourceIndex = sourceModel.index(0, Columns.NAME);
+	proxyIndex = x.mapFromSource(sourceIndex);
+	var pIndex = new PersistentModelIndex(proxyIndex);
+	assertEquals(proxyIndex.row(), 2);
+
+	assertEquals(sourceIndex.data(), 'Luke');
+	assertTrue(sourceModel.setData(sourceIndex, 'Alpha'));
+	assertEquals(sourceIndex.data(), 'Alpha');
+
+	assertEquals(spyDataChanged.size(), 1);
+	assertTrue(spyDataChanged.signals()[0][0].eq(proxyIndex));
+	spyDataChanged.clear();
+
+	assertEquals(proxyIndex.data(), 'Igor');
+	assertEquals(pIndex.data(), 'Alpha');
+	assertEquals(pIndex.row(), 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: defaultState
+function test_defaultState() {
+	x.setSourceModel(sourceModel);
+
+	assertEquals(x.rowCount(), sourceModel.rowCount());
+	assertEquals(x.columnCount(), sourceModel.columnCount());
+	for (var i=0; i< x.rowCount(); i++) {
+		for (var j=0; j< x.columnCount(); j++) {
+			var sourceIndex = sourceModel.index(i, j);
+			var proxyIndex = x.index(i, j);
+			assertEquals(sourceIndex.data(), proxyIndex.data());
+		}
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: filterBasic
+function test_filterBasic() {
+	x = new MockFilterProxyModel();
+	x.setSourceModel(sourceModel);
+
+	assertEquals(x.rowCount(), sourceModel.rowCount());
+	checkValidSort('0123');
+
+	var spyAbout = new SignalSpy(x, SignalType.MODEL_ABOUT_TO_BE_RESET);
+	var spyReset = new SignalSpy(x, SignalType.MODEL_RESET);
+
+	x.setFilterEnabled();
+
+	// Default filter is even-ids
+	assertEquals(x.rowCount(), 2);
+	checkValidSort('02');
+
+	assertEquals(spyAbout.size(), 1);
+	assertEquals(spyReset.size(), 1);
+	spyAbout.clear();
+	spyReset.clear();
+
+	// Disable filter
+	x.setFilterEnabled(false);
+	assertEquals(x.rowCount(), sourceModel.rowCount());
+	checkValidSort('0123');
+	assertEquals(spyAbout.size(), 1);
+	assertEquals(spyReset.size(), 1);
+	spyAbout.clear();
+	spyReset.clear();
+
+	// Sorting then filtering without dynamic sort enabled should provide an unsorted, but filtered view
+	x.sort(Columns.ID, SortOrder.kDesc);
+	x.setFilterEnabled();
+	assertEquals(x.rowCount(), 2);
+	checkValidSort('02');
+
+	// Sorting then filtering with dynamic sort enabled; however, should provide a sorted and filtered view
+	x.setFilterEnabled(false);
+	x.setDynamicSortEnabled();
+	checkValidSort('3210');
+	x.setFilterEnabled();
+	checkValidSort('20');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: filterDataChanged
+function test_filterDataChanged() {
+	x = new MockFilterProxyModel();
+	x.setSourceModel(sourceModel);
+
+	// Change data on non-filtered column
+	x.setFilterEnabled();
+	x.setFilterType(FilterType.kAgeGt, 30);
+	assertEquals(x.rowCount(), 3);
+	checkValidSort('012');
+
+	var spyAboutToInsert = new SignalSpy(x, SignalType.ROWS_ABOUT_TO_BE_INSERTED);
+	var spyInserted = new SignalSpy(x, SignalType.ROWS_INSERTED);
+
+	var spyAboutToRemove = new SignalSpy(x, SignalType.ROWS_ABOUT_TO_BE_REMOVED);
+	var spyRemoved = new SignalSpy(x, SignalType.ROWS_REMOVED);
+
+	var spyDataChanged = new SignalSpy(x, SignalType.DATA_CHANGED);
+	var sourceIndex = sourceModel.index(0, Columns.NAME);
+	assertTrue(sourceModel.setData(sourceIndex, 'Ulrich'));
+	checkValidSort('012');
+	assertEquals(spyDataChanged.size(), 1);
+	assertTrue(x.mapToSource(spyDataChanged.signals()[0][0]).eq(sourceIndex));
+	assertEquals(spyInserted.size(), 0);
+	assertEquals(spyRemoved.size(), 0);
+	spyDataChanged.clear();
+
+	// Change data on filtered column making data no-longer visible
+	sourceIndex = sourceIndex.sibling(Columns.AGE);
+	assertTrue(sourceModel.setData(sourceIndex, 25));
+	checkValidSort('12');
+	assertEquals(spyInserted.size(), 0);
+	assertEquals(spyAboutToRemove.size(), 1);
+	assertEquals(spyAboutToRemove.signals()[0][0], 0);
+	assertEquals(spyAboutToRemove.signals()[0][1], 0);
+	assertArrayEquals(spyAboutToRemove.signals(), spyRemoved.signals());
+	assertEquals(spyDataChanged.size(), 0);
+	spyAboutToRemove.clear();
+	spyRemoved.clear();
+
+	// Change data on filtered column making data visible
+	sourceIndex = sourceModel.index(3, Columns.AGE);
+	assertTrue(sourceModel.setData(sourceIndex, 65));
+	checkValidSort('123');
+	assertEquals(spyRemoved.size(), 0);
+	assertEquals(spyDataChanged.size(), 0);
+	assertEquals(spyAboutToInsert.size(), 1);
+	assertEquals(spyAboutToInsert.signals()[0][0], 2);
+	assertEquals(spyAboutToInsert.signals()[0][1], 2);
+	assertArrayEquals(spyAboutToInsert.signals(), spyInserted.signals());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: filterSourceInsert
+function test_filterSourceInsert() {
+	x = new MockFilterProxyModel();
+	x.setSourceModel(sourceModel);
+
+	x.setFilterEnabled();
+
+	// Default filter is even-rows
+	assertEquals(x.rowCount(), 2);
+	checkValidSort('02');
+
+	// Insert on source model, since it is even, it should show up in the proxy model.
+	var spyAbout = new SignalSpy(x, SignalType.ROWS_ABOUT_TO_BE_INSERTED);
+	var spyInserted = new SignalSpy(x, SignalType.ROWS_INSERTED);
+	sourceModel.insertRow(MockItemModel.randomInsertRow(), sourceModel.rowCount());
+	checkValidSort('024');
+	assertEquals(x.rowCount(), 3);
+	assertEquals(spyAbout.size(), 1);
+	assertEquals(spyAbout.signals()[0][0], 2);
+	assertEquals(spyAbout.signals()[0][1], 2);
+	assertArrayEquals(spyAbout.signals(), spyInserted.signals());
+	spyAbout.clear();
+	spyInserted.clear();
+
+	// Insert on source model, since the next one is odd, it should not show up in the proxy model.
+	sourceModel.insertRow(MockItemModel.randomInsertRow(), sourceModel.rowCount());
+	checkValidSort('024');
+	assertEquals(x.rowCount(), 3);
+	assertTrue(spyAbout.isEmpty());
+	assertTrue(spyInserted.isEmpty());
+
+	// Insert with dynamic sort
+	sourceModel.reset();
+	x.setFilterType(FilterType.kAgeGt, 32);
+	checkValidSort('12');
+	x.sort(Columns.AGE, SortOrder.kAsc);
+	checkValidSort('21');
+
+	// Adding two rows to source, one that matches the filter expression, and the other that does not
+	x.setDynamicSortEnabled();
+	var newRows = MockItemModel.moreMockData().slice(0, 2);
+	newRows[0].age = 40;
+	newRows[1].age = 21;
+	sourceModel.insertRows(newRows, 0);
+	checkValidSort('403');
+
+	assertEquals(x.rowCount(), 3);
+	assertEquals(spyAbout.size(), 1);
+	assertEquals(spyAbout.signals()[0][0], 1);
+	assertEquals(spyAbout.signals()[0][1], 1);
+	assertArrayEquals(spyAbout.signals(), spyInserted.signals());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: filterSourceRemove
+function test_filterSourceRemove() {
+	x = new MockFilterProxyModel();
+	x.setSourceModel(sourceModel);
+
+	x.setFilterType(FilterType.kAgeGt, 32);
+	x.setFilterEnabled();
+	assertEquals(x.rowCount(), 2);
+	checkValidSort('12');
+
+	// Insert on source model another row at the end, since it is even, it should show up in the proxy model
+	var spyAbout = new SignalSpy(x, SignalType.ROWS_ABOUT_TO_BE_REMOVED);
+	var spyRemoved = new SignalSpy(x, SignalType.ROWS_REMOVED);
+
+	// Remove row not in filter model
+	sourceModel.removeRows(3);
+	assertEquals(x.rowCount(), 2);
+	checkValidSort('12');
+	assertEquals(spyAbout.size(), 0);
+	assertEquals(spyRemoved.size(), 0);
+
+	// Remove row that will tweak the proxy internal mapping
+	sourceModel.removeRows(0);
+	assertEquals(x.rowCount(), 2);
+	checkValidSort('01');
+	assertEquals(spyAbout.size(), 0);
+	assertEquals(spyRemoved.size(), 0);
+
+	// Remove row that will remove from proxy as well
+	sourceModel.removeRows(0, 2);
+	assertEquals(x.rowCount(), 0);
+	assertEquals(spyAbout.size(), 1);
+	assertEquals(spyAbout.signals()[0][0], 0);
+	assertEquals(spyAbout.signals()[0][1], 1);
+	assertEquals(spyRemoved.size(), 1);
+	assertArrayEquals(spyAbout.signals(), spyRemoved.signals());
+
+	// Perform the same except with a sort at the same time
+	sourceModel.reset();
+	x.setDynamicSortEnabled();
+	x.setFilterType(FilterType.kAgeGt, 30);
+	x.sort(Columns.AGE);
+	assertEquals(sourceModel.rowCount(), MockItemModel.mockData().length);
+	assertEquals(x.rowCount(), 3);
+	checkValidSort('021');
+
+	sourceModel.removeRows(2);
+	assertEquals(x.rowCount(), 2);
+	checkValidSort('01');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: insertNoDynamicSort
+function test_insertNoDynamicSort() {
+	x.setSourceModel(sourceModel);
+	assertFalse(x.dynamicSortFilterEnabled());
+
+	var spyAbout = new SignalSpy(x, SignalType.ROWS_ABOUT_TO_BE_INSERTED);
+	var spyInserted = new SignalSpy(x, SignalType.ROWS_INSERTED);
+
+	// New row should be inserted exactly as in the source model since there is no dynamic sort and there
+	// is no filtering being performed.
+	var newRows = [MockItemModel.moreMockData()[0], MockItemModel.moreMockData()[1] ];
+	var insertPositions = [0, 1, 4];
+	for (var i=0; i<insertPositions.length; i++) {
+		var insertPos = insertPositions[i]
+		sourceModel.insertRows(newRows, insertPos);
+
+		assertEquals(x.rowCount(), sourceModel.rowCount());
+		for (var i=0; i<newRows.length; i++) {
+			for (var j=0; j<x.columnCount(); j++) {
+				var sourceIndex = sourceModel.index(insertPos + i, j);
+				var proxyIndex = x.index(insertPos + i, j);
+				assertEquals(sourceIndex.data(), proxyIndex.data());
+			}
+		}
+
+		assertEquals(spyAbout.size(), 1);
+		assertEquals(spyAbout.signals()[0][0], insertPos);
+		assertEquals(spyAbout.signals()[0][1], insertPos + newRows.length - 1);
+
+		assertEquals(spyInserted.size(), 1);
+		assertArrayEquals(spyAbout.signals(), spyInserted.signals());
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: insertWithDynamicSort
+function test_insertWithDynamicSort() {
+	x.setSourceModel(sourceModel);
+	x.setDynamicSortEnabled();
+	x.sort(Columns.NAME);
+	checkValidSort('3102');
+
+	var pIndex = new PersistentModelIndex(x.index(2, Columns.NAME));
+	var pIndex2 = new PersistentModelIndex(x.index(3, Columns.NAME));
+
+	var spyAbout = new SignalSpy(x, SignalType.ROWS_ABOUT_TO_BE_INSERTED);
+	var spyInserted = new SignalSpy(x, SignalType.ROWS_INSERTED);
+
+	// New row should be inserted exactly as in the source model since there is no dynamic sort and there
+	// is no filtering being performed.
+	var newRows = [MockItemModel.moreMockData()[0], MockItemModel.moreMockData()[1] ];
+	var insertPos = sourceModel.rowCount();
+	sourceModel.insertRows(newRows, insertPos);
+	assertEquals(x.rowCount(), sourceModel.rowCount());
+	checkValidSort('315042');
+
+	assertEquals(spyAbout.size(), 2);
+	assertEquals(spyAbout.signals()[0][0], 3);
+	assertEquals(spyAbout.signals()[0][1], 3);
+	assertEquals(spyAbout.signals()[1][0], 2);
+	assertEquals(spyAbout.signals()[1][1], 2);
+
+	assertEquals(spyInserted.size(), 2);
+	assertArrayEquals(spyAbout.signals(), spyInserted.signals());
+
+	assertEquals(pIndex.data(), 'Luke');
+	assertEquals(pIndex.row(), 3);
+	assertEquals(pIndex2.data(), 'Paul');
+	assertEquals(pIndex2.row(), 5);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: invalidate
+function test_invalidate() {
+	x.setSourceModel(sourceModel);
+	x.setDynamicSortEnabled();
+	x.sort(Columns.NAME, SortOrder.kDesc);
+	checkValidSort('2013');
+	var spyAbout = new SignalSpy(x, SignalType.MODEL_ABOUT_TO_BE_RESET);
+	var spyReset = new SignalSpy(x, SignalType.MODEL_RESET);
+	x.invalidate();
+	assertEquals(spyAbout.size(), 1);
+	assertEquals(spyReset.size(), 1);
+	assertEquals(x.sortColumn(), 0);
+	assertEquals(x.sortOrder(), SortOrder.kAsc);
+	assertFalse(x.dynamicSortFilterEnabled());
+	checkValidSort('0123');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: move
+function test_move() {
+	x.setSourceModel(sourceModel);
+
+	var spyAbout = new SignalSpy(x, SignalType.ROWS_ABOUT_TO_BE_MOVED);
+	var spyMoved = new SignalSpy(x, SignalType.ROWS_MOVED);
+
+	// Source: Luke, Igor, Paul, Chris -> Paul, Luke, Igor, Chris
+	sourceModel.moveRows(0, 1, 1);
+	checkValidSort('1203');
+
+	// Source: Paul, Luke, Igor, Chris -> Paul, Chris, Luke, Igor
+	sourceModel.moveRows(3, 3, 1);
+	checkValidSort('2301');
+
+	assertEquals(spyAbout.size(), 0);
+	assertEquals(spyMoved.size(), 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: removeRows
+function test_removeRows() {
+	x.setSourceModel(sourceModel);
+
+	var spyAbout = new SignalSpy(x, SignalType.ROWS_ABOUT_TO_BE_REMOVED);
+	var spyRemoved = new SignalSpy(x, SignalType.ROWS_REMOVED);
+
+	// Case 1: remove contiguous span in both source and proxy model
+	var removePos = 0;
+	var removeAmount = 2;
+	sourceModel.removeRows(removePos, removeAmount);
+	test_defaultState();
+
+	assertEquals(spyAbout.size(), 1);
+	assertEquals(spyAbout.signals()[0][0], removePos);
+	assertEquals(spyAbout.signals()[0][1], removePos + removeAmount - 1);
+
+	assertEquals(spyRemoved.size(), 1);
+	assertArrayEquals(spyAbout.signals(), spyRemoved.signals());
+
+	spyAbout.clear();
+	spyRemoved.clear();
+
+	// Case 2: removed from source that translates into multiple non-contiguous rows in proxy
+	sourceModel.reset();
+
+	// Original data
+	// 0 -> {id: 0,		name: 'Luke',		age: 32}
+	// 1 -> {id: 1,		name: 'Igor',		age: 52}
+	// 2 -> {id: 2,		name: 'Paul',		age: 33}
+	// 3 -> {id: 3,		name: 'Chris',		age: 29}
+	//
+	// After sort
+	// 3 -> {id: 3,		name: 'Chris',		age: 29}
+	// 0 -> {id: 0,		name: 'Luke',		age: 32}
+	// 2 -> {id: 2,		name: 'Paul',		age: 33}
+	// 1 -> {id: 1,		name: 'Igor',		age: 52}
+	// ^ = source row
+	x.sort(Columns.AGE);
+
+	sourceModel.removeRows(2, 2);	// Removing the last two rows
+	test_defaultState();
+
+	// Removal from proxy is done in reverse order
+	assertEquals(spyAbout.size(), 2);
+	assertEquals(spyAbout.signals()[0][0], 2);
+	assertEquals(spyAbout.signals()[0][1], 2);
+
+	assertEquals(spyAbout.signals()[1][0], 0);
+	assertEquals(spyAbout.signals()[1][1], 0);
+
+	assertEquals(spyRemoved.size(), 2);
+	assertArrayEquals(spyAbout.signals(), spyRemoved.signals());
+
+	spyAbout.clear();
+	spyRemoved.clear();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: resetOnSourceModel
+function test_resetOnSourceModel() {
+	assertFalse(x.dynamicSortFilterEnabled());
+	x.setSourceModel(sourceModel);
+	sourceModel.insertRow(MockItemModel.randomInsertRow(), 1);
+
+	var spyAbout = new SignalSpy(x, SignalType.MODEL_ABOUT_TO_BE_RESET);
+	var spyReset = new SignalSpy(x, SignalType.MODEL_RESET);
+
+	sourceModel.reset();
+
+	assertEquals(sourceModel.rowCount(), x.rowCount());
+	assertEquals(spyAbout.size(), 1);
+	assertEquals(spyReset.size(), 1);
+	spyAbout.clear();
+	spyReset.clear();
+
+	// Reset with dynamic sort enabled
+	checkValidSort('0123');
+	x.sort(0, SortOrder.kDesc);
+	x.setDynamicSortEnabled();
+	checkValidSort('3210');
+
+	sourceModel.reset();
+
+	checkValidSort('3210');
+	assertEquals(sourceModel.rowCount(), x.rowCount());
+	assertEquals(spyAbout.size(), 1);
+	assertEquals(spyReset.size(), 1);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: setDynamicSortEnabled
+function test_setDynamicSortEnabled() {
+	x.setDynamicSortEnabled();
+	assertTrue(x.dynamicSortFilterEnabled());
+	x.setDynamicSortEnabled(false);
+	assertFalse(x.dynamicSortFilterEnabled());
+	x.setDynamicSortEnabled(true);
+	assertTrue(x.dynamicSortFilterEnabled());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: sort
+/**
+ * Compares all the data in the sorted model that it is in the specified row order and has the expected data.
+ *
+ * @param {string} sourceRowOrder
+ */
+function checkValidSort(sourceRowOrder) {
+	sourceRowOrder = sourceRowOrder.split('');
+	var mockData = MockItemModel.mockData();
+	for (var i=0; i<sourceRowOrder.length; i++) {
+		var proxyRow = i;
+		var sourceRow = parseInt(sourceRowOrder[i]);
+		for (var j=0; j<x.columnCount(); j++) {
+			var sourceIndex = sourceModel.index(sourceRow, j);
+			var proxyIndex = x.index(proxyRow, j);
+			assertTrue(sourceIndex.isValid());
+			assertTrue(proxyIndex.isValid());
+			assertEquals(proxyIndex.data(), sourceIndex.data());
+		}
+	}
+};
+
+function test_sort() {
+	sourceModel.insertNullRow(1);
+	assertEquals(sourceModel.rowCount(), 5);
+	x.setSourceModel(sourceModel);
+
+	var spyAbout = new SignalSpy(x, SignalType.LAYOUT_ABOUT_TO_BE_CHANGED);
+	var spyLayouted = new SignalSpy(x, SignalType.LAYOUT_CHANGED);
+
+	var pIndex1Row = 0;
+	var pIndex2Row = 2;
+
+	// Original source row order
+	// 0 -> {id: 0,		name: 'Luke',		age: 32}  ** pIndex1
+	// 1 -> nulls
+	// 2 -> {id: 1,		name: 'Igor',		age: 52}  ** pIndex2
+	// 3 -> {id: 2,		name: 'Paul',		age: 33}
+	// 4 -> {id: 3,		name: 'Chris',		age: 29}
+	var cases = [
+		[Columns.ID, SortOrder.kAsc, '02341'],
+		[Columns.ID, SortOrder.kDesc, '14320'],
+		[Columns.ID, null, '02341'],
+
+		[Columns.NAME, SortOrder.kAsc, '42031'],
+		[Columns.NAME, SortOrder.kDesc, '13024'],
+		[Columns.NAME, null, '42031'],
+
+		[Columns.AGE, SortOrder.kAsc, '40321'],
+		[Columns.AGE, SortOrder.kDesc, '12304'],
+		[Columns.AGE, null, '40321']
+	];
+
+	var pIndex1 = new PersistentModelIndex(x.index(pIndex1Row, 0));
+	var pIndex2 = new PersistentModelIndex(x.index(pIndex2Row, 1));
+	var pIndex1Data = pIndex1.data();
+	var pIndex2Data = pIndex2.data();
+	for (var i=0; i<cases.length; i++) {
+		var sortColumn = cases[i][0];
+		var sortOrder = cases[i][1];
+		var expRowOrder = cases[i][2];
+
+		// Determine the row for the persistent indices
+		var expPindex1Row = expRowOrder.indexOf(pIndex1Row);
+		var expPindex2Row = expRowOrder.indexOf(pIndex2Row);
+
+		x.sort(sortColumn, sortOrder);
+		checkValidSort(expRowOrder);
+
+		assertEquals(pIndex1.row(), expPindex1Row);
+		assertEquals(pIndex1.data(), pIndex1Data);
+		assertEquals(pIndex2.row(), expPindex2Row);
+		assertEquals(pIndex2.data(), pIndex2Data);
+
+		assertEquals(spyAbout.size(), 1);
+		assertEquals(spyLayouted.size(), 1);
+		spyAbout.clear();
+		spyLayouted.clear();
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: sortColumn
+function test_sortColumn() {
+	// Test: sort column should be 0 until valid source model
+	assertEquals(x.sortColumn(), 0);
+	x.sort(2);
+	assertEquals(x.sortColumn(), 0);
+
+	x.setSourceModel(sourceModel);
+	x.sort(2);
+	assertEquals(x.sortColumn(), 2);
+
+	x.setSourceModel(null);
+	assertEquals(x.sortColumn(), 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: sortOrder
+function test_sortOrder() {
+	// Test: sort column should be 0 until valid source model
+	assertEquals(x.sortOrder(), SortOrder.kAsc);
+	x.sort(2, SortOrder.kDesc);
+	assertEquals(x.sortOrder(), SortOrder.kAsc);
+
+	x.setSourceModel(sourceModel);
+	x.sort(2, SortOrder.kDesc);
+	assertEquals(x.sortOrder(), SortOrder.kDesc);
+
+	x.setSourceModel(null);
+	assertEquals(x.sortOrder(), SortOrder.kAsc);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_sourceLayoutChanged() {
+	x.setSourceModel(sourceModel);
+
+	var spyAbout = new SignalSpy(x, SignalType.LAYOUT_ABOUT_TO_BE_CHANGED);
+	var spyLayouted = new SignalSpy(x, SignalType.LAYOUT_CHANGED);
+
+	sourceModel.reverseRows();
+	// Check that indeed the rows are reversed
+	assertEquals(sourceModel.index(0, 0).data(), 3);
+	assertEquals(sourceModel.index(1, 0).data(), 2);
+	assertEquals(sourceModel.index(2, 0).data(), 1);
+	assertEquals(sourceModel.index(3, 0).data(), 0);
+
+	assertTrue(spyAbout.isEmpty());
+	assertTrue(spyLayouted.isEmpty());
+
+	assertEquals(x.index(0, 0).data(), 0);
+	assertEquals(x.index(1, 0).data(), 1);
+	assertEquals(x.index(2, 0).data(), 2);
+	assertEquals(x.index(3, 0).data(), 3);
+
+	// Try it with the model sorted
+	x.sort(0, SortOrder.kDesc);
+	assertEquals(x.index(0, 0).data(), 3);
+	assertEquals(x.index(1, 0).data(), 2);
+	assertEquals(x.index(2, 0).data(), 1);
+	assertEquals(x.index(3, 0).data(), 0);
+
+	spyAbout.clear();
+	spyLayouted.clear();
+
+	sourceModel.reverseRows();
+	assertEquals(sourceModel.index(0, 0).data(), 0);
+	assertEquals(sourceModel.index(1, 0).data(), 1);
+	assertEquals(sourceModel.index(2, 0).data(), 2);
+	assertEquals(sourceModel.index(3, 0).data(), 3);
+
+	assertEquals(x.index(0, 0).data(), 3);
+	assertEquals(x.index(1, 0).data(), 2);
+	assertEquals(x.index(2, 0).data(), 1);
+	assertEquals(x.index(3, 0).data(), 0);
+};
+
+</script>
+</body>
+</html>

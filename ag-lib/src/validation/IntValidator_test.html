@@ -1,0 +1,250 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.validation.IntValidator</title>
+	<meta charset="utf-8">
+	<link rel="stylesheet" href="/css/meyer-min.css">
+<style type="text/css">
+</style>
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.core.ClosedIntRange');
+goog.require('ag.validation.AbstractValidator');
+goog.require('ag.validation.IntValidator');
+</script>
+<body>
+
+<script>
+var ClosedIntRange = ag.core.ClosedIntRange;
+var IntValidator = ag.validation.IntValidator;
+var State = ag.validation.AbstractValidator.State;
+
+var Acceptable = State.Acceptable;
+var Intermediate = State.Intermediate;
+var Invalid = State.Invalid;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_fixup() {
+	var cases = [
+		[null, ''],
+		['', ''],
+		['-', '-'],
+		['+', ''],
+		['0', '0'],
+		['-1', '-1'],
+		['1', '1'],
+		['10', '10'],
+		['123', '123'],
+		['-123', '-123'],
+		['--', '-'],
+		['-1-2-3-', '-123'],
+		['abcdefghijklnop', ''],
+		[' ', ''],
+		['  9 1 3', '913'],
+		['00', '0'],
+		['-003', '-3'],
+		['-000', '-0'],
+		['+005', '5'],
+		['a0b55cd-90', '5590'],
+		[34, '34'],
+		[-34, '-34'],
+		[0, '0']
+	];
+
+	var x = new IntValidator(new ClosedIntRange(-1, -1));
+	for (var i=0; i<cases.length; i++) {
+		var test = cases[i];
+		var input = test[0];
+		var expect = test[1];
+
+		// console.log('i: ' + i + ', Input: ' + input + ', expect: ' + expect + ', Actual: ' + x.fixup(input));
+
+		assertEquals(x.fixup(input), expect);
+	}
+
+	// Only positive range allowed
+	x = new IntValidator();
+	assertEquals(x.fixup('0'), '0');
+	assertEquals(x.fixup('-3'), '-3');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setMaximum() {
+	var x = new IntValidator(new ClosedIntRange(5, 10));
+	assertEquals(x.maximum(), 10);
+
+	x.setMaximum(20);
+	assertEquals(x.maximum(), 20);
+	x.setMaximum(2);
+	assertEquals(x.minimum(), 2);
+	assertEquals(x.maximum(), 2);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setMinimum() {
+	var x = new IntValidator(new ClosedIntRange(5, 10));
+	assertEquals(x.minimum(), 5);
+
+	x.setMinimum(2);
+	assertEquals(x.minimum(), 2);
+	x.setMinimum(12);
+	assertEquals(x.minimum(), 12);
+	assertEquals(x.maximum(), 12);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_validate() {
+	var range1 = new ClosedIntRange(0, 99);
+	var range2 = new ClosedIntRange(40, 60);
+	var range3 = new ClosedIntRange(40, 600);
+	var range4 = new ClosedIntRange(-20, 20);
+	var range5 = new ClosedIntRange(-60, -40);
+
+	var range6 = new ClosedIntRange(50, 137);
+	var range7 = new ClosedIntRange(50, 336);
+	var range8 = new ClosedIntRange(1421, 1456);
+	var range8b = new ClosedIntRange(-1456, -1421);
+	var range9 = new ClosedIntRange(52, 63);
+
+	var range10 = new ClosedIntRange(1499, 1521);
+
+	var cases = [
+		[range1, '', Intermediate],
+		[range1, ' ', Invalid],
+		[range1, ' 0', Invalid],
+		[range1, '0 ', Invalid],
+		[range1, '-3', Invalid],
+		[range1, '0', Acceptable],
+		[range1, '05', Acceptable],
+		[range1, '50', Acceptable],
+		[range1, '99', Acceptable],
+		[range1, '100', Invalid],
+
+		[range2, '0', Intermediate],
+		[range2, '1', Invalid],
+		[range2, '2', Invalid],
+		[range2, '3', Invalid],
+		[range2, '4', Intermediate],
+		[range2, '5', Intermediate],
+		[range2, '6', Intermediate],
+		[range2, '7', Invalid],
+		[range2, '8', Invalid],
+		[range2, '9', Invalid],
+		[range2, '39', Invalid],
+		[range2, '61', Invalid],
+		[range2, '40', Acceptable],
+		[range2, '60', Acceptable],
+
+		[range3, '0', Intermediate],
+		[range3, '1', Intermediate],
+		[range3, '2', Intermediate],
+		[range3, '3', Intermediate],
+		[range3, '4', Intermediate],
+		[range3, '5', Intermediate],
+		[range3, '6', Intermediate],
+		[range3, '7', Intermediate],
+		[range3, '8', Intermediate],
+		[range3, '9', Intermediate],
+
+		[range3, '00', Intermediate],
+		[range3, '03', Intermediate],
+		[range3, '30', Intermediate],
+		[range3, '70', Acceptable],
+
+		[new ClosedIntRange(1, 99), '0', Intermediate],
+
+		[range4, '0', Acceptable],
+		[range4, '-3', Acceptable],
+		[range4, '3', Acceptable],
+		[range4, '20', Acceptable],
+		[range4, '-20', Acceptable],
+		[range4, '020', Acceptable],
+		[range4, '-020', Acceptable],
+
+		[range5, '-', Intermediate],
+		[range5, '0', Invalid],
+		[range5, '-1', Invalid],
+		[range5, '-2', Invalid],
+		[range5, '-3', Invalid],
+		[range5, '-4', Intermediate],
+		[range5, '-5', Intermediate],
+		[range5, '-6', Intermediate],
+		[range5, '-7', Invalid],
+		[range5, '-8', Invalid],
+		[range5, '-9', Invalid],
+		[range5, '-39', Invalid],
+		[range5, '-61', Invalid],
+		[range5, '-40', Acceptable],
+		[range5, '-60', Acceptable],
+
+		[range6, '1', Intermediate],
+		[range6, '2', Invalid],
+		[range6, '3', Invalid],
+		[range6, '4', Invalid],
+		[range6, '5', Intermediate],
+		[range6, '6', Intermediate],
+		[range6, '7', Intermediate],
+		[range6, '8', Intermediate],
+		[range6, '9', Intermediate],
+
+		[range6, '10', Intermediate],
+		[range6, '12', Intermediate],
+		[range6, '13', Intermediate],
+		[range6, '15', Invalid],
+
+		[range7, '1', Intermediate],
+		[range7, '2', Intermediate],
+		[range7, '3', Intermediate],
+		[range7, '4', Invalid],
+		[range7, '5', Intermediate],
+		[range7, '6', Intermediate],
+		[range7, '7', Intermediate],
+		[range7, '8', Intermediate],
+		[range7, '9', Intermediate],
+
+		[range8, '1', Intermediate],
+		[range8, '14', Intermediate],
+		[range8, '142', Intermediate],
+		[range8, '1421', Acceptable],
+		[range8, '1422', Acceptable],
+		[range8, '1455', Acceptable],
+		[range8, '1456', Acceptable],
+		[range8, '145', Intermediate],
+		[range8, '140', Invalid],
+		[range8, '146', Invalid],
+		[range8b, '-1', Intermediate],
+		[range8b, '-14', Intermediate],
+		[range8b, '-142', Intermediate],
+		[range8b, '-1421', Acceptable],
+		[range8b, '-1422', Acceptable],
+		[range8b, '-1455', Acceptable],
+		[range8b, '-1456', Acceptable],
+		[range8b, '-145', Intermediate],
+		[range8b, '-140', Invalid],
+		[range8b, '-146', Invalid],
+
+		[range9, '5', Intermediate],
+
+		[range10, '1498', Invalid]
+	];
+
+	for (var i=0; i<cases.length; i++) {
+		var test = cases[i];
+		var range = test[0];
+		var input = test[1];
+		var expect = test[2];
+
+		var x = new IntValidator(range);
+		console.log('i: ' + i + ', Range: ' + range + ', Input: ' + input + ', expect: ' + expect + ', actual: ' + x.validate(input));
+
+		assertEquals(x.validate(input), expect);
+	}	
+};
+</script>
+
+</body>
+</html>

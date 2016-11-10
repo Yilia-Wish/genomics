@@ -1,0 +1,65 @@
+/* http://paulirish.com/2012/box-sizing-border-box-ftw/
+   http://css-tricks.com/box-sizing/ 
+*/
+* {
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
+  box-sizing: border-box;
+}
+
+html {
+    font-size: 62.5%;
+}
+
+body {
+    /* Reduce default font size to 10pt */
+    font-size: 13px; font-size: 1.3rem;  /* 13px */
+    font-family: "Lucida Grande", "Trebuchet MS", Tahoma, Verdana, sans-serif;
+    line-height: 1.5em;
+}
+
+/* Reference: https://gist.github.com/413930, 31 Oct 2012 */
+sub, sup {
+  /* Specified in % so that the sup/sup is the
+     right size relative to the surrounding text */
+  font-size: 75%;
+
+  /* Zero out the line-height so that it doesn't
+     interfere with the positioning that follows */
+  line-height: 0;
+
+  /* Where the magic happens: makes all browsers position
+     the sup/sup properly, relative to the surrounding text */
+  position: relative;
+
+  /* Note that if you're using Eric Meyer's reset.css, this
+     is already set and you can remove this rule */
+  vertical-align: baseline;
+}
+
+sup {
+  /* Move the superscripted text up */
+  top: -0.5em;
+}
+
+sub {
+  /* Move the subscripted text down, but only
+     half as far down as the superscript moved up */
+  bottom: -0.25em;
+}
+
+.clearfix:after { 
+   content: "."; 
+   visibility: hidden; 
+   display: block; 
+   height: 0; 
+   clear: both;
+}
+
+.fright {
+    float: right;
+}
+
+.fleft {
+    float: left;
+}

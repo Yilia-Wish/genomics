@@ -1,0 +1,198 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.statemachine.StateMachine</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.events.Event');
+
+goog.require('ag.statemachine.MockState');
+goog.require('ag.statemachine.MockTransition');
+goog.require('ag.statemachine.State');
+goog.require('ag.statemachine.StateMachine');
+
+goog.require('ag.meta.SignalSpy');
+</script>
+<body>
+
+<script>
+// Aliases
+var AbstractState = ag.statemachine.AbstractState;
+var AbstractTransition = ag.statemachine.AbstractTransition;
+var MockState = ag.statemachine.MockState;
+var MockTransition =ag.statemachine.MockTransition;
+var MockTransitionEvent = ag.statemachine.MockTransitionEvent;
+var SignalSpy = ag.meta.SignalSpy;
+var State = ag.statemachine.State;
+var StateMachine = ag.statemachine.StateMachine;
+
+var x;
+var state;
+
+function setUp() {
+	x = new StateMachine();
+	state = new MockState();
+	x.addState(state);
+	x.setInitialState(state);
+};
+
+function tearDown() {
+	x.stop();
+	x.dispose();
+	x = null;
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_addState() {
+	var x = new StateMachine();
+	var state = new MockState();
+	assertNull(state.stateMachine());
+
+	assertEquals(state, x.addState(state));
+	assertEquals(state.stateMachine(), x);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_dispose() {
+	var x = new StateMachine();
+	x.dispose();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_initialState() {
+	var x = new StateMachine();
+	assertNull(x.initialState());
+
+	var state = new MockState();
+	x.addState(state);
+	x.setInitialState(state);
+	assertEquals(x.initialState(), state);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_isRunning() {
+	assertFalse(x.isRunning());
+	x.start();
+	assertTrue(x.isRunning());
+	x.stop();
+	assertFalse(x.isRunning());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_restart() {
+	var spyStarted = new SignalSpy(x, StateMachine.SignalType.STARTED);
+	var spyStopped = new SignalSpy(x, StateMachine.SignalType.STOPPED);
+
+	x.restart();
+	assertEquals(spyStarted.size(), 1);
+	spyStarted.clear();
+	x.restart();
+	assertEquals(spyStopped.size(), 1);
+	assertEquals(spyStarted.size(), 1);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_start() {
+	var spyStarted = new SignalSpy(x, StateMachine.SignalType.STARTED);
+	var spyStateEntered = new SignalSpy(state, AbstractState.SignalType.ENTERED);
+	x.start();
+	assertEquals(spyStarted.size(), 1);
+	assertEquals(spyStateEntered.size(), 0);
+	x.stop();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_stop() {
+	var spy = new SignalSpy(x, StateMachine.SignalType.STOPPED);
+	x.start();
+	assertEquals(spy.size(), 0);
+	x.stop();
+	assertEquals(spy.size(), 1);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_postEvent_targetLess() {
+	var t = new MockTransition('MY_TYPE');
+	state.addTransition(t);
+
+	var stockEvent = new Event('STOCK');
+	var transEvent = new Event('MY_TYPE');
+
+	x.start();
+
+	// Stock event should do nothing, but pass on the result to state for processing since
+	// there is no transition that will accept it.
+	x.postEvent(stockEvent);
+	assertEquals(state.processedEvents.length, 1);
+	assertEquals(state.processedEvents[0], stockEvent);
+
+	assertEquals(state.entryEvents.length, 0);
+	assertEquals(state.exitEvents.length, 0);
+
+	state.clear();
+
+	// An actual event that will pass the test for the transition t
+	x.postEvent(transEvent);
+	assertEquals(state.processedEvents.length, 1);
+	assertEquals(state.processedEvents[0], transEvent);
+
+	assertEquals(state.entryEvents.length, 1);
+	assertEquals(state.entryEvents[0], transEvent);
+
+	assertEquals(state.exitEvents.length, 1);
+	assertEquals(state.exitEvents[0], transEvent);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_postEvent_simple() {
+	var t1 = new MockTransition('ALPHA');
+	var t2 = new MockTransition('BETA');
+
+	var alphaState = new MockState('alpha');
+	var betaState = new MockState('beta');
+	x.addState(alphaState);
+	x.addState(betaState);
+
+	t1.setTargetState(alphaState);
+	t2.setTargetState(betaState);
+
+	state.addTransition(t1);
+	state.addTransition(t2);
+
+	var stockEvent = new Event('Stock');
+	var alphaEvent = new Event('ALPHA');
+
+	x.start();
+	x.postEvent(stockEvent);
+	assertEquals(state.processedEvents.length, 1);
+	assertEquals(state.processedEvents[0], stockEvent);
+
+	assertEquals(state.entryEvents.length, 0);
+	assertEquals(state.exitEvents.length, 0);
+
+	state.clear();
+
+	x.postEvent(alphaEvent);
+	assertEquals(alphaState.processedEvents.length, 1);
+	assertEquals(alphaState.processedEvents[0], alphaEvent);
+
+	assertEquals(alphaState.entryEvents.length, 1);
+	assertEquals(alphaState.entryEvents[0], alphaEvent);
+
+	assertEquals(alphaState.exitEvents.length, 0);
+	assertEquals(state.exitEvents.length, 1);
+	assertEquals(state.exitEvents[0], alphaEvent);
+
+	assertEquals(betaState.processedEvents.length, 0);
+	assertEquals(betaState.entryEvents.length, 0);
+	assertEquals(betaState.exitEvents.length, 0);
+}
+
+</script>
+</body>
+</html>

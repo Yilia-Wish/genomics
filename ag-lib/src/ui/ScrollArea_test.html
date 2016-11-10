@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.ui.ScrollArea</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.dom');
+goog.require('goog.ui.Component');
+goog.require('ag.ui.ScrollArea');
+</script>
+<body>
+
+<div id="scrollarea" style="border: 1px solid black;"></div>
+
+<script>
+// Aliases
+var ScrollArea = ag.ui.ScrollArea;
+
+var y;
+
+// --------------------------------------------------------------------------------------------------------------------
+function setUp() {
+
+}
+
+function tearDown() {
+
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	y = new ScrollArea();
+	// y.setScrollableSize(new goog.math.Size(600, 173));
+	var div = goog.dom.getElement('scrollarea');
+	y.decorate(div);
+};
+
+</script>
+</body>
+</html>

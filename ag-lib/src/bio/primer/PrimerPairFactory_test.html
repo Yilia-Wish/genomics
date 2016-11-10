@@ -1,0 +1,69 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.bio.primer.PrimerPairFactory</title>
+	<meta charset='utf-8'>
+</head>
+
+<script src='../../goog/base.js'></script>
+<script src='../../deps.js'></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.bio.grammar');
+goog.require('ag.bio.BioString');
+goog.require('ag.bio.primer.DimerScoreCalculator');
+goog.require('ag.bio.RestrictionEnzyme');
+goog.require('ag.bio.primer.Primer');
+goog.require('ag.bio.primer.PrimerFactory');
+goog.require('ag.bio.primer.PrimerPairFactory');
+</script>
+<body>
+<script>
+// Aliases
+var grammar = ag.bio.grammar;
+
+var BioString = ag.bio.BioString;
+var DimerScoreCalculator = ag.bio.primer.DimerScoreCalculator;
+var Primer = ag.bio.primer.Primer;
+var PrimerFactory = ag.bio.primer.PrimerFactory;
+var PrimerPairFactory = ag.bio.primer.PrimerPairFactory;
+var RestrictionEnzyme = ag.bio.RestrictionEnzyme;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: makePrimerPair
+function test_makePrimerPair() {
+	var x = new PrimerPairFactory();
+    var primerPair = x.makePrimerPair(new Primer(), new Primer());
+    assertEquals(primerPair.deltaTm(), 0.);
+    assertTrue(primerPair.forwardPrimer.isNull());
+    assertTrue(primerPair.reversePrimer.isNull());
+    assertEquals(primerPair.score, 0.);
+
+    // Test: make some real primers
+    var dimerScoreCalculator = new DimerScoreCalculator();
+    var primerFactory = new PrimerFactory();
+    var forwardPrimer = primerFactory.makePrimer(new BioString('ATGCAGTA', grammar.DNA), new RestrictionEnzyme(), 45.);
+    primerPair = x.makePrimerPair(forwardPrimer, new Primer());
+    assertTrue(primerPair.forwardPrimer.eq(forwardPrimer));
+    assertTrue(primerPair.reversePrimer.eq(new Primer()));
+    assertEquals(primerPair.deltaTm(), 45.0);
+    var expectedScore = dimerScoreCalculator.dimerScore(forwardPrimer.sequence(), new BioString(null, grammar.DNA)) +
+    	primerPair.deltaTm() +
+    	forwardPrimer.homoDimerScore();
+    assertEquals(primerPair.score, expectedScore);
+
+    var reversePrimer = primerFactory.makePrimer(new BioString('GCTGTAAGC', grammar.DNA), new RestrictionEnzyme(), 53.2);
+    primerPair = x.makePrimerPair(forwardPrimer, reversePrimer);
+    assertTrue(primerPair.forwardPrimer.eq(forwardPrimer));
+    assertTrue(primerPair.reversePrimer.eq(reversePrimer));
+    assertEquals(primerPair.deltaTm(), Math.abs(45. - 53.2));
+    var expectedScore = dimerScoreCalculator.dimerScore(forwardPrimer.sequence(), reversePrimer.sequence()) +
+    	primerPair.deltaTm() +
+    	forwardPrimer.homoDimerScore() +
+    	reversePrimer.homoDimerScore();
+    assertEquals(primerPair.score, expectedScore);
+};
+
+</script>
+</body>
+</html>

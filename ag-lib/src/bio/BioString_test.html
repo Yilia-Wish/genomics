@@ -1,0 +1,1107 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.bio.BioString</title>
+	<meta charset='utf-8'>
+</head>
+
+<script src='../goog/base.js'></script>
+<script src='../deps.js'></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.bio.BioString');
+goog.require('ag.bio.grammar');
+goog.require('ag.core.ClosedIntRange');
+</script>
+<body>
+<script>
+// Aliases
+var grammar = ag.bio.grammar;
+var BioString = ag.bio.BioString;
+var ClosedIntRange = ag.core.ClosedIntRange;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_removeGapsFromString() {
+    var fixtures = [
+        '',
+        'A-',
+        '-A',
+        '--A',
+        'A--',
+        '-A-',
+        '--A--',
+        '-.',
+        '-.A.-',
+        '--A..',
+        '.-A-.',
+        '.-A.-',
+        'ABCD',
+        'A-B.C-D.'
+    ];
+
+    for (var i=0; i<fixtures.length; i++) {
+        var sequence = fixtures[i];
+        var result = BioString.removeGapsFromString(sequence);
+        assertEquals(-1, result.indexOf('-'));
+        assertEquals(-1, result.indexOf('.'));
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	var x = new BioString('ACGT');
+	assertEquals(x.grammar(), grammar.UNKNOWN);
+	assertEquals(x.toString(), 'ACGT');
+	assertEquals(x.length(), 4);
+	assertEquals(x.capacity(), 4);
+
+	x = new BioString('AGT', grammar.DNA);
+	assertEquals(x.grammar(), grammar.DNA);
+	assertEquals(x.toString(), 'AGT');
+	assertEquals(x.length(), 3);
+	assertEquals(x.capacity(), 1);
+
+    var y = new BioString(x);
+    assertFalse(y === x);
+    assertEquals(y.grammar(), x.grammar());
+    assertEquals(y.toString(), 'AGT');
+    assertEquals(y.length(), 3);
+    assertEquals(y.capacity(), 1);
+
+    assertTrue(y.eq(x));
+
+    assertFalse(y.buffer_ === x.buffer_);
+
+    y = new BioString(x, grammar.AMINO);
+    assertEquals(y.grammar(), grammar.DNA);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_eq() {
+    var x = new BioString("A");
+    assertTrue(x.eq(x));
+
+    var y = new BioString("A");
+    assertTrue(x.eq(y));
+    y.setGrammar(grammar.DNA);
+    x.setGrammar(grammar.RNA);
+    assertFalse(x.eq(y));
+
+    x = new BioString("ABCABC", grammar.AMINO);
+    y = new BioString("ABCAB", grammar.AMINO);
+    assertFalse(x.eq(y));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: fromToSerialObject
+function test_fromToSerialObject() {
+    var cases = [
+        new BioString(),
+        new BioString('ACTG'),
+        new BioString('ACTG', grammar.DNA),
+        new BioString('acGTGAsd fewefdfasdf3123', grammar.AMINO)
+    ];
+
+    for (var i=0; i<cases.length; i++) {
+        var to = cases[i].toSerialObject();
+        var from = BioString.fromSerialObject(to);
+        assertTrue(cases[i].eq(from));
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: at
+function test_at() {
+    var str = 'aBCDEFAbcdef';
+    var x = new BioString(str);
+    for (var i=0; i<str.length; i++)
+        assertEquals(str.charCodeAt(i), x.at(i+1));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_chop() {
+    var x = new BioString('ABC');
+    x.chop(0);
+    assertEquals('ABC', x.toString());
+    x.chop(1);
+    assertEquals('AB', x.toString());
+    x.chop(2);
+    assertEquals('', x.toString());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: clear
+function test_clear() {
+    var x = new BioString('ABC');
+    assertFalse(x.isEmpty());
+    x.clear();
+    assertTrue(x.isEmpty());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: collaseLeft
+function test_collaseLeft() {
+	var seqs = [
+		'A-BC-D-E',
+        '-A-BCD--',
+        '--A---BC'
+	];
+
+	for (var i=0; i<seqs.length; i++) {
+		var seq = seqs[i];
+		var l = seq.length;
+		for (var start=1; start <= 1; start++) {
+			for (var stop=start; stop <= l; stop++) {
+				var x = new BioString(seq);
+                var expected = buildExpectedCollapseLeft(seq, start, stop);
+                var range = x.collapseLeft(new ClosedIntRange(start, stop));
+                assertEquals(x.toString(), expected);
+
+                var expectedRange = findDifferences(seq, expected);
+                assertTrue(range.eq(expectedRange));
+			}
+		}
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: collaseLeft
+function test_collaseRight() {
+	var seqs = [
+		'A-BC-D-E',
+        '-A-BCD--',
+        '--A---BC'
+	];
+
+	for (var i=0; i<seqs.length; i++) {
+		var seq = seqs[i];
+		var l = seq.length;
+		for (var start=1; start <= 1; start++) {
+			for (var stop=start; stop <= l; stop++) {
+				var x = new BioString(seq);
+                var expected = buildExpectedCollapseRight(seq, start, stop);
+                var range = x.collapseRight(new ClosedIntRange(start, stop));
+                assertEquals(x.toString(), expected);
+
+                var expectedRange = findDifferences(seq, expected);
+                assertTrue(range.eq(expectedRange));
+			}
+		}
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: count
+function test_count() {
+    var cases = [
+        [null, '', 0],
+        [null, '-', 0],
+        [null, 'ACGT', 0],
+
+        ['Aa', 'A', 1],
+        ['Aa', 'a', 1],
+        ['AaAaA', 'A', 3],
+        ['AaAaA', 'a', 2],
+        ['AaAaA', 'Aa', 2],
+        ['AaAaA', 'aA', 2],
+        ['AaAaA', 'AaA', 2],
+
+        ['----', '-', 4],
+        ['----', '--', 3],
+        ['----', '---', 2],
+        ['----', '----', 1],
+        ['----', '-----', 0]
+    ];
+
+    for (var i=0; i<cases.length; i++) {
+        var seq = cases[i][0];
+        var searchString = cases[i][1];
+        var searchBioString = new BioString(cases[i][1]);
+        var expectedCount = cases[i][2];
+
+        var x = new BioString(seq);
+        assertEquals(x.count(searchString), expectedCount);
+        assertEquals(x.count(searchBioString), expectedCount);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: findLocationsOf
+function test_findLocationsOf() {
+    var bioString = new BioString('');
+    assertArrayEquals(bioString.findLocationsOf(new BioString('ABC')), []);
+    assertArrayEquals(bioString.findLocationsOf(new BioString()), []);
+
+    //                   123456789012345
+    bioString.setString('A--aaCTCTCa----');
+    assertArrayEquals(bioString.findLocationsOf(new BioString('A')), [new ClosedIntRange(1, 1)]);
+    assertArrayEquals(bioString.findLocationsOf(new BioString('a')), [new ClosedIntRange(4, 4), new ClosedIntRange(5, 5), new ClosedIntRange(11, 11)]);
+    assertArrayEquals(bioString.findLocationsOf(new BioString('CT')), [new ClosedIntRange(6, 7), new ClosedIntRange(8, 9)]);
+    assertArrayEquals(bioString.findLocationsOf(new BioString('--')), [new ClosedIntRange(2, 3), new ClosedIntRange(12, 13), new ClosedIntRange(13, 14), new ClosedIntRange(14, 15)]);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: gapsBetween
+function test_gapsBetween() {
+	var biostring = new BioString('--A..B--CDE.F-G--');
+    for (var i=1; i<= biostring.length(); i++) {
+        for (var j=i; j<= biostring.length(); j++) {
+            var part = biostring.substr(i, j-i+1);
+            assertEquals(biostring.gapsBetween(new ClosedIntRange(i, j)), part.count('-') + part.count('.'));
+        }
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: gapsLeftOf
+function test_gapsLeftOf() {
+    //                             1234567890123
+    var biostring = new BioString('--AB----CD---');
+
+    // Test: full positive range
+    assertEquals(biostring.gapsLeftOf(1), 0);
+    assertEquals(biostring.gapsLeftOf(2), 1);
+    assertEquals(biostring.gapsLeftOf(3), 2);
+    assertEquals(biostring.gapsLeftOf(4), 0);
+    assertEquals(biostring.gapsLeftOf(5), 0);
+    assertEquals(biostring.gapsLeftOf(6), 1);
+    assertEquals(biostring.gapsLeftOf(7), 2);
+    assertEquals(biostring.gapsLeftOf(8), 3);
+    assertEquals(biostring.gapsLeftOf(9), 4);
+    assertEquals(biostring.gapsLeftOf(10), 0);
+    assertEquals(biostring.gapsLeftOf(11), 0);
+    assertEquals(biostring.gapsLeftOf(12), 1);
+    assertEquals(biostring.gapsLeftOf(13), 2);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: gapsRightOf
+function test_gapsRightOf() {
+    //                             1234567890123
+    var biostring = new BioString('--AB----CD---');
+
+    // Test: full positive range
+    assertEquals(biostring.gapsRightOf(1), 1);
+    assertEquals(biostring.gapsRightOf(2), 0);
+    assertEquals(biostring.gapsRightOf(3), 0);
+    assertEquals(biostring.gapsRightOf(4), 4);
+    assertEquals(biostring.gapsRightOf(5), 3);
+    assertEquals(biostring.gapsRightOf(6), 2);
+    assertEquals(biostring.gapsRightOf(7), 1);
+    assertEquals(biostring.gapsRightOf(8), 0);
+    assertEquals(biostring.gapsRightOf(9), 0);
+    assertEquals(biostring.gapsRightOf(10), 3);
+    assertEquals(biostring.gapsRightOf(11), 2);
+    assertEquals(biostring.gapsRightOf(12), 1);
+    assertEquals(biostring.gapsRightOf(13), 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: indexOf
+function test_indexOf() {
+    //         123456789012345678901
+    var seq = 'ABCDEFABCGHJJIJKLAABC';
+    var x = new BioString(seq);
+
+    var cases = [
+        'A', 'B', 'C', 'J', 'K', 'L',
+        'AB', 'DE', 'GHI', 'JJ', 'AABC',
+        'XYZ', ' ', '*34', 'ABCGHJJIJKL'
+    ];
+
+    for (var i=0; i< cases.length; i++) {
+        for (var j=0; j< seq.length; j++) {
+            var strIndexOf = seq.indexOf(cases[i], j);
+            var bioStrIndexOf = x.indexOf(cases[i], j + 1);
+
+            // console.log('i: ' + i + ', j: ' + j + '; search query: ' + cases[i] + '; javascript: ' + strIndexOf + '; bioString: ' + bioStrIndexOf);
+
+            if (strIndexOf === -1)
+                assertEquals(bioStrIndexOf, -1);
+            else
+                assertEquals(bioStrIndexOf, strIndexOf + 1);
+
+            // Test that indexOf with BioString's works too
+            var y = new BioString(cases[i]);
+            assertEquals(x.indexOf(y, j + 1), bioStrIndexOf);
+        }
+    }
+
+    // Empty search string should return -1
+    assertEquals(x.indexOf(''), -1);
+    assertEquals(x.indexOf('', 6), -1);
+    assertEquals(x.indexOf('', 20), -1);
+
+    assertEquals(new BioString().indexOf('A'), -1);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: insert
+function test_insert() {
+    var seq = 'ABCDEF';
+    var n = seq.length;
+    var bioInsert = new BioString('XYZ');
+
+    var biostring = new BioString();
+
+    // Test: 1..n+1
+    for (var i=1; i<= n+1; ++i)
+    {
+        biostring.setString(seq);
+        // var right = -(n - (i-1));
+        var target = seq.left(i-1) + 'XYZ' + seq.right(n - (i-1));
+        assertEquals(biostring.insert(i, 'XYZ').toString(), target);
+    }
+
+    // ----------------------------------
+    // Spot checks
+    biostring.setString('ABCDEF'); assertEquals(biostring.insert(3, '').toString(), 'ABCDEF');
+    biostring.setString('ABCDEF'); assertEquals(biostring.insert(6, '---').toString(), 'ABCDE---F');
+    biostring.setString('ABCDEF'); assertEquals(biostring.insert(7, '..').toString(), 'ABCDEF..');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: insertGaps
+function test_insertGaps() {
+    var seq = 'ABCDEF';
+    var n = seq.length;
+
+    var biostring = new BioString(seq);
+
+    // Test: 0 for position and/or n
+    assertEquals(biostring.insertGaps(3, 0, '-').toString(), seq);
+
+    // Test: insert gaps at 1..n+1
+    for (var i=1; i<=n+1; ++i)
+    {
+        var expect = seq.left(i-1) + '--' + seq.right(n-i+1);
+
+        biostring.setString(seq);
+        assertEquals(biostring.insertGaps(i, 2, '-').toString(), expect);
+    }
+
+    // ----------------------------------
+    // Spot checks
+    biostring.setString(seq);
+    assertEquals(biostring.insertGaps(1, 2, '#').toString(), '##ABCDEF');
+
+    // Test: different gap character
+    biostring.setString(seq);
+    assertEquals(biostring.insertGaps(3, 0, 'x').toString(), seq);
+
+    // Test: insert gaps at 1..n+1
+    for (var i=1; i<=n+1; ++i)
+    {
+        var expect = seq.left(i-1) + '@@' + seq.right(n-i+1);
+
+        biostring.setString(seq);
+        assertEquals(biostring.insertGaps(i, 2, '@').toString(), expect);
+    }
+
+    bioString = new BioString(seq);
+    bioString.insertGaps(1, 1);
+    assertEquals('-ABCDEF', bioString.toString());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: isPalindrome
+function test_isPalindrome() {
+	var cases = [
+		'', false,
+		'A', false,
+		'AA', false,
+		'AT', true,
+		'ATA', false,
+		'ATC', false,
+		'ATT', false,
+		'AATT', true,
+		'ACTGT', false,
+		'ACTAGT', true,
+		'ACT--AGT', false,
+		'--', false
+	];
+
+	for (var i=0; i<cases.length; i+=2) {
+		var x = new BioString(cases[i]);
+		assertEquals(x.isPalindrome(), cases[i+1]);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: lastIndexOf
+function test_lastIndexOf() {
+    //         123456789012345678901
+    var seq = 'ABCDEFABCGHJJIJKLAABC';
+    var x = new BioString(seq);
+
+    var cases = [
+        'A', 'B', 'C', 'J', 'K', 'L',
+        'AB', 'DE', 'GHI', 'JJ', 'AABC',
+        'XYZ', ' ', '*34', 'ABCGHJJIJKL'
+    ];
+
+    for (var i=0; i< cases.length; i++) {
+        for (var j=0; j< seq.length; j++) {
+            var strIndexOf = seq.lastIndexOf(cases[i], j);
+            var bioStrIndexOf = x.lastIndexOf(cases[i], j + 1);
+
+            // console.log('i: ' + i + ', j: ' + j + '; search query: ' + cases[i] + '; javascript: ' + strIndexOf + '; bioString: ' + bioStrIndexOf);
+
+            if (strIndexOf === -1)
+                assertEquals(bioStrIndexOf, -1);
+            else
+                assertEquals(bioStrIndexOf, strIndexOf + 1);
+
+            // Test that indexOf with BioString's works too
+            var y = new BioString(cases[i]);
+            assertEquals(x.lastIndexOf(y, j + 1), bioStrIndexOf);
+        }
+    }
+
+    // Empty search string should return -1
+    assertEquals(x.lastIndexOf(''), -1);
+    assertEquals(x.lastIndexOf('', 6), -1);
+    assertEquals(x.lastIndexOf('', 20), -1);
+
+    assertEquals(new BioString().lastIndexOf('A'), -1);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: leftSlidablePositions
+function test_leftSlidablePositions() {
+	//                             1234567890
+    var biostring = new BioString('AB--C-D--E');
+
+    // Test: each individual character
+    assertEquals(biostring.leftSlidablePositions(new ClosedIntRange(1, 1)), 0);
+    assertEquals(biostring.leftSlidablePositions(new ClosedIntRange(2, 2)), 0);
+    assertEquals(biostring.leftSlidablePositions(new ClosedIntRange(3, 3)), 2);
+    assertEquals(biostring.leftSlidablePositions(new ClosedIntRange(4, 4)), 3);
+    assertEquals(biostring.leftSlidablePositions(new ClosedIntRange(5, 5)), 2);
+    assertEquals(biostring.leftSlidablePositions(new ClosedIntRange(6, 6)), 5);
+    assertEquals(biostring.leftSlidablePositions(new ClosedIntRange(7, 7)), 1);
+    assertEquals(biostring.leftSlidablePositions(new ClosedIntRange(8, 8)), 7);
+    assertEquals(biostring.leftSlidablePositions(new ClosedIntRange(9, 9)), 8);
+    assertEquals(biostring.leftSlidablePositions(new ClosedIntRange(10, 10)), 2);
+
+    // Test: segment containing bounded on both sides by non-gap character
+    assertEquals(biostring.leftSlidablePositions(new ClosedIntRange(5, 7)), 2);
+
+    // Test: segment containing gap on left bound, but also containing non-gap characters
+    assertEquals(biostring.leftSlidablePositions(new ClosedIntRange(4, 7)), 1);
+
+    // Test: segment containing internal non-gap character and gaps on both terminii
+    assertEquals(biostring.leftSlidablePositions(new ClosedIntRange(4, 6)), 1);
+
+    // Test: segment consisting solely of gaps
+    assertEquals(biostring.leftSlidablePositions(new ClosedIntRange(3, 4)), 2);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_matchesAt() {
+    var seq = "ABCDEF";
+    var bioString = new BioString(seq);
+    for (var i=1; i<= seq.length; i++)
+        assertEquals(false, bioString.matchesAt(new BioString(""), i));
+
+    assertTrue(bioString.matchesAt(new BioString("A"), 1));
+    assertTrue(bioString.matchesAt(new BioString("AB"), 1));
+    assertTrue(bioString.matchesAt(new BioString("ABC"), 1));
+    assertTrue(bioString.matchesAt(new BioString("ABCD"), 1));
+    assertTrue(bioString.matchesAt(new BioString("ABCDE"), 1));
+    assertTrue(bioString.matchesAt(new BioString("ABCDEF"), 1));
+
+    assertFalse(bioString.matchesAt(new BioString("AABCDEF"), 1));
+    assertFalse(bioString.matchesAt(new BioString("ABCDEFF"), 1));
+    assertFalse(bioString.matchesAt(new BioString("-ABCDE"), 1));
+    assertFalse(bioString.matchesAt(new BioString("A-BCDE"), 1));
+    assertFalse(bioString.matchesAt(new BioString("ABCDEF-"), 1));
+    assertFalse(bioString.matchesAt(new BioString("BCDE"), 1));
+    assertFalse(bioString.matchesAt(new BioString("CDE"), 1));
+    assertFalse(bioString.matchesAt(new BioString("DE"), 1));
+    assertFalse(bioString.matchesAt(new BioString("E"), 1));
+    assertFalse(bioString.matchesAt(new BioString("--.."), 1));
+
+    assertFalse(bioString.matchesAt(new BioString("A"), 2));
+    assertFalse(bioString.matchesAt(new BioString("AB"), 2));
+    assertFalse(bioString.matchesAt(new BioString("ABC"), 2));
+    assertFalse(bioString.matchesAt(new BioString("ABCD"), 2));
+    assertFalse(bioString.matchesAt(new BioString("ABCDE"), 2));
+    assertFalse(bioString.matchesAt(new BioString("ABCDEF"), 2));
+
+    assertTrue(bioString.matchesAt(new BioString("B"), 2));
+    assertTrue(bioString.matchesAt(new BioString("BC"), 2));
+    assertTrue(bioString.matchesAt(new BioString("BCD"), 2));
+    assertTrue(bioString.matchesAt(new BioString("BCDE"), 2));
+    assertTrue(bioString.matchesAt(new BioString("BCDEF"), 2));
+
+    assertFalse(bioString.matchesAt(new BioString("BBCDEF"), 2));
+    assertFalse(bioString.matchesAt(new BioString("BCDEFF"), 2));
+    assertFalse(bioString.matchesAt(new BioString("-BCDE"), 2));
+    assertFalse(bioString.matchesAt(new BioString("-BCDE"), 2));
+    assertFalse(bioString.matchesAt(new BioString("BCDEF-"), 2));
+    assertFalse(bioString.matchesAt(new BioString("CDE"), 2));
+    assertFalse(bioString.matchesAt(new BioString("DE"), 2));
+    assertFalse(bioString.matchesAt(new BioString("E"), 2));
+    assertFalse(bioString.matchesAt(new BioString("--.."), 2));
+
+    assertTrue(bioString.matchesAt(new BioString("F"), 6));
+    assertFalse(bioString.matchesAt(new BioString("F-"), 6));
+    assertFalse(bioString.matchesAt(new BioString("-F"), 6));
+    assertFalse(bioString.matchesAt(new BioString("-"), 6));
+    assertFalse(bioString.matchesAt(new BioString("."), 6));
+
+    // Ignore gaps parameter
+    assertFalse(bioString.matchesAt(new BioString(), 1, BioString.IGNORE_QUERY_GAPS));
+    assertFalse(bioString.matchesAt(new BioString("-"), 1, BioString.IGNORE_QUERY_GAPS));
+    assertTrue(bioString.matchesAt(new BioString("-A"), 1, BioString.IGNORE_QUERY_GAPS));
+    assertTrue(bioString.matchesAt(new BioString("A-"), 1, BioString.IGNORE_QUERY_GAPS));
+    assertFalse(bioString.matchesAt(new BioString("-A"), 2, BioString.IGNORE_QUERY_GAPS));
+
+    assertTrue(bioString.matchesAt(new BioString("-A--B-CDEF---"), 1, BioString.IGNORE_QUERY_GAPS));
+    assertTrue(bioString.matchesAt(new BioString("----CD--EF---"), 3, BioString.IGNORE_QUERY_GAPS));
+    assertFalse(bioString.matchesAt(new BioString("----CD--EF---"), 2, BioString.IGNORE_QUERY_GAPS));
+    assertFalse(bioString.matchesAt(new BioString("----CD--EF---ABBBAA"), 3, BioString.IGNORE_QUERY_GAPS));
+    assertFalse(bioString.matchesAt(new BioString("CDEF---"), 3));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: mid
+function test_mid() {
+    var seq = 'ABCDEFGH';
+    var n = seq.length;
+
+    var biostring = new BioString(seq, grammar.AMINO);
+
+    // Test: 1..n, i..n
+    for (var i=1; i<= n; ++i) {
+        for (var j=i; j<= n; ++j) {
+            var x = biostring.mid(new ClosedIntRange(i, j));
+            assertEquals(x.toString(), seq.substr(i-1, j-i+1));
+            assertEquals(x.grammar(), grammar.AMINO);
+        }
+    }
+
+    // --------------------------------------
+    // Spot checks
+    assertEquals(biostring.mid(new ClosedIntRange(3, 3)).toString(), 'C');
+    assertEquals(biostring.mid(new ClosedIntRange(6, 8)).toString(), 'FGH');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: nonGapsBetween
+function test_nonGapsBetween() {
+	var cases = [
+		['ABCDEF', new ClosedIntRange(1, 6), 6],
+		['ABCDEF', new ClosedIntRange(2, 5), 4],
+		['ABCDEF', new ClosedIntRange(1, 6), 6],
+		['ABCDEF', new ClosedIntRange(2, 5), 4]
+	];
+
+    var sequence = 'ABC---DEF';
+    for (var i=1; i<= sequence.length; ++i) {
+        for (var j=i; j<= sequence.length; ++j) {
+        	var extract = sequence.substr(i-1, j-i+1);
+        	var matches = extract.match(/-/g);
+        	var gapsInExtract = matches ? matches.length : 0;
+        	cases.push([sequence, new ClosedIntRange(i, j), (j-i+1) - gapsInExtract]);
+        }
+    }
+
+    for (var i=0; i<cases.length; i++) {
+    	var seq = cases[i][0];
+    	var range = cases[i][1];
+    	var nNonGaps = cases[i][2];
+    	var x = new BioString(seq);
+    	assertEquals(x.nonGapsBetween(range), nNonGaps);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: onlyContainsACGT
+function test_onlyContainsACGT() {
+    var bioString = new BioString();
+
+    assertFalse(bioString.onlyContainsACGT());
+
+    bioString.setString('ACGT');
+    assertTrue(bioString.onlyContainsACGT());
+    bioString.setString('ACGTN');
+    assertFalse(bioString.onlyContainsACGT());
+    bioString.setString('aCGT');
+    assertFalse(bioString.onlyContainsACGT());
+
+    //                   1234567890123
+    bioString.setString('ACGTnacgtACGT');
+    assertTrue(bioString.onlyContainsACGT(new ClosedIntRange(1, 4)));
+    assertTrue(bioString.onlyContainsACGT(new ClosedIntRange(10, 13)));
+    assertTrue(bioString.onlyContainsACGT(new ClosedIntRange(2, 3)));
+    assertTrue(bioString.onlyContainsACGT(new ClosedIntRange(12, 12)));
+
+    assertFalse(bioString.onlyContainsACGT(new ClosedIntRange(1, 5)));
+    assertFalse(bioString.onlyContainsACGT(new ClosedIntRange(5, 9)));
+    assertFalse(bioString.onlyContainsACGT(new ClosedIntRange(8, 10)));
+    assertFalse(bioString.onlyContainsACGT(new ClosedIntRange(4, 5)));};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: remove
+function test_remove() {
+    //                     123456789012
+	var x = new BioString('abc123def456');
+
+    // Remove last two characters
+    x.remove(11, 2);
+    assertEquals(x.length(), 10);
+    assertEquals(x.toString(), 'abc123def4');
+
+    // Remove middle characters
+    // 1234567890
+    // abc123def4
+    x.remove(4, 3);
+    assertEquals(x.length(), 7);
+    assertEquals(x.toString(), 'abcdef4');
+
+    // Remove at beginning
+    x.remove(1, 1);
+    assertEquals(x.length(), 6);
+    assertEquals(x.toString(), 'bcdef4');
+
+    // Remove all
+    x.remove(1, 6);
+    assertTrue(x.isEmpty());
+    assertEquals(x.toString(), '');
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: removeAllGaps
+function test_removeAllGaps() {
+	var biostring = new BioString('ABC');
+    biostring.removeAllGaps();
+    assertEquals(biostring.toString(), 'ABC');
+
+    biostring.setString('-A-B.C-');
+    biostring.removeAllGaps();
+    assertEquals(biostring.toString(), 'ABC');
+
+    biostring.setString('---');
+    biostring.removeAllGaps();
+    assertTrue(biostring.isEmpty());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_replace() {
+    var fixtures = [
+        // ----------------------
+        // amount == insertlength
+        ['', 1, 0, '', ''],
+        ['ABCDEF', 2, 1, '_', 'A_CDEF'],
+        ['ABCDEF', 2, 2, '--', 'A--DEF'],
+        ['ABCDEF', 2, 3, '---', 'A---EF'],
+        ['ABCDEF', 2, 4, '----', 'A----F'],
+        ['ABCDEF', 2, 5, '-----', 'A-----'],
+        ['ABCDEF', 1, 6, '------', '------'],
+
+        // ----------------------
+        // insertLength > amount
+        ['', 1, 0, 'A', 'A'],
+        ['', 1, 0, 'ABC', 'ABC'],
+        ['A', 1, 0, '-', '-A'],
+        ['A', 1, 0, '--', '--A'],
+        ['A', 2, 0, '-', 'A-'],
+        ['A', 2, 0, '--', 'A--'],
+        //123456
+        ['ABCDEF', 4, 0, '--', 'ABC--DEF'],
+        ['ABCDEF', 7, 0, '--', 'ABCDEF--'],
+        ['ABCDEF', 1, 0, '--', '--ABCDEF'],
+
+        ['ABCDEF', 1, 1, '--', '--BCDEF'],
+        ['ABCDEF', 2, 1, '--', 'A--CDEF'],
+        ['ABCDEF', 6, 1, '--', 'ABCDE--'],
+
+        ['ABCDEF', 1, 2, '---', '---CDEF'],
+        ['ABCDEF', 3, 2, '---', 'AB---EF'],
+        ['ABCDEF', 5, 2, '---', 'ABCD---'],
+
+        // Wholesale replacement of more
+        ['ABCDEF', 1, 6, '--AA--BB', '--AA--BB'],
+
+        // ----------------------
+        // amount > insertLength; removing more than replacing with
+        ['A', 1, 1, '', ''],
+        ['AB', 2, 1, '', 'A'],
+        ['AB', 1, 1, '', 'B'],
+        ['AB', 1, 2, '', ''],
+        ['AB', 1, 2, 'C', 'C'],
+        ['ABCDEF', 3, 1, '', 'ABDEF'],
+        ['ABCDEF', 1, 2, '', 'CDEF'],
+        ['ABCDEF', 5, 2, '', 'ABCD'],
+        ['ABCDEF', 3, 3, '-', 'AB-F'],
+        ['ABCDEF', 1, 5, '-', '-F'],
+        ['ABCDEF', 1, 6, '', ''],
+        ['ABCDEF', 1, 6, '-----', '-----'],
+        ['ABCDEF', 2, 4, '-', 'A-F']
+    ];
+
+    for (var i=0; i< fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var bs = new BioString(fixture[0]);
+        var pos = fixture[1];
+        var amount = fixture[2];
+        var replacement = new BioString(fixture[3]);
+        var expect = fixture[4];
+
+        bs.replace(pos, amount, replacement);
+        assertEquals(expect, bs.toString());
+        assertEquals(bs.length(), expect.length);
+    }
+
+    try {
+        var subseq = new BioString('ABCDEF');
+        subseq.replace(6, 2, new BioString('--'));
+        fail('Should have thrown assertion');
+    }
+    catch(error) {}
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: reverse
+function test_reverse() {
+    var biostring = new BioString('A');
+    biostring.reverse();
+    assertEquals(biostring.toString(), 'A');
+
+    biostring.setString('AB');
+    biostring.reverse();
+    assertEquals(biostring.toString(), 'BA');
+
+    biostring.setString('ABC');
+    biostring.reverse();
+    assertEquals(biostring.toString(), 'CBA');
+
+    biostring.setString('123abcdef456');
+    biostring.reverse();
+    assertEquals(biostring.toString(), '654fedcba321');
+
+    biostring.reverse();
+    assertEquals(biostring.toString(), '123abcdef456');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: reverseComplement
+function test_reverseComplement() {
+    var biostring = new BioString(null, grammar.DNA);
+    var dna = biostring.reverseComplement();
+
+    assertTrue(dna.isEmpty());
+    assertEquals(dna.grammar(), grammar.DNA);
+
+    biostring.setString('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxzy1234567890');
+    dna = biostring.reverseComplement();
+    assertEquals(dna.grammar(), grammar.DNA);
+    biostring.reverse();
+    biostring.tr('ABCDGHKMTVabcdghkmtv',
+                 'TVGHCDMKABtvghcdmkab');
+    assertEquals(biostring.toString(), dna.toString());
+
+    biostring.setString('ABCDGHKMTVabcdghkmtv');
+    dna = biostring.reverseComplement();
+    assertEquals(dna.toString(), 'bakmdchgvtBAKMDCHGVT');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: rightSlidablePositions
+function test_rightSlidablePositions() {
+	//                             1234567890
+    var biostring = new BioString('AB--C-D--E');
+
+    // Test: each individual character
+    assertEquals(biostring.rightSlidablePositions(new ClosedIntRange(1, 1)), 0);
+    assertEquals(biostring.rightSlidablePositions(new ClosedIntRange(2, 2)), 2);
+    assertEquals(biostring.rightSlidablePositions(new ClosedIntRange(3, 3)), 7);
+    assertEquals(biostring.rightSlidablePositions(new ClosedIntRange(4, 4)), 6);
+    assertEquals(biostring.rightSlidablePositions(new ClosedIntRange(5, 5)), 1);
+    assertEquals(biostring.rightSlidablePositions(new ClosedIntRange(6, 6)), 4);
+    assertEquals(biostring.rightSlidablePositions(new ClosedIntRange(7, 7)), 2);
+    assertEquals(biostring.rightSlidablePositions(new ClosedIntRange(8, 8)), 2);
+    assertEquals(biostring.rightSlidablePositions(new ClosedIntRange(9, 9)), 1);
+    assertEquals(biostring.rightSlidablePositions(new ClosedIntRange(10, 10)), 0);
+
+    // Test: segment containing bounded on both sides by non-gap character
+    assertEquals(biostring.rightSlidablePositions(new ClosedIntRange(5, 7)), 2);
+
+    // Test: segment containing gap on right bound, but also containing non-gap characters
+    assertEquals(biostring.rightSlidablePositions(new ClosedIntRange(5, 8)), 1);
+
+    // Test: segment containing internal non-gap character and gaps on both terminii
+    assertEquals(biostring.rightSlidablePositions(new ClosedIntRange(6, 8)), 1);
+
+    // Test: segment consisting solely of gaps
+    assertEquals(biostring.rightSlidablePositions(new ClosedIntRange(3, 4)), 6);
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: slide
+function test_slide() {
+    //         1234567890123
+    var str = 'ABC--D-EF--GH';
+    var biostring = new BioString(str);
+
+    // Test: delta of zero and valid positions does nothing
+    assertTrue(biostring.slide(new ClosedIntRange(6, 9), 0) === 0 && biostring.toString() ===str);
+
+    // Test: slide entire sequence does not change anything
+    assertTrue(biostring.slide(new ClosedIntRange(1, 13), 3) === 0 && biostring.toString() ===str);
+    assertTrue(biostring.slide(new ClosedIntRange(1, 13), -3) === 0 && biostring.toString() ===str);
+
+    // Test: positive direction
+                     assertTrue(biostring.slide(new ClosedIntRange(1, 3), 1) === 1 && biostring.toString() ==='-ABC-D-EF--GH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(1, 3), 2) === 2 && biostring.toString() ==='--ABCD-EF--GH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(1, 3), 3) === 2 && biostring.toString() ==='--ABCD-EF--GH');
+
+    // Test: postive direction with region containing gaps
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(6, 9), 1) === 1 && biostring.toString() ==='ABC---D-EF-GH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(6, 9), 2) === 2 && biostring.toString() ==='ABC----D-EFGH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(6, 9), 3) === 2 && biostring.toString() ==='ABC----D-EFGH');
+
+    // Test: region with terminal gaps
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(5, 10), 1) === 1 && biostring.toString() ==='ABC---D-EF-GH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(5, 10), 2) === 1 && biostring.toString() ==='ABC---D-EF-GH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(5, 10), -1) === 1 && biostring.toString() ==='ABC-D-EF---GH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(5, 10), -2) === 1 && biostring.toString() ==='ABC-D-EF---GH');
+
+    // Test: move single residue
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(6, 6), -3) === 2 && biostring.toString() ==='ABCD---EF--GH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(6, 6), -1) === 1 && biostring.toString() ==='ABC-D--EF--GH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(6, 6), 1) === 1 && biostring.toString() ==='ABC---DEF--GH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(6, 6), 2) === 1 && biostring.toString() ==='ABC---DEF--GH');
+
+    // Test: sliding pure gapped region
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(4, 5), -1) === 1 && biostring.toString() ==='AB--CD-EF--GH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(4, 5), -2) === 2 && biostring.toString() ==='A--BCD-EF--GH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(4, 5), -3) === 3 && biostring.toString() ==='--ABCD-EF--GH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(4, 5), -4) === 3 && biostring.toString() ==='--ABCD-EF--GH');
+
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(4, 5), 1) === 1 && biostring.toString() ==='ABCD---EF--GH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(4, 5), 2) === 2 && biostring.toString() ==='ABCD---EF--GH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(4, 5), 3) === 3 && biostring.toString() ==='ABCD-E--F--GH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(4, 5), 4) === 4 && biostring.toString() ==='ABCD-EF----GH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(4, 5), 5) === 5 && biostring.toString() ==='ABCD-EF----GH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(4, 5), 6) === 6 && biostring.toString() ==='ABCD-EF----GH');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(4, 5), 7) === 7 && biostring.toString() ==='ABCD-EF--G--H');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(4, 5), 8) === 8 && biostring.toString() ==='ABCD-EF--GH--');
+    biostring.setString(str); assertTrue(biostring.slide(new ClosedIntRange(4, 5), 9) === 8 && biostring.toString() ==='ABCD-EF--GH--');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: substr
+function test_substr() {
+    var seq = 'ABCDEFGH';
+    var n = seq.length;
+
+    var biostring = new BioString(seq, grammar.AMINO);
+
+    // Test: 1..n, i..n
+    for (var i=1; i<= n; ++i) {
+        for (var j=i; j<= n; ++j) {
+        	var x = biostring.substr(i, j-i+1);
+        	assertEquals(x.toString(), seq.substr(i-1, j-i+1));
+        	assertEquals(x.grammar(), grammar.AMINO);
+        }
+    }
+
+    // --------------------------------------
+    // Spot checks
+    assertEquals(biostring.substr(3, 1).toString(), 'C');
+    assertEquals(biostring.substr(6, 3).toString(), 'FGH');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: tailGaps
+function test_tailGaps() {
+    var biostring = new BioString('-C---D-');
+
+    biostring.setString('-C---D-');
+    assertEquals(biostring.tailGaps(), 1);
+
+    biostring.setString('CDE');
+    assertEquals(biostring.tailGaps(), 0);
+
+    biostring.setString('EF------');
+    assertEquals(biostring.tailGaps(), 6);
+
+    biostring.setString('---EF');
+    assertEquals(biostring.tailGaps(), 0);
+
+    biostring.setString('E--F');
+    assertEquals(biostring.tailGaps(), 0);
+
+    biostring.setString('');
+    assertEquals(biostring.tailGaps(), 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: tr
+function test_tr() {
+	var biostring = new BioString('ABCDEFabcdef..--aA');
+
+    // Test: single letter replacement
+    biostring.tr('A', 'Z');
+    assertEquals(biostring.toString(), 'ZBCDEFabcdef..--aZ');
+
+    // Test: multiple letter replacement
+    biostring.tr('Za.-Xb', 'aA-.sb');
+    assertEquals(biostring.toString(), 'aBCDEFAbcdef--..Aa');
+
+    // Test: the duplicate query rule
+    biostring.tr('BB', '12');
+    assertEquals(biostring.toString(), 'a1CDEFAbcdef--..Aa');
+
+    // Test: individual character version
+    biostring.tr('.', '@');
+    assertEquals(biostring.toString(), 'a1CDEFAbcdef--@@Aa');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: translateGaps
+function test_translateGaps() {
+    var x = new BioString('ABC');
+
+    assertEquals(x.translateGaps('-').toString(), 'ABC');
+
+    x.setString('');
+    assertEquals(x.translateGaps(' ').toString(), '');
+
+    x.setString('-AB-C-.');
+    assertEquals(x.translateGaps('@').toString(), '@AB@C@@');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: ungapped
+function test_ungapped() {
+    var biostring = new BioString('ABC---DEF', grammar.DNA);
+    var result = biostring.ungapped();
+    assertEquals(result.toString(), 'ABCDEF');
+    assertEquals(result.grammar(), grammar.DNA);
+
+    biostring.setString('ABC...DEF');
+    assertEquals(biostring.ungapped().toString(), 'ABCDEF');
+
+    biostring.setString('---ABCDEF');
+    assertEquals(biostring.ungapped().toString(), 'ABCDEF');
+
+    biostring.setString('ABCDEF---');
+    assertEquals(biostring.ungapped().toString(), 'ABCDEF');
+
+    biostring.setString('...ABCDEF');
+    assertEquals(biostring.ungapped().toString(), 'ABCDEF');
+
+    biostring.setString('ABCDEF...');
+    assertEquals(biostring.ungapped().toString(), 'ABCDEF');
+
+    // Test removal of dash gaps
+    biostring.setString('--AB--CDEF--');
+    biostring = biostring.ungapped();
+    assertEquals(biostring.toString(), 'ABCDEF');
+
+    // Test removal of period gaps
+    biostring.setString('..AB..CDEF..');
+    biostring = biostring.ungapped();
+    assertEquals(biostring.toString(), 'ABCDEF');
+
+    // Test removal of mixed dashes and dots
+    biostring.setString('..AB--CD..EF--');
+    biostring = biostring.ungapped();
+    assertEquals(biostring.toString(), 'ABCDEF');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: ungappedLength
+function test_ungappedLength() {
+    var biostring = new BioString('ABC');
+    assertEquals(biostring.ungappedLength(), 3);
+
+    biostring.setString('---');
+    assertEquals(biostring.ungappedLength(), 0);
+
+    biostring.setString('ABC---DEF...GHI');
+    assertEquals(biostring.ungappedLength(), 9);
+
+    biostring.setString('');
+    assertEquals(biostring.ungappedLength(), 0);
+};
+
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Private methods
+/**
+ * @param {string} input
+ * @param {number} start
+ * @param {number} stop
+ * @return {string}
+ */
+function buildExpectedCollapseLeft(input, start, stop)
+{
+    var l = stop - start + 1;
+    var extract = input.substr(start - 1, l).replace(/-/g, '');
+    extract += '-'.repeated(l - extract.length);
+
+    var result = '';
+    if (start > 1)
+    	result += input.substr(0, start - 1);
+    result += extract;
+    if (stop < input.length)
+    	result += input.substr(stop);
+
+    return result;
+};
+
+/**
+ * @param {string} input
+ * @param {number} start
+ * @param {number} stop
+ * @return {string}
+ */
+function buildExpectedCollapseRight(input, start, stop)
+{
+    var l = stop - start + 1;
+    var extract = input.substr(start - 1, l).replace(/-/g, '');
+    extract = '-'.repeated(l - extract.length) + extract;
+
+    var result = '';
+    if (start > 1)
+    	result += input.substr(0, start - 1);
+    result += extract;
+    if (stop < input.length)
+    	result += input.substr(stop);
+
+    return result;
+};
+
+/**
+ * @param {string} a
+ * @param {string} b
+ * @return {ClosedIntRange}
+ */
+function findDifferences(a, b) {
+	var range = new ClosedIntRange();
+
+	var aPos = 0;
+	var bPos = 0;
+	for (var i=1; aPos < a.length; i++, aPos++, bPos++) {
+		if (a.charAt(aPos) != b.charAt(bPos)) {
+			if (range.begin === 0)
+				range.begin = i;
+			range.end = i;
+		}
+	}
+	return range;
+};
+
+</script>
+</body>
+</html>

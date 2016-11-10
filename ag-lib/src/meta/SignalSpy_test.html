@@ -1,0 +1,171 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.meta.SignalSpy</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.array');
+goog.require('ag.meta.MetaObject');
+goog.require('ag.meta.MockSourceObject');
+goog.require('ag.meta.SignalSpy');
+</script>
+<body>
+<script>
+// --------------------------------------------------------------------------------------------------------------------
+function test_dispose() {
+	var meta = ag.meta.MetaObject.getInstance();
+	var source = new ag.meta.MockSourceObject('source');
+	var x = new ag.meta.SignalSpy(source, 'blargh');
+	
+	x.dispose();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: clear
+function test_clear() {
+	var meta = ag.meta.MetaObject.getInstance();
+	var source = new ag.meta.MockSourceObject('source');
+	var x = new ag.meta.SignalSpy(source, 'blargh');
+
+	meta.emit(source, 'blargh');
+	assertTrue(x.signals().length > 0);
+	assertEquals(x.size(), 1);
+	x.clear();
+	assertEquals(x.signals().length, 0);
+	assertEquals(x.size(), 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: isEmpty
+function test_isEmpty() {
+	var meta = ag.meta.MetaObject.getInstance();
+	var source = new ag.meta.MockSourceObject('source');
+	var x = new ag.meta.SignalSpy(source, 'blargh');
+
+	assertTrue(x.isEmpty());
+	meta.emit(source, 'blargh');
+	assertFalse(x.isEmpty());
+	x.clear();
+	assertTrue(x.isEmpty());		
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: signalName
+function test_signalName() {
+	var source = new ag.meta.MockSourceObject('source');
+	var x = new ag.meta.SignalSpy(source, 'blargh');
+
+	assertEquals(x.signalName(), 'blargh');	
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: signals
+function test_signals() {
+	var meta = ag.meta.MetaObject.getInstance();
+	var source = new ag.meta.MockSourceObject('source');
+	var x = new ag.meta.SignalSpy(source, 'blargh');
+
+	assertEquals(x.signals().length, 0);
+
+	// Whenever a signal is emitted with any variables it should then be placed into the signals array.
+
+	// Single signal with no args
+	meta.emit(source, 'blargh');
+	assertEquals(x.signals().length, 1);
+	assertEquals(x.signals()[0].length, 0);
+	x.clear();
+
+	// Same signal twice with no args
+	meta.emit(source, 'blargh');
+	meta.emit(source, 'blargh');
+	assertEquals(x.signals().length, 2);
+	assertEquals(x.signals()[0].length, 0);	
+	assertEquals(x.signals()[1].length, 0);	
+	x.clear();
+
+	// One argument signal
+	var inputs = [true, false, 0, 1, 'abc', 34.7, 'another long string', null, undefined, ['a', 23] ];
+	for (var i=0; i< inputs.length; i++)
+	{
+		meta.emit(source, 'blargh', inputs[i]);
+		assertEquals(x.signals().length, 1);
+		assertEquals(x.signals()[0].length, 1);
+		if (goog.isArray(inputs[i]))
+			assertTrue(goog.array.equals(x.signals()[0][0], inputs[i]));
+		else
+			assertEquals(x.signals()[0][0], inputs[i]);
+		x.clear();
+	}
+
+	// Two argument signals
+	inputs = [
+		[null, 'a'],
+		[34.2, undefined],
+		['hello', 'world'],
+		['magic', ['happens', 'here', 99] ],
+		[ [1, 2, 3], null]
+	];
+	for (var i=0; i< inputs.length; i++)
+	{
+		meta.emit(source, 'blargh', inputs[i][0], inputs[i][1]);
+		assertEquals(x.signals().length, 1);
+		assertEquals(x.signals()[0].length, 2);
+		if (goog.isArray(inputs[i][0]))
+			assertTrue(goog.array.equals(x.signals()[0][0], inputs[i][0]));
+		else
+			assertEquals(x.signals()[0][0], inputs[i][0]);
+
+		if (goog.isArray(inputs[i][1]))
+			assertTrue(goog.array.equals(x.signals()[0][1], inputs[i][1]));
+		else
+			assertEquals(x.signals()[0][1], inputs[i][1]);
+
+		x.clear();
+	}
+
+	// Ensure that the right signal is sent
+	meta.emit(source, 'swine');
+	assertEquals(x.signals().length, 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: size
+function test_size() {
+	var meta = ag.meta.MetaObject.getInstance();
+	var source = new ag.meta.MockSourceObject('source');
+	var x = new ag.meta.SignalSpy(source, 'blargh');
+
+	assertEquals(x.size(), 0);
+	meta.emit(source, 'blargh');
+	assertEquals(x.size(), 1);
+	meta.emit(source, 'blargh');
+	meta.emit(source, 'blargh');
+	assertEquals(x.size(), 3);
+	x.clear();
+	assertEquals(x.size(), 0);
+
+	meta.emit(source, 'swine');
+	assertEquals(x.size(), 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: sourceObject
+function test_sourceObject() {
+	var source = new ag.meta.MockSourceObject('source');
+	var x = new ag.meta.SignalSpy(source, 'blargh');
+
+	assertEquals(x.sourceObject(), source);	
+};
+</script>
+</body>
+</html>

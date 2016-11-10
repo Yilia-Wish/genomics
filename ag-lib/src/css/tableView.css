@@ -1,0 +1,35 @@
+.ag-tableView {
+	overflow: hidden;
+}
+
+.ag-tableView .ag-dataView table {
+  table-layout: fixed;
+  width: 10px;
+/*^^^^^^^^^^^ For the browser to render fixed columns properly, a base width must be
+  provided. Since we are working with pixels, a pixel value is given here, but any number
+  should work since it is overridden in the Javascript.
+
+  This also applies to the header view css.
+  */
+  cursor: default;
+}
+.ag-tableView .ag-dataView tbody {
+  outline: 0;
+  /* Remove any browser added outline when the tbody receives the focus for handling keyboard events */
+}
+/* FF-specific rule: table must have separate borders to render properly (tested version 13.0.1) */
+@-moz-document url-prefix() {
+  .ag-tableView table {
+    border-collapse: separate;
+  }
+}
+.ag-dataView td {
+  text-overflow: ellipsis;
+  -o-text-overflow: ellipsis;
+  -webkit-text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.ag-tableView .ag-dataView {
+  overflow: auto;
+}

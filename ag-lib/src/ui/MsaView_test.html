@@ -1,0 +1,164 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - ag.ui.MsaView</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="../css/ui.css">
+<style>
+[data-cursor="open-hand"] {
+    cursor: hand;
+    cursor: grab;
+    cursor: -moz-grab;
+    cursor: -webkit-grab;
+}
+[data-cursor="closed-hand"] {
+    cursor: grabbing;
+    cursor: -moz-grabbin;
+    cursor: -webkit-grabbing;
+}
+[data-cursor="ew-resize"] {
+    cursor: ew-resize;
+}
+:focus {
+    outline: none;
+}
+</style>
+
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.dom');
+goog.require('goog.ui.Component');
+goog.require('ag.ui.MsaView');
+goog.require('ag.ui.SingleImageMsaView');
+goog.require('ag.bio.ObservableMsa');
+goog.require('ag.bio.Subseq');
+
+goog.require('ag.bio.MsaCharCountDistribution');
+goog.require('ag.service.LiveSymbolString');
+goog.require('ag.graphics.ClustalAminoColorScheme');
+goog.require('ag.graphics.ClustalAminoSymbolGroup');
+goog.require('ag.graphics.SymbolColorProvider');
+goog.require('ag.service.SymbolStringCalculator');
+
+goog.require('ag.ui.MsaSubseqTableView');
+goog.require('ag.model.MsaSubseqModel');
+
+goog.require('ag.meta.MetaObject');
+goog.require('ag.ui');
+goog.require('ag.ui.KeySequence');
+goog.require('ag.ui.ActionHandler');
+goog.require('ag.ui.Action');
+goog.require('goog.events.KeyCodes');
+
+
+</script>
+<body>
+
+<div id="info" style="width: 75px; height: 400px; clear: left; float: left; font-family: MuseJazz; overflow: hidden;"></div>
+<div id="msaView" style="font: 14px monospace;"></div>
+
+<script>
+// Aliases
+var dom = goog.dom;
+
+var MsaView = ag.ui.MsaView;
+var SingleImageMsaView = ag.ui.SingleImageMsaView;
+var ObservableMsa = ag.bio.ObservableMsa;
+var Subseq = ag.bio.Subseq;
+
+var MsaCharCountDistribution = ag.bio.MsaCharCountDistribution;
+var LiveSymbolString = ag.service.LiveSymbolString;
+var ClustalAminoColorScheme = ag.graphics.ClustalAminoColorScheme;
+var ClustalAminoSymbolGroup = ag.graphics.ClustalAminoSymbolGroup;
+var SymbolColorProvider = ag.graphics.SymbolColorProvider;
+var SymbolStringCalculator = ag.service.SymbolStringCalculator;
+
+var MsaSubseqTableView = ag.ui.MsaSubseqTableView;
+var MsaSubseqModel = ag.model.MsaSubseqModel;
+
+var y;
+var view;
+var ruler;
+
+var metaObject = ag.meta.MetaObject.getInstance;
+var KeySequence = ag.ui.KeySequence;
+var ActionHandler = ag.ui.ActionHandler;
+var Action = ag.ui.Action;
+var KeyCodes = goog.events.KeyCodes;
+var KeyModifiers = ag.ui.KeyModifiers;
+
+// --------------------------------------------------------------------------------------------------------------------
+function setUp() {
+
+}
+
+function tearDown() {
+
+}
+
+function randomString(len) {
+    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ----------';
+    var str = '';
+    for (var i = 0; i< len; i++) {
+        var index = Math.floor(Math.random() * chars.length);
+        str += chars[index];
+    }
+    return str;
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+    var msa = new ObservableMsa();
+
+    var rows = 50;
+    var columns = 100;
+
+    var str = 'A'.repeated(columns);
+    var subseq = new Subseq(str);
+    subseq.name = '1.';
+    msa.append(subseq);
+    for (var i=1; i<rows-1; i++) {
+        str = randomString(columns);
+        subseq = new Subseq(str);
+        subseq.name = (i+1) + '. ajMlq';
+        msa.append(subseq);
+    }
+    var str = 'Z'.repeated(columns);
+    var subseq = new Subseq(str);
+    subseq.name = rows + '.';
+    msa.append(subseq);
+
+    var calculator = new SymbolStringCalculator(ClustalAminoSymbolGroup);
+    var dist = new MsaCharCountDistribution(msa);
+    var liveSymbolString = new LiveSymbolString(dist, calculator);
+    var colorProvider = new SymbolColorProvider(liveSymbolString, ClustalAminoColorScheme);
+
+    y = new SingleImageMsaView();
+    y.setColorProvider(colorProvider);
+
+    var model = new MsaSubseqModel(msa);
+    view = new MsaSubseqTableView(y);
+    view.setModel(model);
+    view.decorate(dom.getElement('info'));
+
+    var div = dom.getElement('msaView');
+    y.decorate(div);
+    y.setMsa(msa);
+    // y.setSize(new goog.math.Size(600, 400));
+
+    var removeAllGapsShortcut = new KeySequence(KeyCodes.G, [KeyModifiers.XOsCtrl, KeyModifiers.Shift]);
+    var action = new Action(removeAllGapsShortcut, 'Remove all gaps');
+    metaObject().connect(action, Action.SignalType.TRIGGERED, msa, msa.removeGapColumns);
+    ActionHandler.getInstance().register(action)
+        .register(y.selectTool_.extendAction())
+        .register(y.selectTool_.trimAction());
+};
+
+</script>
+</body>
+</html>

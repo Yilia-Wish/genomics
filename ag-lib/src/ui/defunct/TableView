@@ -1,0 +1,1295 @@
+goog.provide('ag.ui.TableView');
+
+goog.require('goog.array');
+goog.require('goog.asserts');
+goog.require('goog.dom');
+goog.require('goog.dom.classes');
+goog.require('goog.events');
+goog.require('goog.math');
+goog.require('goog.style');
+goog.require('goog.userAgent');
+
+goog.require('goog.math.Coordinate');
+goog.require('goog.math.Size');
+goog.require('goog.events.BrowserEvent');
+goog.require('goog.events.KeyCodes');
+goog.require('goog.events.KeyEvent');
+goog.require('goog.events.KeyHandler');
+goog.require('goog.events.MouseWheelEvent');
+goog.require('goog.events.MouseWheelHandler');
+goog.require('goog.ui.Component');
+
+goog.require('ag.meta.MetaObject');
+goog.require('ag.model.AbstractItemModel');
+goog.require('ag.ui.Clipboard');
+
+/**
+ * TableView visualizes the data from an AbstractItemModel in a two-dimensional table.
+ *
+ * Supports:
+ * o Vertical / horizontal scrolling
+ * o Resizable columns
+ * o Single column sort triggered by clicking on a header column
+ * o Selection of rows
+ * o Basic keyboard navigation and selection
+ *
+ * When decorated, all column widths as defined by the browser or user CSS styles will be stored as pixel
+ * widths. Percentage column widths are not currently supported.
+ *
+ * Assumptions:
+ * o CSS box-sizing: border (thus all column widths include padding and border widths)
+ * o Call refreshSizes() to keep the header sizes synced with resize events
+ *
+ * @constructor
+ * @extends goog.ui.Component
+ */
+ag.ui.TableView = function() {
+	goog.base(this);
+
+	// --------------------------------------------------------------------------------------------------------------------
+	// Private properties
+	/**
+	 * @type {ag.model.AbstractItemModel}
+	 * @private
+	 */
+	this.model_ = null;
+
+	/**
+	 * @type {goog.events.KeyHandler}
+	 * @private
+	 */
+	this.keyHandler_ = null;
+
+	/**
+	 * @type {goog.events.MouseWheelHandler}
+	 * @private
+	 */
+	this.mouseWheelHandler_ = null;
+
+	/**
+	 * @type {Object}
+	 * @private
+	 */
+	this.htmlRefs_ = {
+		headerDiv: null,	// .ag-tableHeader
+		dataDiv: null,		// .ag-tableData
+		headerTable: null,	// table of header
+		dataTable: null,	// table containing invisible header and datas
+		theadRow: null,		// thead > tr of visible header
+		dataTheadRow: null,	// thead > tr of invisible header
+		dataTbody: null		// tbody of all visualized data
+	};
+
+	/**
+	 * @type {Array.<number>}
+	 * @private
+	 */
+	this.columnWidths_ = [];
+
+	/**
+	 * @type {boolean}
+	 * @private
+	 */
+	this.headerMouseDown_ = false;
+
+	/**
+	 * @type {number}
+	 * @private
+	 */
+	this.headerMouseDownX_ = 0;
+
+	/**
+	 * @type {number}
+	 * @private
+	 */
+	this.activeColumn_ = -1;	// -1: no column is active
+
+	/**
+	 * @type {boolean}
+	 * @private
+	 */
+	this.columnsResizable_ = true;
+
+	/**
+	 * @type {number}
+	 * @private
+	 */
+	this.savedColWidth_ = 0;
+
+	/**
+	 * @type {boolean}
+	 * @private
+	 */
+	this.sortingEnabled_ = true;
+
+	/**
+	 * Keep track of the current action mode across evevnts (e.g. mousedown, mousemove, mouseup).
+	 *
+	 * @type {ag.ui.TableView.ActionMode}
+	 * @private
+	 */
+	this.actionMode_ = ag.ui.TableView.ActionMode.None;
+
+	/**
+	 * @type {HTMLTdElement}
+	 * @private
+	 */
+	this.currentTd_ = null;
+
+	/**
+	 * @type {boolean}
+	 * @private
+	 */
+	this.bodyMouseDown_ = false;
+
+	/**
+	 * @type {goog.math.Coordinate}
+	 * @private
+	 */
+	this.bodyMouseDownCoordinate_ = null;
+};
+goog.inherits(ag.ui.TableView, goog.ui.Component);
+
+/**********************************************************************************************/ goog.scope(function() {
+// Aliases
+var array = goog.array;
+var assert = goog.asserts.assert;
+var classes = goog.dom.classes;
+var dom = goog.dom;
+var events = goog.events;
+var math = goog.math;
+var style = goog.style;
+var userAgent = goog.userAgent;
+
+var BrowserEvent = events.BrowserEvent;
+var Component = goog.ui.Component;
+var Coordinate = goog.math.Coordinate;
+var KeyCodes = events.KeyCodes;
+var KeyEvent = events.KeyEvent;
+var KeyHandler = events.KeyHandler;
+var MouseWheelEvent = events.MouseWheelEvent;
+var MouseWheelHandler = events.MouseWheelHandler;
+var Size = goog.math.Size;
+
+var AbstractItemModel = ag.model.AbstractItemModel;
+var Clipboard = ag.ui.Clipboard.getInstance;
+var MetaObject = ag.meta.MetaObject.getInstance;
+var ModelIndex = ag.model.ModelIndex;
+var ModelSignal = AbstractItemModel.SignalType;
+var TableView = ag.ui.TableView;
+
+
+var SortOrder = AbstractItemModel.SortOrder;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Static properties
+/** @type {number} */
+TableView.MINIMUM_COLUMN_SIZE = 20;	 // pixels
+/** @type {number} */
+TableView.RESIZE_HANDLE_WIDTH = 9;   // pixels
+/** @type {number} */
+TableView.HALF_RESIZE_HANDLE_WIDTH = (TableView.RESIZE_HANDLE_WIDTH - 1) / 2;   // pixels
+
+/** @type {string} */
+TableView.Css = {
+	RootName: goog.getCssName('ag-tableView'),
+	ResizeHover: goog.getCssName('resize-hover'),
+	Active: goog.getCssName('active'),
+	SortAsc: goog.getCssName('sort-asc'),
+	SortDesc: goog.getCssName('sort-desc'),
+	Selected: goog.getCssName('selected'),
+	Anchor: goog.getCssName('anchor'),
+	Current: goog.getCssName('current')
+};
+
+/** @type {number} */
+TableView.ActionMode = {
+	None: 0,
+	Resizing: 1,
+	Sorting: 2
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Public methods
+/** @override */
+TableView.prototype.canDecorate = function(element) {
+	return element.tagName === 'DIV';
+};
+
+/**
+ * Removes the selected class from all selected elements
+ */
+TableView.prototype.clearSelection = function() {
+	var selectedRowElements = this.selectedTrs_();
+	for (var i=0, z=selectedRowElements.length; i<z; i++)
+		classes.remove(selectedRowElements[i], TableView.Css.Selected);
+};
+
+/** @return {boolean} */
+TableView.prototype.columnsResizable = function() {
+	return this.columnsResizable_;
+};
+
+/** @override */
+TableView.prototype.createDom = function() {
+	goog.base(this, 'createDom');
+
+	this.decorateInternal(this.getDomHelper().createElement('div'));
+};
+
+/** @override */
+TableView.prototype.decorateInternal = function(element) {
+	goog.base(this, 'decorateInternal', element);
+	var domHelper = this.getDomHelper();
+
+	classes.add(element, TableView.Css.RootName);
+
+	var frag = document.createDocumentFragment();
+
+	// Header
+	var headerDiv = domHelper.createElement('div');
+	classes.add(headerDiv, goog.getCssName('ag-tableHeader'));
+	var table = domHelper.createElement('table');
+	headerDiv.appendChild(table);
+	var thead = domHelper.createElement('thead');
+	table.appendChild(thead);
+	var tr = domHelper.createElement('tr');
+	thead.appendChild(tr);
+
+	frag.appendChild(headerDiv);
+
+	this.htmlRefs_.headerDiv = headerDiv;
+	this.htmlRefs_.headerTable = table;
+	this.htmlRefs_.theadRow = tr;
+
+	// Body
+	var dataDiv = domHelper.createElement('div');
+	classes.add(dataDiv, goog.getCssName('ag-tableData'));
+	table = domHelper.createElement('table');
+	dataDiv.appendChild(table);
+	thead = domHelper.createElement('thead');
+	table.appendChild(thead);
+	tr = domHelper.createElement('tr');
+	thead.appendChild(tr);
+	var tbody = domHelper.createDom('tbody', {'tabIndex': 1});
+	table.appendChild(tbody);
+
+	frag.appendChild(dataDiv);
+
+	this.htmlRefs_.dataDiv = dataDiv;
+	this.htmlRefs_.dataTable = table;
+	this.htmlRefs_.dataTheadRow = tr;
+	this.htmlRefs_.dataTbody = tbody;
+
+	// Setup the key and mouse wheel handlers
+	this.keyHandler_ = new KeyHandler(this.htmlRefs_.dataTbody);
+	this.mouseWheelHandler_ = new MouseWheelHandler(this.htmlRefs_.dataDiv);
+
+	// Move the document fragment to the core element itself.
+	element.appendChild(frag);
+
+	// Make sure the clipboard is ready
+	Clipboard();
+};
+
+/**
+ * Removes the selected css class from all rows between startRow and endRow, inclusive. Both row values
+ * are 0-based.
+ *
+ * @param {number} startRow
+ * @param {number?} endRow defaults to startRow
+ */
+TableView.prototype.deselectRows = function(startRow, endRow) {
+	var rowNodes = this.htmlRefs_.dataTbody.childNodes;
+	if (!goog.isDefAndNotNull(endRow))
+		endRow = startRow;
+	if (startRow > endRow) {
+		var temp = startRow;
+		startRow = endRow;
+		endRow = temp;
+	}
+
+	for (var i=startRow; i<=endRow; i++)
+		classes.remove(rowNodes[i], TableView.Css.Selected);
+};
+
+
+/** @override */
+TableView.prototype.disposeInternal = function() {
+	// Final HTML cleanup
+	var rootElement = this.getElement();
+	dom.removeChildren(rootElement);
+	classes.remove(rootElement, TableView.Css.RootName);
+
+	goog.base(this, 'disposeInternal');
+
+	this.keyHandler_.dispose();
+
+	this.model_ = null;
+	this.keyHandler_ = null;
+	this.htmlRefs_ = null;
+};
+
+/** @override */
+TableView.prototype.enterDocument = function() {
+	goog.base(this, 'enterDocument');
+
+	this.initializeHTMLFromModel_();
+	this.attachModelSignals_();
+
+	var htmlRefs = this.htmlRefs_;
+	events.listen(htmlRefs.dataDiv, events.EventType.SCROLL, this.onDataDivScroll_, false /* capture */, this);
+	events.listen(htmlRefs.theadRow, events.EventType.MOUSEDOWN, this.onHeaderMouseDown_, false /* capture */, this);
+	events.listen(document.body, events.EventType.MOUSEMOVE, this.onDocumentBodyMouseMove_, true /* capture */, this);
+	events.listen(htmlRefs.theadRow, events.EventType.MOUSEOUT, this.onHeaderMouseOut_, false /* capture */, this);
+
+	events.listen(htmlRefs.dataTbody, events.EventType.MOUSEDOWN, this.onTbodyMouseDown_, false /* capture */, this);
+	events.listen(htmlRefs.dataTbody, events.EventType.MOUSEUP, this.onTbodyMouseUp_, false /* capture */, this);
+	events.listen(this.keyHandler_, KeyHandler.EventType.KEY, this.onTbodyKey_, false /* capture */, this);
+
+	events.listen(this.mouseWheelHandler_, MouseWheelHandler.EventType.MOUSEWHEEL, this.onDataDivMouseWheel_, false, this);
+};
+
+/** @override */
+TableView.prototype.exitDocument = function() {
+	goog.base(this, 'exitDocument');
+
+	this.detachModelSignals_();
+	this.disposeHtml_();
+
+	var htmlRefs = this.htmlRefs_;
+	events.unlisten(htmlRefs.dataDiv, events.EventType.SCROLL, this.onDataDivScroll_, false /* capture */, this);
+	events.unlisten(htmlRefs.theadRow, events.EventType.MOUSEDOWN, this.onHeaderMouseDown_, false /* capture */, this);
+	events.unlisten(document.body, events.EventType.MOUSEMOVE, this.onDocumentBodyMouseMove_, true /* capture */, this);
+	events.unlisten(htmlRefs.theadRow, events.EventType.MOUSEOUT, this.onHeaderMouseOut_, false /* capture */, this);
+
+	events.unlisten(htmlRefs.dataTbody, events.EventType.MOUSEDOWN, this.onTbodyMouseDown_, false /* capture */, this);
+	events.unlisten(htmlRefs.dataTbody, events.EventType.MOUSEUP, this.onTbodyMouseUp_, false /* capture */, this);
+	events.unlisten(this.keyHandler_, KeyHandler.EventType.KEY, this.onTbodyKey_, false /* capture */, this);
+
+	events.unlisten(this.mouseWheelHandler_, MouseWheelHandler.EventType.MOUSEWHEEL, this.onDataDivMouseWheel_, false, this);
+};
+
+/**
+ * Focus the tbody element for keyboard input while maintaining the same window scroll position
+ */
+TableView.prototype.focusWithoutScrolling = function() {
+	var oldDocScroll = document.body.scrollTop;
+	var oldDataDivScroll = this.htmlRefs_.dataDiv.scrollTop;
+	this.htmlRefs_.dataTbody.focus();
+	document.body.scrollTop = oldDocScroll;
+	this.htmlRefs_.dataDiv.scrollTop = oldDataDivScroll;
+};
+
+/** @return {boolean} */
+TableView.prototype.isSortingEnabled = function() {
+	return this.sortingEnabled_;
+};
+
+/** @return {AbstractItemModel} */
+TableView.prototype.model = function() {
+	return this.model_;
+};
+
+/**
+ * Updates the relevant header and column widths (e.g. stemming from resize event) such that the display
+ * and scrolling work properly.
+ */
+TableView.prototype.refreshHeaderWidth = function() {
+	var dataDivWidth = style.getSize(this.htmlRefs_.dataDiv).width;
+	if (this.vertScrollBarIsVisible_())
+		this.htmlRefs_.headerDiv.style.width = (dataDivWidth - style.getScrollbarWidth()) + 'px';
+	else
+		this.htmlRefs_.headerDiv.style.width = dataDivWidth + 'px';
+};
+
+/**
+ * @param {number} row
+ * @param {number} column
+ */
+TableView.prototype.scrollIntoView = function(row, column) {
+	var td = this.tdElement_(row, column);
+
+	// Scroll this puppy into the view if it is not visible
+	var dataDiv = this.htmlRefs_.dataDiv;
+	var scrollTop = dataDiv.scrollTop;
+	var top = style.getRelativePosition(td, this.htmlRefs_.dataTbody).y;
+	if (top < scrollTop) {
+		dataDiv.scrollTop = top;
+	}
+	else {
+		var currentBottom = top + style.getSize(td).height;
+		var scrollBottom = scrollTop + style.getSize(dataDiv).height;
+		if (this.horzScrollBarIsVisible_())
+			scrollBottom -= style.getScrollbarWidth();
+		if (currentBottom >= scrollBottom)
+			dataDiv.scrollTop = dataDiv.scrollTop + (currentBottom - scrollBottom);
+	}
+};
+
+/**
+ * Adds the selected css class to all rows between startRow and endRow, inclusive. Both row values
+ * are 0-based.
+ *
+ * @param {number} startRow
+ * @param {number?} endRow defaults to startRow
+ */
+TableView.prototype.selectRows = function(startRow, endRow) {
+	var rowNodes = this.htmlRefs_.dataTbody.childNodes;
+	if (!goog.isDefAndNotNull(endRow))
+		endRow = startRow;
+	if (startRow > endRow) {
+		var temp = startRow;
+		startRow = endRow;
+		endRow = temp;
+	}
+
+	for (var i=startRow; i<=endRow; i++)
+		classes.add(rowNodes[i], TableView.Css.Selected);
+};
+
+/**
+ * @return {Array.<number>}
+ */
+TableView.prototype.selectedRows = function() {
+	var rowIndices = [];
+	var selectedTrs = this.selectedTrs_();
+	for (var i=0, z=selectedTrs.length; i<z; i++)
+		rowIndices.push(selectedTrs[i].rowIndex - 1);
+	return rowIndices;
+};
+
+/**
+ * @param {boolean} resizable
+ */
+TableView.prototype.setColumnsResizable = function(resizable) {
+	this.columnsResizable_ = resizable;
+	if (!resizable)
+		classes.remove(this.htmlRefs_.headerTable, TableView.Css.ResizeHover);
+};
+
+/**
+ * @param {number} column
+ * @param {number} newWidth
+ */
+TableView.prototype.setColumnWidth = function(column, newWidth) {
+	assert(this.model_);
+	assert(this.model_.isValidColumn(column));
+	newWidth = Math.max(TableView.MINIMUM_COLUMN_SIZE, newWidth);
+	this.columnWidths_[column] = newWidth;
+
+	var stringWidth = newWidth + 'px';
+	this.htmlRefs_.theadRow.childNodes[column].style.width = stringWidth;
+	this.htmlRefs_.dataTheadRow.childNodes[column].style.width = stringWidth;
+	this.refreshHeaderWidth();
+
+	// Given that the column width has been updated, update the entire table width as well
+	var sum = this.sumColumnWidths();
+	this.htmlRefs_.headerTable.style.width = sum + 'px';
+	this.htmlRefs_.dataTable.style.width = sum + 'px';
+};
+
+/**
+ * @param {number} row
+ * @param {column} column
+ */
+TableView.prototype.setCurrentIndex = function(row, column) {
+	assert(this.model_.isValidRow(row));
+	assert(this.model_.isValidColumn(column));
+	assert(this.htmlRefs_.dataTbody.childNodes.length > row);
+	var tr = this.htmlRefs_.dataTbody.childNodes[row];
+	assert(tr.childNodes.length > column);
+	var td = tr.childNodes[column];
+	if (td === this.currentTd_)
+		return;
+
+	if (this.currentTd_) {
+		classes.remove(this.currentTd_, TableView.Css.Current);
+		classes.remove(this.currentTd_.parentNode, TableView.Css.Current);
+	}
+	classes.add(tr, TableView.Css.Current);
+	classes.add(td, TableView.Css.Current);
+	this.currentTd_ = td;
+
+	// TODO: Emit currentChanged signal!
+};
+
+/**
+ * @param {AbstractItemModel} newModel
+ */
+TableView.prototype.setModel = function(newModel) {
+	if (newModel === this.model_)
+		return;
+
+	this.detachModelSignals_();
+	this.disposeHtml_();
+	this.model_ = newModel;
+	if (this.isInDocument()) {
+		this.initializeHTMLFromModel_();
+		this.attachModelSignals_();
+	}
+};
+
+/**
+ * @param {boolean=} enabled defaults to true
+ */
+TableView.prototype.setSortingEnabled = function(enabled) {
+	this.sortingEnabled_ = (goog.isDefAndNotNull(enabled)) ? enabled : true;
+};
+
+/**
+ * @param {number} column
+ */
+TableView.prototype.sortModel = function(column) {
+	assert(this.model_.isValidColumn(column));
+
+	// Is the model already sorted on this column
+	var thNode = this.thNodeForColumn_(column);
+	var sortOrder = SortOrder.kAsc;
+	if (classes.has(thNode, TableView.Css.SortAsc)) {
+		classes.swap(thNode, TableView.Css.SortAsc, TableView.Css.SortDesc);
+		sortOrder = SortOrder.kDesc;
+	}
+	else if (classes.has(thNode, TableView.Css.SortDesc)) {
+		classes.swap(thNode, TableView.Css.SortDesc, TableView.Css.SortAsc);
+	}
+	else {
+		var theadRow = this.htmlRefs_.theadRow;
+		var previousSortedNode = dom.getElementByClass(TableView.Css.SortAsc, theadRow) ||
+								 dom.getElementByClass(TableView.Css.SortDesc, theadRow);
+		if (previousSortedNode)
+			classes.remove(previousSortedNode, TableView.Css.SortAsc, TableView.Css.SortDesc);
+
+		classes.add(thNode, TableView.Css.SortAsc);
+	}
+
+	// Finally perform the actual sort
+	this.model_.sort(column, sortOrder);
+}
+
+/** @return {number} */
+TableView.prototype.sumColumnWidths = function() {
+	var sum = 0;
+	for (var i=0, z=this.columnWidths_.length; i<z; i++)
+		sum += this.columnWidths_[i];
+	return sum;
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Private methods
+/** @return {number} */
+TableView.prototype.anchorRow_ = function() {
+	var anchorTr = this.anchorTr_();
+	return (anchorTr) ? anchorTr.rowIndex - 1 : -1;
+};
+
+/** @return {HTMLTrElement} */
+TableView.prototype.anchorTr_ = function() {
+	return dom.getElementByClass(TableView.Css.Anchor, this.htmlRefs_.dataTbody);
+};
+
+/**
+ * @private
+ */
+TableView.prototype.attachModelSignals_ = function() {
+	if (!this.model_)
+		return;
+
+	var mo = MetaObject();
+	mo.connect(this.model_, ModelSignal.DATA_CHANGED, this, this.updateCellData_);
+	mo.connect(this.model_, ModelSignal.ROWS_INSERTED, this, this.onRowsInserted_);
+	mo.connect(this.model_, ModelSignal.ROWS_REMOVED, this, this.removeRows_);
+
+	mo.connect(this.model_, ModelSignal.LAYOUT_ABOUT_TO_BE_CHANGED, this, this.onLayoutAboutToBeChanged_);
+	mo.connect(this.model_, ModelSignal.LAYOUT_CHANGED, this, this.onLayoutChanged_);
+};
+
+/**
+ * xPos must be relative to the header row.
+ *
+ * @return {number}
+ */
+TableView.prototype.columnFromXPos_ = function(xPos) {
+	var rightSide = 0;
+	for (var i=0, z=this.columnWidths_.length; i<z; i++) {
+		rightSide += this.columnWidths_[i];
+		if (xPos <= rightSide)
+			return i;
+	}
+	return -1;
+};
+
+/** @return {number} */
+TableView.prototype.columnToResizeFromXPos_ = function(xPos) {
+	var columnCenter = 0;
+	for (var i=0, z=this.columnWidths_.length; i<z; i++) {
+		columnCenter += this.columnWidths_[i];
+		if (xPos >= columnCenter - TableView.HALF_RESIZE_HANDLE_WIDTH && xPos <= columnCenter + TableView.HALF_RESIZE_HANDLE_WIDTH)
+			return i;
+	}
+	return -1;
+};
+
+/**
+ * @param {number} row
+ * @return {HTMLElement}
+ */
+TableView.prototype.createTrForRow_ = function(row) {
+	var model = this.model_;
+	var nCols = model.columnCount();
+	var tr = dom.createElement('tr');
+	for (var i=0; i<nCols; i++) {
+		var index = model.index(row, i);
+		var td = dom.createElement('td');
+		dom.setTextContent(td, index.data());
+		tr.appendChild(td);
+	}
+	return tr;
+};
+
+/**
+ * @param {number} startRow
+ * @param {number} endRow
+ * @return {HTMLDocumentFragment}
+ */
+TableView.prototype.createTrsFragmentForRows_ = function(startRow, endRow) {
+	var rowsFragment = document.createDocumentFragment();
+	for (var i=startRow; i<=endRow; i++) {
+		var tr = this.createTrForRow_(i);
+		rowsFragment.appendChild(tr);
+	};
+	return rowsFragment;
+};
+
+/** @return {HTMLTrElement} */
+TableView.prototype.currentTr_ = function() {
+	return this.currentTd_.parentNode;
+};
+
+/**
+ * @private
+ */
+TableView.prototype.detachModelSignals_ = function() {
+	if (!this.model_ || !this.isInDocument())
+		return;
+
+	var mo = MetaObject();
+	mo.disconnect(this.model_, ModelSignal.DATA_CHANGED, this, this.updateCellData_);
+	mo.disconnect(this.model_, ModelSignal.ROWS_INSERTED, this, this.onRowsInserted_);
+	mo.disconnect(this.model_, ModelSignal.ROWS_REMOVED, this, this.removeRows_);
+	mo.disconnect(this.model_, ModelSignal.LAYOUT_ABOUT_TO_BE_CHANGED, this, this.onLayoutAboutToBeChanged_);
+	mo.disconnect(this.model_, ModelSignal.LAYOUT_CHANGED, this, this.onLayoutChanged_);
+};
+
+/**
+ * Disposes any HTML elements currently present (if any). Vital that all event listeners have been
+ * detached first. Does not matter if the component is in the document or not.
+ *
+ * @private
+ */
+TableView.prototype.disposeHtml_ = function() {
+	if (this.htmlRefs_.theadRow)
+		dom.removeChildren(this.htmlRefs_.theadRow);
+	if (this.htmlRefs_.dataTheadRow)
+		dom.removeChildren(this.htmlRefs_.dataTheadRow);
+	if (this.htmlRefs_.dataTbody)
+		dom.removeChildren(this.htmlRefs_.dataTbody);
+
+	this.currentTd_ = null;
+	array.clear(this.columnWidths_);
+	this.activeColumn_ = -1;
+};
+
+/** @return {boolean} */
+TableView.prototype.horzScrollBarIsVisible_ = function() {
+	var div = this.htmlRefs_.dataDiv;
+
+	return div.clientWidth < div.scrollWidth;
+};
+
+/**
+ * Builds the HTML table rows and such from the associated model
+ *
+ * @private
+ */
+TableView.prototype.initializeHTMLFromModel_ = function() {
+	if (!this.model_)
+		return;
+
+	assert(this.model_.columnCount() > 0);
+
+	this.initializeHTMLTableHeaders_();
+	this.initializeHTMLTableData_();
+
+	// First time this table is being initialized or possibly that the view has not displayed at least one row
+	if (this.columnWidths_.length === 0)
+		this.storeStyledColumnWidths_();
+
+	// Turn off auto-scaling of 100% defined in tableView.css
+	var sum = this.sumColumnWidths();
+	this.htmlRefs_.headerTable.style.width = sum + 'px';
+	this.htmlRefs_.dataTable.style.width = sum + 'px';
+
+	// Define pixels widths for each column
+	this.setColumnsToStoredWidths_();
+};
+
+/**
+ * Populates the table body with rows for all the model data.
+ *
+ * @private
+ */
+TableView.prototype.initializeHTMLTableData_ = function() {
+	var model = this.model_;
+	assert(model);
+	var nRows = model.rowCount();
+	if (nRows === 0)
+		return;
+
+	var rowsFragment = this.createTrsFragmentForRows_(0, nRows-1);
+	this.htmlRefs_.dataTbody.appendChild(rowsFragment);
+};
+
+/**
+ * Builds the HTML table header data from the current model
+ *
+ * @private
+ */
+TableView.prototype.initializeHTMLTableHeaders_ = function() {
+	assert(this.model_);
+
+	var headerFrag = document.createDocumentFragment();
+	var dataHeaderFrag = document.createDocumentFragment();
+	var colClassPrefix = 'col';
+	for (var i=0, z=this.model_.columnCount(); i<z; i++) {
+		var colClassName = colClassPrefix + i;
+		var th = dom.createDom('th', colClassName, this.model_.headerData(i));
+		headerFrag.appendChild(th);
+
+		th = dom.createDom('th', colClassName);
+		th.style.paddingTop = 0;
+		th.style.paddingBottom = 0;
+		th.style.borderTopWidth = 0;
+		th.style.borderBottomWidth = 0;
+		dataHeaderFrag.appendChild(th);
+	}
+
+	this.htmlRefs_.theadRow.appendChild(headerFrag);
+	this.htmlRefs_.dataTheadRow.appendChild(dataHeaderFrag);
+};
+
+/** @return {number} */
+TableView.prototype.rowSize_ = function() {
+	if (this.htmlRefs_.dataTbody.childNodes.length === 0)
+		return new Size();
+
+	return style.getSize(this.trElement_(0));
+};
+
+/** @return {number} */
+TableView.prototype.rowsPerPage_ = function() {
+	if (this.htmlRefs_.dataTbody.childNodes.length === 0)
+		return 0;
+
+	var heightOfFirstRow = style.getSize(this.trElement_(0)).height;
+	var visibleTbodyHeight = style.getSize(this.htmlRefs_.dataDiv).height;
+	if (this.horzScrollBarIsVisible_())
+		visibleTbodyHeight -= style.getScrollbarWidth();
+	return visibleTbodyHeight / heightOfFirstRow | 0;
+};
+
+/**
+ * @param {number} row
+ */
+TableView.prototype.selectFromAnchorToRow_ = function(row) {
+	var anchorRow = this.anchorRow_();
+	if (anchorRow === -1)
+		return;
+
+	this.clearSelection();
+	this.selectRows(anchorRow, row);
+};
+
+/**
+ * @return {Array.<HTMLTrElement>}
+ */
+TableView.prototype.selectedTrs_ = function() {
+	return dom.getElementsByClass(TableView.Css.Selected, this.htmlRefs_.dataTbody);
+};
+
+/**
+ * Clears the previous anchor and sets it to row.
+ *
+ * @param {number} row
+ */
+TableView.prototype.setAnchorRow_ = function(row) {
+	assert(this.model_.isValidRow(row));
+
+	var anchorTr = this.anchorTr_();
+	if (anchorTr) {
+		classes.remove(anchorTr, TableView.Css.Anchor);
+		anchorTr = null;
+	}
+	classes.add(this.trElement_(row), TableView.Css.Anchor);
+};
+
+/**
+ * Sets the pixel width of all columns to that which was stored.
+ *
+ * @private
+ */
+TableView.prototype.setColumnsToStoredWidths_ = function() {
+	var theadRow = this.htmlRefs_.theadRow;
+	assert(theadRow);
+	var dataTheadRow = this.htmlRefs_.dataTheadRow;
+	assert(dataTheadRow);
+	var visibleColumnNodes = theadRow.childNodes;
+	var invisibleColumnNodes = dataTheadRow.childNodes;
+	assert(this.columnWidths_.length === 0 || visibleColumnNodes.length === this.columnWidths_.length);
+	for (var i=0, z=this.columnWidths_.length; i<z; i++) {
+		var w = this.columnWidths_[i] + 'px';
+		visibleColumnNodes[i].style.width = w;
+		invisibleColumnNodes[i].style.width = w;
+	}
+};
+
+/**
+ * Captures the browser or user styled column widths in pixels for later use. See initializeHTMLTableHeaders_.
+ * If there is no data, do not store anything. On the other hand, if there is data, use the widths of the
+ * first data row as this will reflect the width with respect to any vertical scrollbar.
+ *
+ * @private
+ */
+TableView.prototype.storeStyledColumnWidths_ = function() {
+	if (this.model_.rowCount() === 0)
+		return;
+
+	var dataRow = this.htmlRefs_.dataTbody.firstChild;
+	assert(dataRow);
+
+	var columnNodes = dataRow.childNodes;
+	var nCols = this.model_.columnCount();
+	for (var i=0; i<nCols; i++)
+		this.columnWidths_[i] = Math.max(TableView.MINIMUM_COLUMN_SIZE, style.getSize(columnNodes[i]).width);
+
+	// HACK! Take one away from the very last column so that a scrollbar will not appear unnecessarily in
+	// IE and FF.
+	if (nCols && (userAgent.GECKO || userAgent.IE))
+	 	this.columnWidths_[nCols-1]--;
+};
+
+/**
+ * Returns the th element for the given row and column within the table body.
+ *
+ * @param {number} column
+ * @return HTMLTdElement
+ */
+TableView.prototype.tdElement_ = function(row, column) {
+	assert(this.model_.isValidRow(row));
+	assert(this.model_.isValidColumn(column));
+
+	var tr = this.htmlRefs_.dataTbody.childNodes[row];
+	var td = tr.childNodes[column];
+	return td;
+};
+
+/**
+ * Returns the th element for the visible header only.
+ *
+ * @param {number} column
+ * @return HTMLThElement
+ */
+TableView.prototype.thNodeForColumn_ = function(column) {
+	assert(this.model_.isValidColumn(column));
+	return this.htmlRefs_.theadRow.childNodes[column];
+};
+
+/**
+ * Returns the tr element of the tbody for the given row
+ *
+ * @param {number} row
+ * @return {HTMLTrElement}
+ */
+TableView.prototype.trElement_ = function(row) {
+	assert(this.model_.isValidRow(row));
+	return this.htmlRefs_.dataTbody.childNodes[row];
+};
+
+/** @return {boolean} */
+TableView.prototype.vertScrollBarIsVisible_ = function() {
+	var div = this.htmlRefs_.dataDiv;
+	return div.clientHeight < div.scrollHeight;
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Private event handlers
+/**
+ * @param {MouseWheelEvent} event
+ * @private
+ */
+TableView.prototype.onDataDivMouseWheel_ = function(event) {
+	var mouseEvent = /** @type {MouseWheelEvent} */ event;
+	var dataDiv = this.htmlRefs_.dataDiv;
+	var rowSize = this.rowSize_();
+	dataDiv.scrollTop += (event.deltaY * rowSize.height);
+	dataDiv.scrollLeft += (event.deltaX * rowSize.width);
+	event.preventDefault();
+};
+
+/**
+ * @param {events.Event} event
+ * @private
+ */
+TableView.prototype.onDataDivScroll_ = function(event) {
+	this.htmlRefs_.headerDiv.scrollLeft = event.target.scrollLeft;
+};
+
+/**
+ * Since this event handler is for the entire document body, route it to the appropriate handler.
+ *
+ * @param {BrowserEvent} event
+ */
+TableView.prototype.onDocumentBodyMouseMove_ = function(event) {
+	if (this.bodyMouseDown_)
+		this.onTbodyMouseMove_(event);
+	else	// Let the header process all events
+		this.onHeaderMouseMove_(event);
+};
+
+/**
+ * Reactions to handle:
+ *
+ * @param {BrowserEvent} event
+ */
+TableView.prototype.onHeaderMouseDown_ = function(event) {
+	events.listen(document.body, events.EventType.MOUSEUP, this.onHeaderMouseUp_, false /* capture */, this);
+
+	var theadRow = this.htmlRefs_.theadRow;
+	this.headerMouseDown_ = true;
+	var trXPos = style.getRelativePosition(event, theadRow).x;
+	this.headerMouseDownX_ = trXPos;
+
+	// Order of precedence:
+	// 1) Resizing column
+	if (this.columnsResizable_) {
+		var columnClicked = this.activeColumn_ = this.columnToResizeFromXPos_(trXPos);
+		if (columnClicked !== -1) {
+			this.actionMode_ = TableView.ActionMode.Resizing;
+			var thNode = this.thNodeForColumn_(columnClicked);
+			this.savedColWidth_ = style.getSize(thNode).width;
+			event.preventDefault();
+			return;
+		}
+	}
+
+	// 2) Clicking header to sort
+	if (this.sortingEnabled_) {
+		var columnClicked = this.activeColumn_ = this.columnFromXPos_(trXPos);
+		if (columnClicked !== -1) {
+			this.actionMode_ = TableView.ActionMode.Sorting;
+			var thNode = this.thNodeForColumn_(columnClicked);
+			classes.add(thNode, TableView.Css.Active);
+			event.preventDefault();
+			return;
+		}
+	}
+};
+
+/**
+ * Reactions to handle:
+ * 1) Simply hovering the mouse without any button - is it over a resize handle area?
+ * 2) Has the user pressed the mouse button and actively resizing a column?
+ * @param {BrowserEvent} event
+ */
+TableView.prototype.onHeaderMouseMove_ = function(event) {
+	var theadRow = this.htmlRefs_.theadRow;
+	var trXPos = style.getRelativePosition(event, theadRow).x;
+	if (this.columnsResizable_) {
+		if (!this.headerMouseDown_) {
+			// Case 1: check if mouse is over a resize area so we can add the resize hover class
+			var resizeColumn = this.columnToResizeFromXPos_(trXPos);
+			var table = this.htmlRefs_.headerTable;
+			if (resizeColumn === -1)
+				classes.remove(table, TableView.Css.ResizeHover);
+			else
+				classes.add(table, TableView.Css.ResizeHover);
+		}
+		else if (this.actionMode_ === TableView.ActionMode.Resizing) {
+			assert(this.activeColumn_ !== -1);
+			// Case 2: User is resizing a column
+			var delta = trXPos - this.headerMouseDownX_;
+			var newWidth = this.savedColWidth_ + delta;
+			this.setColumnWidth(this.activeColumn_, newWidth);
+			event.preventDefault();
+		}
+	}
+};
+
+/**
+ * @param {BrowserEvent} event
+ */
+TableView.prototype.onHeaderMouseOut_ = function(event) {
+	var isMouseWithinHeader = !!event.relatedTarget && dom.contains(this.htmlRefs_.headerDiv, event.relatedTarget)
+	if (!this.headerMouseDown_ && !isMouseWithinHeader)
+		classes.remove(this.htmlRefs_.headerTable, TableView.Css.ResizeHover);
+};
+
+/**
+ * @param {BrowserEvent} event
+ */
+TableView.prototype.onHeaderMouseUp_ = function(event) {
+	if (this.actionMode_ === TableView.ActionMode.Sorting) {
+		assert(this.activeColumn_ !== -1);
+
+		// Need to remove the class from the th node regardless of whether the sort is performed or not
+		var thNode = this.thNodeForColumn_(this.activeColumn_);
+		classes.remove(thNode, TableView.Css.Active);
+
+		// Perform a sort if the mouse up event occurred over the node that was clicked
+		if (event.target === thNode)
+			this.sortModel(this.activeColumn_);
+	}
+
+	this.headerMouseDown_ = false;
+	this.activeColumn_ = -1;
+	events.unlisten(document.body, events.EventType.MOUSEUP, this.onHeaderMouseUp_, false /* capture */, this);
+};
+
+/**
+ * @param {KeyEvent} event
+ */
+TableView.prototype.onTbodyKey_ = function(event) {
+	if (!this.htmlRefs_.dataTbody.childNodes.length === 0)
+		return;
+
+	if (!this.currentTd_)
+		this.setCurrentIndex(0, 0);
+
+	var oldColumn = this.currentTd_.cellIndex;
+	var oldRow = this.currentTr_().rowIndex - 1;
+	var newColumn = oldColumn;
+	var newRow = oldRow;
+
+	var handledKey = true;
+	var keyCode = event.keyCode;
+	switch (keyCode) {
+	case KeyCodes.A:
+		if (event.ctrlKey) {
+			this.selectRows(0, this.model_.rowCount() - 1);
+			event.preventDefault();
+			return;
+		}
+		break;
+	case KeyCodes.C:
+	case KeyCodes.INSERT:
+		var doCopy = (!userAgent.MAC && event.ctrlKey) || (userAgent.MAC && event.ctrlKey);
+		if (doCopy) {
+			Clipboard().copy(dom.getTextContent(this.currentTd_), this.htmlRefs_.dataTbody);
+			return;
+		}
+		break;
+	case KeyCodes.HOME:
+		if (event.ctrlKey) 
+			newRow = newColumn = 0;
+		else
+			handledKey = false;
+		break;
+	case KeyCodes.END:
+		if (event.ctrlKey) {
+			newRow = this.model_.rowCount() - 1;
+			newColumn = this.model_.columnCount() - 1;
+		}
+		else
+			handledKey = false;
+		break;
+	case KeyCodes.LEFT:
+		newColumn--;
+		break;
+	case KeyCodes.RIGHT:
+		newColumn++;
+		break;
+	case KeyCodes.UP:
+		newRow--;
+		break;
+	case KeyCodes.DOWN:
+		newRow++;
+		break;
+	case KeyCodes.PAGE_DOWN:
+		newRow += Math.max(1, this.rowsPerPage_());
+		break;
+	case KeyCodes.PAGE_UP:
+		newRow -= Math.max(1, this.rowsPerPage_());
+		break;
+	case KeyCodes.SPACE:
+		if (event.ctrlKey)
+			classes.toggle(this.trElement_(newRow), TableView.Css.Selected);
+		break;
+
+	default:
+		handledKey = false;
+		break;
+	}
+
+	if (!handledKey)
+		return;
+
+	event.preventDefault();
+	newRow = math.clamp(0, newRow, this.model_.rowCount() - 1);
+	newColumn = math.clamp(0, newColumn, this.model_.columnCount() - 1);
+	if (newRow != oldRow || newColumn != oldColumn) {
+		if (!event.ctrlKey && !event.shiftKey) {
+			this.clearSelection();
+			this.selectRows(newRow);
+			this.setAnchorRow_(newRow);
+		}
+		else if (event.shiftKey) {
+			this.selectFromAnchorToRow_(newRow);
+		}
+		else if (event.ctrlKey) {
+			this.setAnchorRow_(newRow);
+		}
+		this.setCurrentIndex(newRow, newColumn);
+		this.scrollIntoView(newRow, newColumn);
+	}
+}
+
+/**
+ * @param {BrowserEvent} event
+ */
+TableView.prototype.onTbodyMouseDown_ = function(event) {
+	this.bodyMouseDown_ = true;
+	this.bodyMouseDownCoordinate_ = style.getRelativePosition(event, this.htmlRefs_.dataTbody);
+	this.focusWithoutScrolling();
+
+	var target = event.target;
+	var td = (target.nodeName === 'TD') ? target : dom.getAncestorByTagNameAndClass(target, 'td');
+	if (!td)
+		return;
+
+	var tr = dom.getAncestorByTagNameAndClass(td, 'tr');
+
+	var column = td.cellIndex;
+	var row = tr.rowIndex - 1;	// Skip the header row
+
+	// Update the current cell index
+	this.setCurrentIndex(row, column);
+	event.preventDefault();
+
+	var anchorTr = this.anchorTr_();
+	if (event.shiftKey && anchorTr) {
+		this.selectFromAnchorToRow_(row);
+		return;
+	}
+	if (anchorTr) {
+		classes.remove(anchorTr, TableView.Css.Anchor);
+		anchorTr = null;
+	}
+
+	if (event.ctrlKey) {
+		classes.toggle(tr, TableView.Css.Selected);
+		classes.add(tr, TableView.Css.Anchor);
+		return;
+	}
+
+	this.clearSelection();
+	classes.add(tr, TableView.Css.Selected, TableView.Css.Anchor);
+};
+
+/**
+ * Not directly listened to, but rather directed from mouse move event on document captured
+ * by this tbody.
+ *
+ * @param {BrowserEvent} event
+ */
+TableView.prototype.onTbodyMouseMove_ = function(event) {
+	if (!this.bodyMouseDown_)
+		return;
+
+
+};
+
+/**
+ * @param {BrowserEvent} event
+ */
+TableView.prototype.onTbodyMouseUp_ = function(event) {
+	this.bodyMouseDown_ = false;
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Private slots
+/**
+ * @private
+ */
+TableView.prototype.onLayoutAboutToBeChanged_ = function() {
+	// Get persistent indices of current selection
+};
+
+/**
+ * @private
+ */
+TableView.prototype.onLayoutChanged_ = function() {
+	// Re-render all data cells
+	var nColumns = this.model_.columnCount();
+	for (var i=0, z=this.model_.rowCount(); i<z; i++) {
+		// Get the corresponding row
+		var tr = this.trElement_(i);
+		for (var j=0; j<nColumns; j++) {
+			var index = this.model_.index(i, j);
+			var data = index.data(AbstractItemModel.DataRole.kDisplay);
+			var td = tr.childNodes[j];
+			dom.setTextContent(td, data);
+		}
+	}
+
+	// Update the selection using the persistent indices
+	// Invalidate all the persistent indices
+	// Tell model to purge all invalid persistent indices
+};
+
+/**
+ * @param {number} startRow
+ * @param {number} endRow
+ * @private
+ */
+TableView.prototype.onRowsInserted_ = function(startRow, endRow) {
+	assert(this.model_);
+	assert(this.model_.isValidRow(startRow));
+	assert(this.model_.isValidRow(endRow));
+	assert(startRow <= endRow);
+
+	var rowsFragment = this.createTrsFragmentForRows_(startRow, endRow);
+	dom.insertChildAt(this.htmlRefs_.dataTbody, rowsFragment, startRow);
+
+	this.refreshHeaderWidth();
+};
+
+/**
+ * @param {number} startRow
+ * @param {number} endRow
+ * @private
+ */
+TableView.prototype.removeRows_ = function(startRow, endRow) {
+	assert(this.model_);
+	assert(startRow <= endRow);
+
+	var tbody = this.htmlRefs_.dataTbody;
+	for (var i=startRow; i<= endRow; i++)
+		dom.removeNode(tbody.childNodes[startRow]);
+
+	this.refreshHeaderWidth();
+};
+
+/**
+ * @param {ModelIndex} index
+ * @private
+ */
+TableView.prototype.updateCellData_ = function(index) {
+	var node = this.htmlRefs_.dataTbody.childNodes(index.row);
+	dom.setTextContent(node, index.data());
+};
+
+
+/*******************************************************************************************************************/});

@@ -1,0 +1,726 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.validation</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.validation');
+</script>
+<body>
+<script>
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: empty
+// All tests expected to return true
+function testEmptyUndefined() {
+	assertTrue(ag.validation.empty(undefined));
+};
+
+function testEmptyNull() {
+	assertTrue(ag.validation.empty(null));
+};
+
+function testEmptyString() {
+	assertTrue(ag.validation.empty(''));
+};
+
+function testEmpty() {
+	assertTrue(ag.validation.empty([]));
+};
+
+function testEmptyObject() {
+	assertTrue(ag.validation.empty({}));
+};
+
+function testEmptyZero() {
+	assertTrue(ag.validation.empty(0));
+};
+
+function testEmptyZeroAsString() {
+	assertTrue(ag.validation.empty('0'));
+};
+
+function testEmptyZeroAsFloat() {
+	assertTrue(ag.validation.empty(0.0));
+};
+
+function testEmptyFalse() {
+	assertTrue(ag.validation.empty(false));
+};
+
+// Tests expected to return false
+function testEmptycontainsNonWhitespaceString() {
+	assertFalse(ag.validation.empty(' '));
+	assertFalse(ag.validation.empty('a'));
+	assertFalse(ag.validation.empty('-'));
+	assertFalse(ag.validation.empty('Blargh'));
+};
+
+function testEmptyNonZeroNumbers() {
+	assertFalse(ag.validation.empty(1));
+	assertFalse(ag.validation.empty(-1));
+	assertFalse(ag.validation.empty(10));
+	assertFalse(ag.validation.empty(30));
+};
+
+function testEmptyNonZeroFloats() {
+	assertFalse(ag.validation.empty(1.0));
+	assertFalse(ag.validation.empty(-1.0));
+	assertFalse(ag.validation.empty(10.324));
+	assertFalse(ag.validation.empty(30.98));
+};
+
+function testEmptyNonEmptyArrays() {
+	assertFalse(ag.validation.empty([1, 3]));
+	assertFalse(ag.validation.empty([0]));
+};
+
+function testEmptyNonEmptyObject() {
+	assertFalse(ag.validation.empty({name: 'Bob'}));
+};
+
+function testEmptyTrue() {
+	assertFalse(ag.validation.empty(true));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: alphaNumeric
+function testAlphaNumeric() {
+	assertTrue(ag.validation.alphaNumeric('frferrf'));
+	assertTrue(ag.validation.alphaNumeric('12234'));
+	assertTrue(ag.validation.alphaNumeric('1w2e2r3t4y'));
+	assertTrue(ag.validation.alphaNumeric('0'));
+	assertTrue(ag.validation.alphaNumeric('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXZY1234567890'));
+
+	assertFalse(ag.validation.alphaNumeric(undefined));
+	assertFalse(ag.validation.alphaNumeric(null));
+	assertFalse(ag.validation.alphaNumeric('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXZY1234567890 '));
+	assertFalse(ag.validation.alphaNumeric('!@#$%'));
+	assertFalse(ag.validation.alphaNumeric('אกあアꀀ豈'));
+	assertFalse(ag.validation.alphaNumeric('abçďĕʑʘπй'));
+	assertFalse(ag.validation.alphaNumeric('12 234'));
+	assertFalse(ag.validation.alphaNumeric('dfd 234'));
+	assertFalse(ag.validation.alphaNumeric("\n"));
+	assertFalse(ag.validation.alphaNumeric("\t"));
+	assertFalse(ag.validation.alphaNumeric("\r"));
+	assertFalse(ag.validation.alphaNumeric(' '));
+	assertFalse(ag.validation.alphaNumeric(''));	
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: boolean
+function testBool() {
+	assertTrue(ag.validation.bool(true));
+	assertTrue(ag.validation.bool(false));
+	assertTrue(ag.validation.bool(0));
+	assertTrue(ag.validation.bool('0'));
+	assertTrue(ag.validation.bool('1'));
+
+	assertFalse(ag.validation.bool(undefined));
+	assertFalse(ag.validation.bool(null));
+	assertFalse(ag.validation.bool(2));
+	assertFalse(ag.validation.bool(-1));
+	assertFalse(ag.validation.bool('00'));
+	assertFalse(ag.validation.bool('3'));
+	assertFalse(ag.validation.bool('abc'));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: containsNonWhitespace
+function testContainsNonWhitespace() {
+	assertTrue(ag.validation.containsNonWhitespace('abcdef'));
+	assertTrue(ag.validation.containsNonWhitespace('abc '));
+	assertTrue(ag.validation.containsNonWhitespace(' abc'));
+	assertTrue(ag.validation.containsNonWhitespace(' abc '));
+	assertTrue(ag.validation.containsNonWhitespace('a b c'));
+	assertTrue(ag.validation.containsNonWhitespace('0'));
+	assertTrue(ag.validation.containsNonWhitespace('0.0'));
+	assertTrue(ag.validation.containsNonWhitespace('\rX'));
+	assertTrue(ag.validation.containsNonWhitespace('z'));
+
+	assertFalse(ag.validation.containsNonWhitespace(undefined));
+	assertFalse(ag.validation.containsNonWhitespace(null));
+	assertFalse(ag.validation.containsNonWhitespace(''));
+	assertFalse(ag.validation.containsNonWhitespace('\t\r\n\v'));
+	assertFalse(ag.validation.containsNonWhitespace('  '));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: date
+function testDateNullUndefined() {
+	assertFalse(ag.validation.date(null, 'dmy'));
+	assertFalse(ag.validation.date(undefined, 'dmy'));
+};
+
+function testDateCustom() {
+	assertTrue(ag.validation.date('4/30/2012', 'mdy'));
+};
+
+function testDateDdmmyyyy() {
+	assertTrue(ag.validation.date('27-12-2006', 'dmy'));
+	assertTrue(ag.validation.date('27.12.2006', 'dmy'));
+	assertTrue(ag.validation.date('27/12/2006', 'dmy'));
+	assertTrue(ag.validation.date('27 12 2006', 'dmy'));
+	assertFalse(ag.validation.date('00-00-0000', 'dmy'));
+	assertFalse(ag.validation.date('00.00.0000', 'dmy'));
+	assertFalse(ag.validation.date('00/00/0000', 'dmy'));
+	assertFalse(ag.validation.date('00 00 0000', 'dmy'));
+	assertFalse(ag.validation.date('31-11-2006', 'dmy'));
+	assertFalse(ag.validation.date('31.11.2006', 'dmy'));
+	assertFalse(ag.validation.date('31/11/2006', 'dmy'));
+	assertFalse(ag.validation.date('31 11 2006', 'dmy'));
+};
+
+function testDateDdmmyyyyLeapYear() {
+	assertTrue(ag.validation.date('29-02-2004', ['dmy']));
+	assertTrue(ag.validation.date('29.02.2004', ['dmy']));
+	assertTrue(ag.validation.date('29/02/2004', ['dmy']));
+	assertTrue(ag.validation.date('29 02 2004', ['dmy']));
+	assertFalse(ag.validation.date('29-02-2006', ['dmy']));
+	assertFalse(ag.validation.date('29.02.2006', ['dmy']));
+	assertFalse(ag.validation.date('29/02/2006', ['dmy']));
+	assertFalse(ag.validation.date('29 02 2006', ['dmy']));
+};
+
+function testDateDdmmyy() {
+	assertTrue(ag.validation.date('27-12-06', ['dmy']));
+	assertTrue(ag.validation.date('27.12.06', ['dmy']));
+	assertTrue(ag.validation.date('27/12/06', ['dmy']));
+	assertTrue(ag.validation.date('27 12 06', ['dmy']));
+	assertFalse(ag.validation.date('00-00-00', ['dmy']));
+	assertFalse(ag.validation.date('00.00.00', ['dmy']));
+	assertFalse(ag.validation.date('00/00/00', ['dmy']));
+	assertFalse(ag.validation.date('00 00 00', ['dmy']));
+	assertFalse(ag.validation.date('31-11-06', ['dmy']));
+	assertFalse(ag.validation.date('31.11.06', ['dmy']));
+	assertFalse(ag.validation.date('31/11/06', ['dmy']));
+	assertFalse(ag.validation.date('31 11 06', ['dmy']));
+};
+
+function testDateDdmmyyLeapYear() {
+	assertTrue(ag.validation.date('29-02-04', ['dmy']));
+	assertTrue(ag.validation.date('29.02.04', ['dmy']));
+	assertTrue(ag.validation.date('29/02/04', ['dmy']));
+	assertTrue(ag.validation.date('29 02 04', ['dmy']));
+	assertFalse(ag.validation.date('29-02-06', ['dmy']));
+	assertFalse(ag.validation.date('29.02.06', ['dmy']));
+	assertFalse(ag.validation.date('29/02/06', ['dmy']));
+	assertFalse(ag.validation.date('29 02 06', ['dmy']));
+};
+
+function testDateDmyy() {
+	assertTrue(ag.validation.date('7-2-06', ['dmy']));
+	assertTrue(ag.validation.date('7.2.06', ['dmy']));
+	assertTrue(ag.validation.date('7/2/06', ['dmy']));
+	assertTrue(ag.validation.date('7 2 06', ['dmy']));
+	assertFalse(ag.validation.date('0-0-00', ['dmy']));
+	assertFalse(ag.validation.date('0.0.00', ['dmy']));
+	assertFalse(ag.validation.date('0/0/00', ['dmy']));
+	assertFalse(ag.validation.date('0 0 00', ['dmy']));
+	assertFalse(ag.validation.date('32-2-06', ['dmy']));
+	assertFalse(ag.validation.date('32.2.06', ['dmy']));
+	assertFalse(ag.validation.date('32/2/06', ['dmy']));
+	assertFalse(ag.validation.date('32 2 06', ['dmy']));
+};
+
+function testDateDmyyLeapYear() {
+	assertTrue(ag.validation.date('29-2-04', ['dmy']));
+	assertTrue(ag.validation.date('29.2.04', ['dmy']));
+	assertTrue(ag.validation.date('29/2/04', ['dmy']));
+	assertTrue(ag.validation.date('29 2 04', ['dmy']));
+	assertFalse(ag.validation.date('29-2-06', ['dmy']));
+	assertFalse(ag.validation.date('29.2.06', ['dmy']));
+	assertFalse(ag.validation.date('29/2/06', ['dmy']));
+	assertFalse(ag.validation.date('29 2 06', ['dmy']));
+};
+
+function testDateDmyyyy() {
+	assertTrue(ag.validation.date('7-2-2006', ['dmy']));
+	assertTrue(ag.validation.date('7.2.2006', ['dmy']));
+	assertTrue(ag.validation.date('7/2/2006', ['dmy']));
+	assertTrue(ag.validation.date('7 2 2006', ['dmy']));
+	assertFalse(ag.validation.date('0-0-0000', ['dmy']));
+	assertFalse(ag.validation.date('0.0.0000', ['dmy']));
+	assertFalse(ag.validation.date('0/0/0000', ['dmy']));
+	assertFalse(ag.validation.date('0 0 0000', ['dmy']));
+	assertFalse(ag.validation.date('32-2-2006', ['dmy']));
+	assertFalse(ag.validation.date('32.2.2006', ['dmy']));
+	assertFalse(ag.validation.date('32/2/2006', ['dmy']));
+	assertFalse(ag.validation.date('32 2 2006', ['dmy']));
+};
+
+function testDateDmyyyyLeapYear() {
+	assertTrue(ag.validation.date('29-2-2004', ['dmy']));
+	assertTrue(ag.validation.date('29.2.2004', ['dmy']));
+	assertTrue(ag.validation.date('29/2/2004', ['dmy']));
+	assertTrue(ag.validation.date('29 2 2004', ['dmy']));
+	assertFalse(ag.validation.date('29-2-2006', ['dmy']));
+	assertFalse(ag.validation.date('29.2.2006', ['dmy']));
+	assertFalse(ag.validation.date('29/2/2006', ['dmy']));
+	assertFalse(ag.validation.date('29 2 2006', ['dmy']));
+};
+
+function testDateMmddyyyy() {
+	assertTrue(ag.validation.date('12-27-2006', ['mdy']));
+	assertTrue(ag.validation.date('12.27.2006', ['mdy']));
+	assertTrue(ag.validation.date('12/27/2006', ['mdy']));
+	assertTrue(ag.validation.date('12 27 2006', ['mdy']));
+	assertFalse(ag.validation.date('00-00-0000', ['mdy']));
+	assertFalse(ag.validation.date('00.00.0000', ['mdy']));
+	assertFalse(ag.validation.date('00/00/0000', ['mdy']));
+	assertFalse(ag.validation.date('00 00 0000', ['mdy']));
+	assertFalse(ag.validation.date('11-31-2006', ['mdy']));
+	assertFalse(ag.validation.date('11.31.2006', ['mdy']));
+	assertFalse(ag.validation.date('11/31/2006', ['mdy']));
+	assertFalse(ag.validation.date('11 31 2006', ['mdy']));
+};
+
+function testDateMmddyyyyLeapYear() {
+	assertTrue(ag.validation.date('02-29-2004', ['mdy']));
+	assertTrue(ag.validation.date('02.29.2004', ['mdy']));
+	assertTrue(ag.validation.date('02/29/2004', ['mdy']));
+	assertTrue(ag.validation.date('02 29 2004', ['mdy']));
+	assertFalse(ag.validation.date('02-29-2006', ['mdy']));
+	assertFalse(ag.validation.date('02.29.2006', ['mdy']));
+	assertFalse(ag.validation.date('02/29/2006', ['mdy']));
+	assertFalse(ag.validation.date('02 29 2006', ['mdy']));
+};
+
+function testDateMmddyy() {
+	assertTrue(ag.validation.date('12-27-06', ['mdy']));
+	assertTrue(ag.validation.date('12.27.06', ['mdy']));
+	assertTrue(ag.validation.date('12/27/06', ['mdy']));
+	assertTrue(ag.validation.date('12 27 06', ['mdy']));
+	assertFalse(ag.validation.date('00-00-00', ['mdy']));
+	assertFalse(ag.validation.date('00.00.00', ['mdy']));
+	assertFalse(ag.validation.date('00/00/00', ['mdy']));
+	assertFalse(ag.validation.date('00 00 00', ['mdy']));
+	assertFalse(ag.validation.date('11-31-06', ['mdy']));
+	assertFalse(ag.validation.date('11.31.06', ['mdy']));
+	assertFalse(ag.validation.date('11/31/06', ['mdy']));
+	assertFalse(ag.validation.date('11 31 06', ['mdy']));
+};
+
+function testDateMmddyyLeapYear() {
+	assertTrue(ag.validation.date('02-29-04', ['mdy']));
+	assertTrue(ag.validation.date('02.29.04', ['mdy']));
+	assertTrue(ag.validation.date('02/29/04', ['mdy']));
+	assertTrue(ag.validation.date('02 29 04', ['mdy']));
+	assertFalse(ag.validation.date('02-29-06', ['mdy']));
+	assertFalse(ag.validation.date('02.29.06', ['mdy']));
+	assertFalse(ag.validation.date('02/29/06', ['mdy']));
+	assertFalse(ag.validation.date('02 29 06', ['mdy']));
+};
+
+function testDateMdyy() {
+	assertTrue(ag.validation.date('2-7-06', ['mdy']));
+	assertTrue(ag.validation.date('2.7.06', ['mdy']));
+	assertTrue(ag.validation.date('2/7/06', ['mdy']));
+	assertTrue(ag.validation.date('2 7 06', ['mdy']));
+	assertFalse(ag.validation.date('0-0-00', ['mdy']));
+	assertFalse(ag.validation.date('0.0.00', ['mdy']));
+	assertFalse(ag.validation.date('0/0/00', ['mdy']));
+	assertFalse(ag.validation.date('0 0 00', ['mdy']));
+	assertFalse(ag.validation.date('2-32-06', ['mdy']));
+	assertFalse(ag.validation.date('2.32.06', ['mdy']));
+	assertFalse(ag.validation.date('2/32/06', ['mdy']));
+	assertFalse(ag.validation.date('2 32 06', ['mdy']));
+};
+
+function testDateMdyyLeapYear() {
+	assertTrue(ag.validation.date('2-29-04', ['mdy']));
+	assertTrue(ag.validation.date('2.29.04', ['mdy']));
+	assertTrue(ag.validation.date('2/29/04', ['mdy']));
+	assertTrue(ag.validation.date('2 29 04', ['mdy']));
+	assertFalse(ag.validation.date('2-29-06', ['mdy']));
+	assertFalse(ag.validation.date('2.29.06', ['mdy']));
+	assertFalse(ag.validation.date('2/29/06', ['mdy']));
+	assertFalse(ag.validation.date('2 29 06', ['mdy']));
+};
+
+function testDateMdyyyy() {
+	assertTrue(ag.validation.date('2-7-2006', ['mdy']));
+	assertTrue(ag.validation.date('2.7.2006', ['mdy']));
+	assertTrue(ag.validation.date('2/7/2006', ['mdy']));
+	assertTrue(ag.validation.date('2 7 2006', ['mdy']));
+	assertFalse(ag.validation.date('0-0-0000', ['mdy']));
+	assertFalse(ag.validation.date('0.0.0000', ['mdy']));
+	assertFalse(ag.validation.date('0/0/0000', ['mdy']));
+	assertFalse(ag.validation.date('0 0 0000', ['mdy']));
+	assertFalse(ag.validation.date('2-32-2006', ['mdy']));
+	assertFalse(ag.validation.date('2.32.2006', ['mdy']));
+	assertFalse(ag.validation.date('2/32/2006', ['mdy']));
+	assertFalse(ag.validation.date('2 32 2006', ['mdy']));
+};
+
+function testDateMdyyyyLeapYear() {
+	assertTrue(ag.validation.date('2-29-2004', ['mdy']));
+	assertTrue(ag.validation.date('2.29.2004', ['mdy']));
+	assertTrue(ag.validation.date('2/29/2004', ['mdy']));
+	assertTrue(ag.validation.date('2 29 2004', ['mdy']));
+	assertFalse(ag.validation.date('2-29-2006', ['mdy']));
+	assertFalse(ag.validation.date('2.29.2006', ['mdy']));
+	assertFalse(ag.validation.date('2/29/2006', ['mdy']));
+	assertFalse(ag.validation.date('2 29 2006', ['mdy']));
+};
+
+function testDateYyyymmdd() {
+	assertTrue(ag.validation.date('2006-12-27', ['ymd']));
+	assertTrue(ag.validation.date('2006.12.27', ['ymd']));
+	assertTrue(ag.validation.date('2006/12/27', ['ymd']));
+	assertTrue(ag.validation.date('2006 12 27', ['ymd']));
+	assertFalse(ag.validation.date('2006-11-31', ['ymd']));
+	assertFalse(ag.validation.date('2006.11.31', ['ymd']));
+	assertFalse(ag.validation.date('2006/11/31', ['ymd']));
+	assertFalse(ag.validation.date('2006 11 31', ['ymd']));
+};
+
+function testDateYyyymmddLeapYear() {
+	assertTrue(ag.validation.date('2004-02-29', ['ymd']));
+	assertTrue(ag.validation.date('2004.02.29', ['ymd']));
+	assertTrue(ag.validation.date('2004/02/29', ['ymd']));
+	assertTrue(ag.validation.date('2004 02 29', ['ymd']));
+	assertFalse(ag.validation.date('2006-02-29', ['ymd']));
+	assertFalse(ag.validation.date('2006.02.29', ['ymd']));
+	assertFalse(ag.validation.date('2006/02/29', ['ymd']));
+	assertFalse(ag.validation.date('2006 02 29', ['ymd']));
+};
+
+function testDateYymmdd() {
+	assertTrue(ag.validation.date('06-12-27', ['ymd']));
+	assertTrue(ag.validation.date('06.12.27', ['ymd']));
+	assertTrue(ag.validation.date('06/12/27', ['ymd']));
+	assertTrue(ag.validation.date('06 12 27', ['ymd']));
+	assertFalse(ag.validation.date('12/27/2600', ['ymd']));
+	assertFalse(ag.validation.date('12.27.2600', ['ymd']));
+	assertFalse(ag.validation.date('12/27/2600', ['ymd']));
+	assertFalse(ag.validation.date('12 27 2600', ['ymd']));
+	assertFalse(ag.validation.date('06-11-31', ['ymd']));
+	assertFalse(ag.validation.date('06.11.31', ['ymd']));
+	assertFalse(ag.validation.date('06/11/31', ['ymd']));
+	assertFalse(ag.validation.date('06 11 31', ['ymd']));
+};
+
+function testDateYymmddLeapYear() {
+	assertTrue(ag.validation.date('2004-02-29', ['ymd']));
+	assertTrue(ag.validation.date('2004.02.29', ['ymd']));
+	assertTrue(ag.validation.date('2004/02/29', ['ymd']));
+	assertTrue(ag.validation.date('2004 02 29', ['ymd']));
+	assertFalse(ag.validation.date('2006-02-29', ['ymd']));
+	assertFalse(ag.validation.date('2006.02.29', ['ymd']));
+	assertFalse(ag.validation.date('2006/02/29', ['ymd']));
+	assertFalse(ag.validation.date('2006 02 29', ['ymd']));
+};
+
+function testDateDdMMMMyyyy() {
+	assertTrue(ag.validation.date('27 December 2006', ['dMy']));
+	assertTrue(ag.validation.date('27 Dec 2006', ['dMy']));
+	assertFalse(ag.validation.date('2006 Dec 27', ['dMy']));
+	assertFalse(ag.validation.date('2006 December 27', ['dMy']));
+};
+
+function testDateDdMMMMyyyyLeapYear() {
+	assertTrue(ag.validation.date('29 February 2004', ['dMy']));
+	assertFalse(ag.validation.date('29 February 2006', ['dMy']));
+};
+
+function testDateMmmmDdyyyy() {
+	assertTrue(ag.validation.date('December 27, 2006', ['Mdy']));
+	assertTrue(ag.validation.date('Dec 27, 2006', ['Mdy']));
+	assertTrue(ag.validation.date('December 27 2006', ['Mdy']));
+	assertTrue(ag.validation.date('Dec 27 2006', ['Mdy']));
+	assertFalse(ag.validation.date('27 Dec 2006', ['Mdy']));
+	assertFalse(ag.validation.date('2006 December 27', ['Mdy']));
+	assertTrue(ag.validation.date('Sep 12, 2011', ['Mdy']));
+};
+
+function testDateMmmmDdyyyyLeapYear() {
+	assertTrue(ag.validation.date('February 29, 2004', ['Mdy']));
+	assertTrue(ag.validation.date('Feb 29, 2004', ['Mdy']));
+	assertTrue(ag.validation.date('February 29 2004', ['Mdy']));
+	assertTrue(ag.validation.date('Feb 29 2004', ['Mdy']));
+	assertFalse(ag.validation.date('February 29, 2006', ['Mdy']));
+};
+
+function testDateMy() {
+	assertTrue(ag.validation.date('December 2006', ['My']));
+	assertTrue(ag.validation.date('Dec 2006', ['My']));
+	assertTrue(ag.validation.date('December/2006', ['My']));
+	assertTrue(ag.validation.date('Dec/2006', ['My']));
+};
+
+function testDateMyNumeric() {
+	assertTrue(ag.validation.date('12/2006', ['my']));
+	assertTrue(ag.validation.date('12-2006', ['my']));
+	assertTrue(ag.validation.date('12.2006', ['my']));
+	assertTrue(ag.validation.date('12 2006', ['my']));
+	assertFalse(ag.validation.date('12/06', ['my']));
+	assertFalse(ag.validation.date('12-06', ['my']));
+	assertFalse(ag.validation.date('12.06', ['my']));
+	assertFalse(ag.validation.date('12 06', ['my']));
+};
+
+function testDateMultiple() {
+	assertTrue(ag.validation.date('2011-12-31', ['ymd', 'dmy']));
+	assertTrue(ag.validation.date('31-12-2011', ['ymd', 'dmy']));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: email
+function testEmail() {
+	// assertTrue(ag.validation.email('abc.efg@domain.com'));
+	// assertTrue(ag.validation.email('efg@domain.com'));
+	// assertTrue(ag.validation.email('abc-efg@domain.com'));
+	// assertTrue(ag.validation.email('abc_efg@domain.com'));
+	// assertTrue(ag.validation.email('raw@test.ra.ru'));
+	// assertTrue(ag.validation.email('abc-efg@domain-hyphened.com'));
+	// assertTrue(ag.validation.email("p.o'malley@domain.com"));
+	// assertTrue(ag.validation.email('abc+efg@domain.com'));
+	// assertTrue(ag.validation.email('abc&efg@domain.com'));
+	// assertTrue(ag.validation.email('abc.efg@12345.com'));
+	// assertTrue(ag.validation.email('abc.efg@12345.co.jp'));
+	// assertTrue(ag.validation.email('abc@g.cn'));
+	// assertTrue(ag.validation.email('abc@x.com'));
+	// assertTrue(ag.validation.email('henrik@sbcglobal.net'));
+	// assertTrue(ag.validation.email('sani@sbcglobal.net'));
+
+	// // all ICANN TLDs
+	// assertTrue(ag.validation.email('abc@example.aero'));
+	// assertTrue(ag.validation.email('abc@example.asia'));
+	// assertTrue(ag.validation.email('abc@example.biz'));
+	// assertTrue(ag.validation.email('abc@example.cat'));
+	// assertTrue(ag.validation.email('abc@example.com'));
+	// assertTrue(ag.validation.email('abc@example.coop'));
+	// assertTrue(ag.validation.email('abc@example.edu'));
+	// assertTrue(ag.validation.email('abc@example.gov'));
+	// assertTrue(ag.validation.email('abc@example.info'));
+	// assertTrue(ag.validation.email('abc@example.int'));
+	// assertTrue(ag.validation.email('abc@example.jobs'));
+	// assertTrue(ag.validation.email('abc@example.mil'));
+	// assertTrue(ag.validation.email('abc@example.mobi'));
+	// assertTrue(ag.validation.email('abc@example.museum'));
+	// assertTrue(ag.validation.email('abc@example.name'));
+	// assertTrue(ag.validation.email('abc@example.net'));
+	// assertTrue(ag.validation.email('abc@example.org'));
+	// assertTrue(ag.validation.email('abc@example.pro'));
+	// assertTrue(ag.validation.email('abc@example.tel'));
+	// assertTrue(ag.validation.email('abc@example.travel'));
+	// assertTrue(ag.validation.email('someone@st.t-com.hr'));
+
+	// // strange, but technically valid email addresses
+	// assertTrue(ag.validation.email('S=postmaster/OU=rz/P=uni-frankfurt/A=d400/C=de@gateway.d400.de'));
+	// assertTrue(ag.validation.email('customer/department=shipping@example.com'));
+	// assertTrue(ag.validation.email('$A12345@example.com'));
+	// assertTrue(ag.validation.email('!def!xyz%abc@example.com'));
+	// assertTrue(ag.validation.email('_somename@example.com'));
+
+	// invalid addresses
+	assertFalse(ag.validation.email(undefined));
+	assertFalse(ag.validation.email(null));
+	assertFalse(ag.validation.email('abc@example'));
+	assertFalse(ag.validation.email('abc@example.c'));
+	assertFalse(ag.validation.email('abc@example.com.'));
+	assertFalse(ag.validation.email('abc.@example.com'));
+	assertFalse(ag.validation.email('abc@example..com'));
+	assertFalse(ag.validation.email('abc@example.com.a'));
+	assertFalse(ag.validation.email('abc@example.toolong'));
+	assertFalse(ag.validation.email('abc;@example.com'));
+	assertFalse(ag.validation.email('abc@example.com;'));
+	assertFalse(ag.validation.email('abc@efg@example.com'));
+	assertFalse(ag.validation.email('abc@@example.com'));
+	assertFalse(ag.validation.email('abc efg@example.com'));
+	assertFalse(ag.validation.email('abc,efg@example.com'));
+	assertFalse(ag.validation.email('abc@sub,example.com'));
+	assertFalse(ag.validation.email("abc@sub'example.com"));
+	assertFalse(ag.validation.email('abc@sub/example.com'));
+	assertFalse(ag.validation.email('abc@yahoo!.com'));
+	assertFalse(ag.validation.email("Nyrée.surname@example.com"));
+	assertFalse(ag.validation.email('abc@example_underscored.com'));
+	assertFalse(ag.validation.email('raw@test.ra.ru....com'));
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: integer
+function testInteger() {
+	assertFalse(ag.validation.integer(undefined));
+	assertFalse(ag.validation.integer(null));
+	assertFalse(ag.validation.integer([]));
+	assertFalse(ag.validation.integer({}));
+	assertFalse(ag.validation.integer('abc'));
+	assertFalse(ag.validation.integer(''));
+	assertFalse(ag.validation.integer('0.9'));
+	assertFalse(ag.validation.integer('34a'));
+	assertFalse(ag.validation.integer('1.25'));
+	assertFalse(ag.validation.integer(1.25));
+	assertFalse(ag.validation.integer(' 34'));
+	assertFalse(ag.validation.integer('12 '));
+	assertFalse(ag.validation.integer(' 98 '));
+
+	assertTrue(ag.validation.integer(0));
+	assertTrue(ag.validation.integer(-0));
+	assertTrue(ag.validation.integer(-1));
+	assertTrue(ag.validation.integer(1));
+	assertTrue(ag.validation.integer('0'));
+	assertTrue(ag.validation.integer('-1'));
+	assertTrue(ag.validation.integer('1'));
+	assertTrue(ag.validation.integer('-0'));
+	assertTrue(ag.validation.integer(34));
+	assertTrue(ag.validation.integer(-1234567890));
+	assertTrue(ag.validation.integer(005));
+	assertTrue(ag.validation.integer(-005));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: integerStrict
+function test_integerStrict() {
+	assertFalse(ag.validation.integerStrict(undefined));
+	assertFalse(ag.validation.integerStrict(null));
+	assertFalse(ag.validation.integerStrict([]));
+	assertFalse(ag.validation.integerStrict({}));
+	assertFalse(ag.validation.integerStrict('abc'));
+	assertFalse(ag.validation.integerStrict(''));
+	assertFalse(ag.validation.integerStrict('0.9'));
+	assertFalse(ag.validation.integerStrict('34a'));
+	assertFalse(ag.validation.integerStrict('1.25'));
+	assertFalse(ag.validation.integerStrict(1.25));
+	assertFalse(ag.validation.integerStrict(' 34'));
+	assertFalse(ag.validation.integerStrict('12 '));
+	assertFalse(ag.validation.integerStrict(' 98 '));
+
+	assertFalse(ag.validation.integerStrict('0'));
+	assertFalse(ag.validation.integerStrict('-1'));
+	assertFalse(ag.validation.integerStrict('1'));
+	assertFalse(ag.validation.integerStrict('-0'));
+
+	assertTrue(ag.validation.integerStrict(0));
+	assertTrue(ag.validation.integerStrict(-0));
+	assertTrue(ag.validation.integerStrict(-1));
+	assertTrue(ag.validation.integerStrict(1));
+	assertTrue(ag.validation.integerStrict(34));
+	assertTrue(ag.validation.integerStrict(-1234567890));
+	assertTrue(ag.validation.integerStrict(005));
+	assertTrue(ag.validation.integerStrict(-005));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: between
+function testLengthBetween() {
+	assertTrue(ag.validation.lengthBetween('abcde', 1, 9));
+	assertTrue(ag.validation.lengthBetween(' ', 0, 1));
+	assertTrue(ag.validation.lengthBetween(' \n', 2, 2));
+	assertTrue(ag.validation.lengthBetween(' abc ', 0, 5));;
+	assertTrue(ag.validation.lengthBetween('abcdef', 0, 6));
+	assertTrue(ag.validation.lengthBetween('', 0, 0));
+	assertTrue(ag.validation.lengthBetween('', 0, 34));
+
+	assertFalse(ag.validation.lengthBetween(undefined, 0, 9));
+	assertFalse(ag.validation.lengthBetween(null, 0, 9));
+	assertFalse(ag.validation.lengthBetween('abcde', 6, 6));
+	assertFalse(ag.validation.lengthBetween('abcd', 0, 3));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: maxLength
+function testMaxLength() {
+	assertTrue(ag.validation.maxLength('ab', 3));
+	assertTrue(ag.validation.maxLength('abc', 3));
+	assertTrue(ag.validation.maxLength('ÆΔΩЖÇ', 10));
+
+	assertFalse(ag.validation.maxLength('abcd', 3));
+	assertFalse(ag.validation.maxLength('ÆΔΩЖÇ', 3));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: minLength
+function testMinLength() {
+	assertFalse(ag.validation.minLength('ab', 3));
+	assertFalse(ag.validation.minLength('ÆΔΩЖÇ', 10));
+
+	assertTrue(ag.validation.minLength('abc', 3));
+	assertTrue(ag.validation.minLength('abcd', 3));
+	assertTrue(ag.validation.minLength('ÆΔΩЖÇ', 2));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: numericCompare
+function testNumericCompare() {
+	assertTrue(ag.validation.numericCompare(7, '>', 6));
+	assertTrue(ag.validation.numericCompare(6, '<', 7));
+	assertTrue(ag.validation.numericCompare(7, '>=', 7));
+	assertTrue(ag.validation.numericCompare(7, '>=', 6));
+	assertTrue(ag.validation.numericCompare(6, '<=', 7));
+	assertTrue(ag.validation.numericCompare(7, '==', 7));
+	assertTrue(ag.validation.numericCompare(7, '!=', 6));
+	assertFalse(ag.validation.numericCompare(6, '>', 7));
+	assertFalse(ag.validation.numericCompare(7, '<', 6));
+	assertFalse(ag.validation.numericCompare(6, '>=', 7));
+	assertFalse(ag.validation.numericCompare(6, '>=', 7));
+	assertFalse(ag.validation.numericCompare(7, '<=', 6));
+	assertFalse(ag.validation.numericCompare(7, '==', 6));
+	assertFalse(ag.validation.numericCompare(7, '!=', 7));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: testValidates
+function testValidates() {
+	var rules = {
+		projectName: {
+			rule: ag.validation.ruleType.CONTAINS_NON_WHITESPACE,
+			message: "This field is required."
+		},
+		activity: {
+			rule: ag.validation.ruleType.CONTAINS_NON_WHITESPACE,
+			message: "This field is required."
+		},
+		minutesSpent: {
+			rule: [ag.validation.ruleType.NUMERIC_COMPARE, '>=', 0],
+			message: "Minutes must be an integer greater than or equal to 0.",
+			allowEmpty: true
+		},
+		date: [
+			{
+				rule: ag.validation.ruleType.CONTAINS_NON_WHITESPACE,
+				message: "This field is required."
+			},
+			{
+				rule: [ag.validation.ruleType.DATE, 'dmy'],
+				message: "Invalid date format. Expected value in dd/mm/yyyy."
+			}
+		]
+	};
+
+	var object = {
+		projectName: 'Blargh',
+		date: '08/02/1980a'
+	};
+
+	var invalidFields = {};
+
+	assertFalse(ag.validation.validateObject(object, rules, invalidFields));
+	assertTrue(goog.isDefAndNotNull(invalidFields.activity));
+	assertEquals("This field is required.", invalidFields.activity);
+
+	assertTrue(goog.isDefAndNotNull(invalidFields.date));
+	assertEquals(invalidFields.date, "Invalid date format. Expected value in dd/mm/yyyy.");
+}
+
+
+</script>
+</body>
+</html>

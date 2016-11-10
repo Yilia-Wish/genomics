@@ -1,0 +1,188 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.core.AObject</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.core.AObject');
+goog.require('ag.meta.SignalSpy');
+goog.require('ag.meta.MetaObject');
+goog.require('ag.meta.MockDestObject');
+goog.require('ag.meta.MockSourceObject');
+</script>
+<body>
+<script>
+// Aliases
+var AObject = ag.core.AObject;
+var SignalSpy = ag.meta.SignalSpy;
+
+var MetaObject = ag.meta.MetaObject.getInstance;
+var MockDestObject = ag.meta.MockDestObject;
+var MockSourceObject = ag.meta.MockSourceObject;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function testConstructor() {
+	var x = new AObject();
+	
+	assertNull(x.parent());
+	assertEquals(x.children().length, 0);
+
+	var y = new AObject(null);
+	assertNull(y.parent());
+	assertEquals(y.children().length, 0);
+
+	var z = new AObject(x);
+	assertEquals(z.parent(), x);
+	assertEquals(x.children().length, 1);
+	assertEquals(x.children()[0], z);
+
+	// Test multiple children under single object
+	var z2 = new AObject(x);
+	assertEquals(z2.parent(), x);
+	assertEquals(x.children().length, 2);
+	assertEquals(x.children()[0], z);
+	assertEquals(x.children()[1], z2);
+
+	// Test three levels of children
+	var z2_0 = new AObject(z2);
+	assertEquals(z2.parent(), x);
+	assertEquals(x.children().length, 2);
+	assertEquals(x.children()[0], z);
+	assertEquals(x.children()[1], z2);
+	assertEquals(z2_0.parent(), z2);
+	assertEquals(z2.children().length, 1);
+	assertEquals(z2.children()[0], z2_0);
+
+	// Cleanup
+	x.dispose();
+	y.dispose();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: dispose
+function test_dispose() {
+	var x = new AObject();
+	var y = new AObject(x);
+
+	assertEquals(y.parent(), x);
+
+	// Test disposing child
+	y.dispose();
+	assertTrue(y.isDisposed());
+	assertNull(y.parent());
+	assertEquals(x.children().length, 0);
+	y = null;
+
+	// Test disposing of parent
+	y = new AObject(x);
+	x.dispose();
+	assertTrue(x.isDisposed());
+	assertNull(x.children());
+	assertNull(y.parent());
+	assertNull(y.children());
+	assertTrue(y.isDisposed());
+	x = null;
+	y = null;
+
+	// Test disposing of multi-level parent
+	var root = new AObject();
+	var child1 = new AObject(root) ;
+	var child11 = new AObject(child1);
+
+	root.dispose();
+	assertNull(root.parent());
+	assertNull(root.children());
+	assertNull(child1.parent());
+	assertNull(child1.children());
+	assertNull(child11.parent());
+	assertNull(child11.children());
+	root = null;
+	child1 = null;
+	child11 = null;
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: emit
+function test_emit() {
+	var x = new AObject();
+	var spy = new SignalSpy(x, 'signal');
+
+	x.emit('signal');
+	assertTrue(spy.signals().length > 0);
+	assertEquals(spy.size(), 1);
+	spy.clear();
+
+	x.emit('signal', 1, 'domain');
+	assertEquals(spy.size(), 1);
+	assertArrayEquals(spy.signals()[0], [1, 'domain']);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: isDescendant
+function test_isDescendantOf() {
+	var x = new AObject();
+	var y1 = new AObject(x);
+	var y2 = new AObject(x);
+	var z = new AObject(y1);
+
+	assertTrue(y1.isDescendantOf(x));
+	assertTrue(y2.isDescendantOf(x));
+	assertTrue(z.isDescendantOf(x));
+	assertTrue(z.isDescendantOf(y1));
+
+	assertFalse(x.isDescendantOf(null));
+	assertFalse(z.isDescendantOf(y2));
+	assertFalse(y1.isDescendantOf(z));
+	assertFalse(y2.isDescendantOf(z));
+	assertFalse(x.isDescendantOf(z));
+	assertFalse(x.isDescendantOf(y1));
+	assertFalse(x.isDescendantOf(y2));
+	assertFalse(x.isDescendantOf(x));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: setParent
+function test_setParent() {
+	var x = new AObject();
+	var y = new AObject();
+	var z = new AObject();
+
+	// Not allowed to parent oneself
+	var e = assertThrows(function() { x.setParent(x); });
+	assertEquals(e.message, AObject.ErrorStrings.CANNOT_PARENT_SELF);
+
+	// Basic parenting
+	y.setParent(x);
+	assertEquals(y.parent(), x);
+	assertEquals(x.children().length, 1);
+	assertEquals(x.children()[0], y);
+
+	// Set parent to same parent should do nothing
+	y.setParent(x);
+	assertEquals(y.parent(), x);
+	assertEquals(x.children().length, 1);
+	assertEquals(x.children()[0], y);
+
+	y.setParent(null);
+	assertNull(y.parent());
+	assertEquals(x.children().length, 0);
+
+	// Not allowed to parent to descendant
+	y.setParent(x);
+	e = assertThrows(function() { x.setParent(y); });
+	assertEquals(e.message, AObject.ErrorStrings.CANNOT_PARENT_TO_DESCENDANT);
+
+	z.setParent(y);
+	e = assertThrows(function() { x.setParent(z); });
+	assertEquals(e.message, AObject.ErrorStrings.CANNOT_PARENT_TO_DESCENDANT);
+};
+
+</script>
+</body>
+</html>

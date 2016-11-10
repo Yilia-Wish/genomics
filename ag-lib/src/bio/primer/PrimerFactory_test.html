@@ -1,0 +1,126 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.bio.primer.PrimerFactory</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../../goog/base.js"></script>
+<script src="../../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.bio.grammar');
+goog.require('ag.bio.BioString');
+goog.require('ag.bio.RestrictionEnzyme');
+goog.require('ag.bio.primer.DimerScoreCalculator');
+goog.require('ag.bio.primer.Primer');
+goog.require('ag.bio.primer.PrimerFactory');
+goog.require('ag.bio.primer.PrimerSearchParameters');
+goog.require('ag.bio.primer.ThermodynamicCalculator');
+</script>
+<body>
+<script>
+// Aliases
+var grammar = ag.bio.grammar;
+
+var BioString = ag.bio.BioString;
+var DimerScoreCalculator = ag.bio.primer.DimerScoreCalculator;
+var Primer = ag.bio.Primer;
+var PrimerFactory = ag.bio.primer.PrimerFactory;
+var PrimerSearchParameters = ag.bio.primer.PrimerSearchParameters;
+var RestrictionEnzyme = ag.bio.RestrictionEnzyme;
+var ThermodynamicCalculator = ag.bio.primer.ThermodynamicCalculator;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	var x = new PrimerFactory();
+    assertEquals(x.sodiumConcentration(), PrimerSearchParameters.Defaults.SODIUM_CONCENTRATION);
+    assertEquals(x.primerDnaConcentration(), PrimerSearchParameters.Defaults.PRIMER_DNA_CONCENTRATION);
+
+    var x2 = new PrimerFactory(.5, .002);
+    assertEquals(x2.sodiumConcentration(), .5);
+    assertEquals(x2.primerDnaConcentration(), .002);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: sodiumConcentration
+function test_sodiumConcentration() {
+    var x = new PrimerFactory;
+
+    x.setSodiumConcentration(2.);
+    assertEquals(x.sodiumConcentration(), 2.);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: primerDnaConcentration
+function test_primerDnaConcentration() {
+    var x = new PrimerFactory;
+
+    x.setPrimerDnaConcentration(.01);
+    assertEquals(x.primerDnaConcentration(), .01);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: makePrimer
+function test_makePrimerWithoutTM() {
+    var x = new PrimerFactory();
+    var dimerScoreCalculator = new DimerScoreCalculator();
+
+    // Test: empty sequence and restriction enzyme
+    var primer = x.makePrimer(new BioString(null, grammar.DNA), new RestrictionEnzyme());
+    assertTrue(primer.isNull());
+    assertEquals(primer.tm(), 0.);
+    assertEquals(primer.homoDimerScore(), 0.);
+    assertTrue(primer.sequence().isEmpty());
+
+    // Test: no restriction enzyme
+    var dnaString = new BioString('ATGCGTAAACGTA', grammar.DNA);
+    primer = x.makePrimer(dnaString, new RestrictionEnzyme());
+    assertTrue(primer.coreSequence().eq(dnaString));
+    assertTrue(primer.restrictionEnzyme().isEmpty());
+    assertEquals(primer.tm(), ThermodynamicCalculator.meltingTemperature(primer.sequence(), x.sodiumConcentration(), x.primerDnaConcentration()));
+    assertEquals(primer.homoDimerScore(), dimerScoreCalculator.homoDimerScore(dnaString));
+
+    // Test: with restriction enzyme
+    var re = new RestrictionEnzyme('AatI', 'TTATTA', [3], [3]);
+    primer = x.makePrimer(dnaString, re);
+    assertTrue(primer.coreSequence().eq(dnaString));
+    assertTrue(primer.restrictionEnzyme().eq(re));
+    assertEquals(primer.tm(), ThermodynamicCalculator.meltingTemperature(primer.sequence(), x.sodiumConcentration(), x.primerDnaConcentration()));
+    assertEquals(primer.homoDimerScore(), dimerScoreCalculator.homoDimerScore(new BioString('TTATTAATGCGTAAACGTA', grammar.DNA)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: makePrimerWithTm
+function test_makePrimerWithTm() {
+    var x = new PrimerFactory();
+    var dimerScoreCalculator = new DimerScoreCalculator();
+
+    // Test: empty sequence and restriction enzyme
+    var primer = x.makePrimer(new BioString(null, grammar.DNA), new RestrictionEnzyme(), 0.);
+    assertTrue(primer.isNull());
+    assertEquals(primer.tm(), 0.);
+    assertEquals(primer.homoDimerScore(), 0.);
+    assertTrue(primer.sequence().isEmpty());
+
+    // Test: no restriction enzyme, basic tm
+    var dnaString = new BioString('ATGCGTAAACGTA', grammar.DNA);
+    primer = x.makePrimer(dnaString, new RestrictionEnzyme(), .35);
+    assertTrue(primer.coreSequence().eq(dnaString));
+    assertTrue(primer.restrictionEnzyme().isEmpty());
+    assertEquals(primer.tm(), .35);
+    assertEquals(primer.homoDimerScore(), dimerScoreCalculator.homoDimerScore(dnaString));
+
+    // Test: with restriction enzyme
+    var re = new RestrictionEnzyme('AatI', 'TTATTA', [3], [3]);
+    primer = x.makePrimer(dnaString, re, .75);
+    assertTrue(primer.coreSequence().eq(dnaString));
+    assertTrue(primer.restrictionEnzyme().eq(re));
+    assertEquals(primer.tm(), .75);
+    assertEquals(primer.homoDimerScore(), dimerScoreCalculator.homoDimerScore(new BioString('TTATTAATGCGTAAACGTA', grammar.DNA)));
+};
+
+</script>
+</body>
+</html>

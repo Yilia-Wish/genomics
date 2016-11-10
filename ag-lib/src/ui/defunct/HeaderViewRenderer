@@ -1,0 +1,423 @@
+goog.provide('ag.ui.HeaderViewRenderer');
+
+goog.require('goog.array');
+goog.require('goog.asserts');
+goog.require('goog.dom');
+goog.require('goog.dom.classes');
+goog.require('goog.dom.TagName');
+goog.require('goog.ui.ControlRenderer');
+goog.require('goog.style');
+
+goog.require('ag.ui');
+
+// --------------------------------------------------------------------------------------------------------------------
+/**
+ * Default renderer for {@link ag.ui.HeaderView}. Renders either a horizontal or vertical header view as an HTML table
+ * wrapped in a DIV, with one header item per table header cell.
+ *
+ * Horizontal header example:
+ *
+ *   <div class="ag-headerView horizontal">
+ *     <table class="ag-headerView-table">
+ *       <thead class="ag-headerView-head">
+ *         <tr class="ag-headerView-row">
+ *           <th class="ag-headerView-cell">ID</th>
+ *           <th class="ag-headerView-cell">Name</th>
+ *           ...
+ *         </tr>
+ *       </thead>
+ *     </table>
+ *   </div>
+ *
+ * Vertical header example:
+ *
+ *   <div class="ag-headerView vertical">
+ *     <table class="ag-headerView-table">
+ *       <thead class="ag-headerView-head">
+ *         <tr class="ag-headerView-row">
+ *           <th class="ag-headerView-cell">1.</th>
+ *         </tr>
+ *         <tr class="ag-headerView-row">
+ *           <th class="ag-headerView-cell">2.</th>
+ *         </tr>
+ *         ...
+ *       </thead>
+ *     </table>
+ *   </div>
+ *
+ * The main element div is given a user-defined width. The child table's total size varies as the sections are resized
+ * and provide for scrolling as necessary.
+ *
+ * @constructor
+ * @extends {goog.ui.ControlRenderer}
+ */
+ag.ui.HeaderViewRenderer = function() {
+	goog.base(this);
+};
+goog.inherits(ag.ui.HeaderViewRenderer, goog.ui.ControlRenderer);
+goog.addSingletonGetter(ag.ui.HeaderViewRenderer);
+
+/**********************************************************************************************/ goog.scope(function() {
+// Aliases
+var array = goog.array;
+var assert = goog.asserts.assert;
+var classes = goog.dom.classes;
+var dom = goog.dom;
+var style = goog.style;
+
+var ControlRenderer = goog.ui.ControlRenderer;
+var TagName = goog.dom.TagName;
+
+var HeaderViewRenderer = ag.ui.HeaderViewRenderer;
+var Orientation = ag.ui.Orientation;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Constants
+/** @enum {string} */
+HeaderViewRenderer.Css = {
+	RootClass: goog.getCssName('ag-headerView'),
+	Vertical: goog.getCssName('vertical'),
+	Horizontal: goog.getCssName('horizontal'),
+	Table: goog.getCssName('ag-headerView-table'),
+	Head: goog.getCssName('ag-headerView-head'),
+	Row: goog.getCssName('ag-headerView-row'),
+	Cell: goog.getCssName('ag-headerView-cell'),
+
+	ResizeHover: goog.getCssName('resize-hover')
+};
+
+/** @enum {number} */
+HeaderViewRenderer.Constants = {
+	ResizeHandleWidth: 9,
+	HalfResizeHandleWidth: 4		// (9 - 1) / 2
+};
+
+var Css = HeaderViewRenderer.Css;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Public functions
+/**
+ */
+HeaderViewRenderer.prototype.clearHeaderContents = function(headerView) {
+	dom.removeChildren(headerView.getElement());
+};
+
+/**
+ */
+HeaderViewRenderer.prototype.columnToResizeFromEvent = function(headerView, event) {
+	var element = headerView.getElement();
+	if (!element || !this.isHorizontalHeader_(element))
+		return -1;
+
+	var theadRow = element.firstChild.firstChild.firstChild;
+	if (!theadRow)
+		return -1;
+
+	var pos = style.getRelativePosition(event, theadRow);
+	// Make sure that we are vertically within the container
+	if (pos.y < 0 || pos.y >= style.getSize(theadRow).height)
+		return -1;
+
+	var xPos = pos.x;
+	var halfHandleWidth = HeaderViewRenderer.Constants.HalfResizeHandleWidth;
+	var nColumns = theadRow.cells.length;
+	var columnCenter = 0;
+	for (var i=0; i< nColumns; i++) {
+		var cell = theadRow.cells[i];
+		columnCenter += style.getSize(cell).width;
+		if (xPos >= columnCenter - halfHandleWidth && xPos <= columnCenter + halfHandleWidth)
+			return i;
+	}
+
+	return -1;
+};
+
+/**
+ */
+HeaderViewRenderer.prototype.sectionFromEvent = function(headerView, event) {
+	var element = headerView.getElement();
+	if (!element)
+		return -1;
+
+	if (this.isHorizontalHeader_(element)) {
+		var theadRow = element.firstChild.firstChild.firstChild;
+		if (!theadRow)
+			return -1;
+
+		var xPos = style.getRelativePosition(event, theadRow).x;
+		var rightSide = 0;
+		for (var i=0, z=theadRow.cells.length; i<z; i++) {
+			rightSide += style.getSize(theadRow.cells[i]).width;
+			if (xPos <= rightSide)
+				return i;
+		}
+	}
+	else {
+		// TODO: Can assume they are fixed height and therefore perform simple division to calculate
+		// this.
+
+		var thead = element.firstChild.firstChild;
+		assert(thead);
+
+		var yPos = style.getRelativePosition(event, thead).y;
+		var topSide = 0;
+		for (var i=0, z=thead.rows.length; i<z; i++) {
+			var row = thead.rows[i];
+			assert(row.cells.length === 1);
+			topSide += style.getSize(row.cells[0]).height;
+			if (yPos <= topSide)
+				return i;
+		}
+	}
+
+	return -1;
+};
+
+/** @return {number} */
+HeaderViewRenderer.prototype.scrollValue = function(headerView) {
+	var element = headerView.getElement();
+	if (!element)
+		return 0;
+
+	return (this.isHorizontalHeader_(element)) ? element.scrollLeft : element.scrollTop;
+};
+
+/**
+ */
+HeaderViewRenderer.prototype.sectionSize = function(headerView, section) {
+	var element = headerView.getElement();
+	if (!element)
+		return 0;
+
+	if (this.isHorizontalHeader_(element)) {
+		var theadRow = element.firstChild.firstChild.firstChild;
+		if (!theadRow)
+			return 0;
+
+		var nColumns = theadRow.cells.length;
+		assert(section >= 0 && section < nColumns);
+		var cell = theadRow.cells[section];
+		return style.getSize(cell).width;
+	}
+	else {
+		var thead = element.firstChild.firstChild;
+		assert(thead);
+
+		var nRows = thead.rows.length;
+		assert(section >= 0 && section < nRows);
+		var row = thead.rows[section];
+		assert(row.cells.length === 1);
+		var cell = row[0];
+		return style.getSize(cell).height;
+	}
+};
+
+/**
+ */
+HeaderViewRenderer.prototype.setActiveSection = function(headerView, section) {
+	console.log('Set active!');
+	// classes.add(thNode, Css.Active);
+};
+
+/**
+ * Triggered from the virtual HeaderView.modelChanged function.
+ *
+ * @param {Element} element root element of the header view
+ * @param {Array.<string>} content new header strings to replace the existing header items
+ */
+HeaderViewRenderer.prototype.setHeaderContents = function(headerView, contents) {
+	var element = headerView.getElement();
+	if (!element)
+		return;
+
+	var strings = /** @type {Array.<string>} */ (contents);
+	var thead = element.firstChild.firstChild;
+	assert(thead);
+
+	var sectionSize = headerView.defaultSectionSize();
+	if (this.isHorizontalHeader_(element))
+		this.setHorizontalContent_(thead, strings, sectionSize);
+	else
+		this.setVerticalContent_(thead, strings, sectionSize);
+};
+
+/**
+ */
+HeaderViewRenderer.prototype.setResizeHoverState = function(headerView, enabled) {
+	classes.enable(headerView.getElement(), Css.ResizeHover, enabled);
+};
+
+HeaderViewRenderer.prototype.setSectionSize = function(headerView, section, newSize) {
+	var element = headerView.getElement();
+	if (!element)
+		return 0;
+
+	if (this.isHorizontalHeader_(element)) {
+		var theadRow = element.firstChild.firstChild.firstChild;
+		if (!theadRow)
+			return 0;
+
+		var nColumns = theadRow.cells.length;
+		assert(section >= 0 && section < nColumns);
+		var cell = theadRow.cells[section];
+		cell.style.width = newSize + 'px';
+	}
+	else {
+		var thead = element.firstChild.firstChild;
+		assert(thead);
+
+		var nRows = thead.rows.length;
+		assert(section >= 0 && section < nRows);
+		var row = thead.rows[section];
+		assert(row.cells.length === 1);
+		var cell = row[0];
+		cell.style.height = newSize + 'px';
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Renderer related functions
+/**
+ * Overrides {@link ControlRenderer#canDecorate} to allow decorating empty DIVs only.
+ *
+ * @param {Element} element
+ * @return {boolean}
+ * @override
+ */
+HeaderViewRenderer.prototype.canDecorate = function(element) {
+	return element.tagName === TagName.DIV.toString() && !element.firstChild;
+};
+
+HeaderViewRenderer.prototype.createDom = function(headerView) {
+	var element = goog.base(this, 'createDom', headerView);
+	return this.decorate(headerView, element);
+};
+
+HeaderViewRenderer.prototype.decorate = function(headerView, element) {
+	goog.base(this, 'decorate', headerView, element);
+	var domHelper = headerView.getDomHelper();
+
+	var orientationClass = (headerView.orientation() === Orientation.kHorizontal) ? Css.Horizontal : Css.Vertical;
+	classes.add(element, orientationClass);
+
+	var frag = document.createDocumentFragment();
+	var head = domHelper.createDom('thead', Css.Head);
+	var table = domHelper.createDom('table', Css.Table, head);
+	frag.appendChild(table);
+	element.appendChild(frag);
+
+	return element;	
+};
+
+/**
+ * Returns the CSS class to be applied to the root element of components
+ * rendered using this renderer.
+ * @return {string} Renderer-specific CSS class.
+ * @override
+ */
+HeaderViewRenderer.prototype.getCssClass = function() {
+  return Css.RootClass;
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Private functions
+/**
+ * @param {string} text
+ * @return {Element}
+ */
+HeaderViewRenderer.prototype.createHeaderCell_ = function(text) {
+	var th = dom.createDom('th', Css.Cell, text);
+	th.style.paddingTop = 0;
+	th.style.paddingBottom = 0;
+	th.style.borderTopWidth = 0;
+	th.style.borderBottomWidth = 0;
+	return th;
+};
+
+/**
+ * @return {boolean}
+ * @private
+ */
+HeaderViewRenderer.prototype.isHorizontalHeader_ = function(element) {
+	return classes.has(element, Css.Horizontal);
+};
+
+/**
+ * @param {Element} thead
+ * @param {Array.<strings>} strings
+ * @param {number} cellWidth
+ * @private
+ */
+HeaderViewRenderer.prototype.setHorizontalContent_ = function(thead, strings, cellWidth) {
+	var tr = this.trForHorizontalHeader_(thead);
+	var nStrings = strings.length;
+	var nCells = tr.cells.length;
+	var i;
+	for (i=0, z=Math.min(nCells, nStrings); i<z; i++) {
+		var cell = tr.cells[i];
+		dom.removeChildren(cell);
+		dom.setTextContent(cell, strings[i]);
+	}
+
+	for (; i< nStrings; i++) {
+		var th = this.createHeaderCell_(strings[i]);
+		th.style.width = cellWidth + 'px';
+		tr.appendChild(th);
+	}
+
+	// Remove any extra cells
+	for (var i=nCells-1; i>=nStrings; i--)
+		dom.removeNode(tr.childNodes[i]);
+};
+
+/**
+ * @param {Element} thead
+ * @param {Array.<strings>} strings
+ * @param {number=} optCellHeight
+ * @private
+ */
+HeaderViewRenderer.prototype.setVerticalContent_ = function(thead, strings, optCellHeight) {
+	var nStrings = strings.length;
+	var nRows = thead.rows.length;
+	var i;
+	for (i=0, z=Math.min(nRows, nStrings); i<z; i++) {
+		assert(thead.rows[i].cells.length === 1);
+		var cell = thead.rows[i].cells[0];
+		dom.removeChildren(cell);
+		dom.setTextContent(cell, strings[i]);
+	}
+
+	for (; i< nStrings; i++) {
+		var tr = dom.createDom('tr', Css.Row);
+		var th = this.createHeaderCell_(strings[i]);
+		if (goog.isDefAndNotNull(optCellHeight))
+			th.style.height = optCellHeight + 'px';
+		tr.appendChild(th);
+		thead.appendChild(tr);
+	}
+
+	// Remove any extra rows
+	for (var i=nRows-1; i>=nStrings; i--)
+		dom.removeNode(thead.childNodes[i]);
+};
+
+/**
+ * A horizontal header should have only one header row, but may have none if it has not yet been rendered (or is being
+ * rendered). This method returns the first header row if it is present, or creates one otherwise.
+ *
+ * @param {Element} thead
+ * @return {Element}
+ */
+HeaderViewRenderer.prototype.trForHorizontalHeader_ = function(thead) {
+	if (thead.rows.length > 0) {
+		assert(thead.rows.length === 1);
+		return thead.rows[0];
+	}
+
+	var tr = dom.createDom('tr', Css.Row);
+	thead.appendChild(tr);
+	return tr;
+};
+
+/*******************************************************************************************************************/});

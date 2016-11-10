@@ -1,0 +1,415 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.undoredo.UndoStack</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.meta.SignalSpy');
+goog.require('ag.undoredo.UndoStack');
+goog.require('ag.undoredo.UndoCommand');
+goog.require('ag.undoredo.MockUndoCommand');
+</script>
+<body>
+<script>
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	var x = new ag.undoredo.UndoStack();
+	assertFalse(x.canRedo());
+	assertFalse(x.canUndo());
+	assertEquals(x.cleanIndex(), 0);
+	assertEquals(x.count(), 0);
+	assertEquals(x.index(), 0);
+	assertTrue(x.isClean());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: canRedo
+function test_canRedo() {
+	var x = new ag.undoredo.UndoStack();
+	x.push(new ag.undoredo.UndoCommand());
+	assertFalse(x.canRedo());
+	x.undo();
+	assertTrue(x.canRedo());
+	x.redo();
+	assertFalse(x.canRedo());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: canUndo
+function test_canUndo() {
+	var x = new ag.undoredo.UndoStack();
+	x.push(new ag.undoredo.UndoCommand());
+	assertTrue(x.canUndo());
+	x.undo();
+	assertFalse(x.canUndo());
+	x.redo();
+	assertTrue(x.canUndo());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: cleanIndex
+// Also tests setClean
+function test_cleanIndex() {
+	var x = new ag.undoredo.UndoStack();
+	assertEquals(x.cleanIndex(), 0);
+	x.push(new ag.undoredo.UndoCommand());
+	assertEquals(x.cleanIndex(), 0);
+	assertTrue(x.canUndo());
+	x.setClean();
+	assertEquals(x.cleanIndex(), 1);
+	x.undo();
+	x.setClean();
+	assertEquals(x.cleanIndex(), 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: clear
+function test_clear() {
+	var x = new ag.undoredo.UndoStack();
+	x.push(new ag.undoredo.UndoCommand());
+	assertEquals(x.count(), 1);
+	assertFalse(x.isClean());
+	x.setClean();
+	x.clear();
+	assertEquals(x.count(), 0);
+	assertTrue(x.isClean());
+	assertEquals(x.cleanIndex(), 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: count
+function test_count() {
+	var x = new ag.undoredo.UndoStack();
+	assertEquals(x.count(), 0);
+	x.push(new ag.undoredo.UndoCommand());
+	assertEquals(x.count(), 1);
+	x.push(new ag.undoredo.UndoCommand());
+	x.push(new ag.undoredo.UndoCommand());
+	assertEquals(x.count(), 3);
+	x.clear();
+	assertEquals(x.count(), 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: index
+function test_index() {
+	var x = new ag.undoredo.UndoStack();
+	assertEquals(x.index(), 0);
+	x.push(new ag.undoredo.UndoCommand());
+	assertEquals(x.index(), 1);
+	x.push(new ag.undoredo.UndoCommand());
+	assertEquals(x.index(), 2);
+	x.undo();
+	assertEquals(x.index(), 1);
+	x.redo();
+	assertEquals(x.index(), 2);
+	x.undo();
+	x.undo();
+	assertEquals(x.index(), 0);
+	x.redo();
+	x.redo();
+	assertEquals(x.index(), 2);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: isClean
+function test_isClean() {
+	var x = new ag.undoredo.UndoStack();
+	assertTrue(x.isClean());
+	x.push(new ag.undoredo.UndoCommand());
+	assertFalse(x.isClean());
+	x.undo();
+	assertTrue(x.isClean());
+	x.redo();
+	assertFalse(x.isClean());
+	x.setClean();
+	assertTrue(x.isClean());
+	x.undo();
+	assertFalse(x.isClean());
+	x.redo();
+	assertTrue(x.isClean());
+	x.undo();
+	x.clear();
+	assertTrue(x.isClean());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: push
+function test_push() {
+	var x = new ag.undoredo.UndoStack();
+	var y = new ag.undoredo.MockUndoCommand();
+	assertEquals(y.redoCount, 0);
+
+	x.push(y);
+	assertEquals(y.redoCount, 1);
+	assertEquals(x.count(), 1);
+	x.clear();
+	assertEquals(x.count(), 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: pushSignals
+function test_pushSignals() {
+	var x = new ag.undoredo.UndoStack();
+	var y = new ag.undoredo.MockUndoCommand();
+	var z = new ag.undoredo.MockUndoCommand();
+
+	var spyCanUndoChanged = new ag.meta.SignalSpy(x, ag.undoredo.UndoStack.SignalType.CAN_UNDO_CHANGED);
+	var spyCanRedoChanged = new ag.meta.SignalSpy(x, ag.undoredo.UndoStack.SignalType.CAN_REDO_CHANGED);
+
+	x.push(y);
+	assertEquals(spyCanUndoChanged.size(), 1);
+	assertEquals(spyCanUndoChanged.signals()[0][0], true);
+	assertEquals(spyCanRedoChanged.size(), 0);
+	spyCanUndoChanged.clear();
+
+	x.push(z);
+	assertEquals(spyCanUndoChanged.size(), 0);
+	assertEquals(spyCanRedoChanged.size(), 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: redo
+function test_redo() {
+	var x = new ag.undoredo.UndoStack();
+	x.redo();
+	assertEquals(x.index(), 0);
+	assertTrue(x.isClean());
+
+	var y = new ag.undoredo.MockUndoCommand();
+	x.push(y);
+	assertEquals(y.redoCount, 1);
+	x.undo();
+	assertEquals(y.redoCount, 1);
+	x.redo();
+	assertEquals(y.redoCount, 2);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: redoSignals
+function test_redoSignals() {
+	var x = new ag.undoredo.UndoStack();
+	var y = new ag.undoredo.MockUndoCommand();
+	var z = new ag.undoredo.MockUndoCommand();
+
+	var spyCanRedoChanged = new ag.meta.SignalSpy(x, ag.undoredo.UndoStack.SignalType.CAN_REDO_CHANGED);
+
+	x.push(y);
+	x.push(z);
+	assertEquals(spyCanRedoChanged.size(), 0);
+
+	x.undo();
+	assertEquals(spyCanRedoChanged.size(), 1);
+	assertEquals(spyCanRedoChanged.signals()[0][0], true);
+	spyCanRedoChanged.clear();
+
+	x.redo();
+	assertEquals(spyCanRedoChanged.size(), 1);
+	assertEquals(spyCanRedoChanged.signals()[0][0], false);
+
+	x.undo();
+	spyCanRedoChanged.clear();
+	x.undo();
+	x.redo();
+	assertEquals(spyCanRedoChanged.size(), 0);
+
+	x.redo();
+	assertEquals(spyCanRedoChanged.size(), 1);
+	assertEquals(spyCanRedoChanged.signals()[0][0], false);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: setIndex
+function test_setIndex() {
+	var x = new ag.undoredo.UndoStack();
+	var a = new ag.undoredo.MockUndoCommand();
+	var b = new ag.undoredo.MockUndoCommand();
+	var c = new ag.undoredo.MockUndoCommand();
+	x.push(a);
+	x.push(b);
+	x.push(c);
+
+	assertEquals(x.index(), 3);
+	assertEquals(a.undoCount, 0);
+	assertEquals(b.undoCount, 0);
+	assertEquals(c.undoCount, 0);
+
+	x.setIndex(3);
+	assertEquals(x.index(), 3);
+	assertEquals(a.undoCount, 0);	assertEquals(a.redoCount, 1);
+	assertEquals(b.undoCount, 0);	assertEquals(b.redoCount, 1);
+	assertEquals(c.undoCount, 0);	assertEquals(c.redoCount, 1);
+
+	x.setIndex(2);
+	assertEquals(x.index(), 2);
+	assertEquals(a.undoCount, 0);	assertEquals(a.redoCount, 1);
+	assertEquals(b.undoCount, 0);	assertEquals(b.redoCount, 1);
+	assertEquals(c.undoCount, 1);	assertEquals(c.redoCount, 1);
+
+	x.setIndex(0);
+	assertEquals(x.index(), 0);
+	assertEquals(a.undoCount, 1);	assertEquals(a.redoCount, 1);
+	assertEquals(b.undoCount, 1);	assertEquals(b.redoCount, 1);
+	assertEquals(c.undoCount, 1);	assertEquals(c.redoCount, 1);
+
+	x.setIndex(1);
+	assertEquals(x.index(), 1);
+	assertEquals(a.undoCount, 1);	assertEquals(a.redoCount, 2);
+	assertEquals(b.undoCount, 1);	assertEquals(b.redoCount, 1);
+	assertEquals(c.undoCount, 1);	assertEquals(c.redoCount, 1);
+
+	x.setIndex(3);
+	assertEquals(x.index(), 3);
+	assertEquals(a.undoCount, 1);	assertEquals(a.redoCount, 2);
+	assertEquals(b.undoCount, 1);	assertEquals(b.redoCount, 2);
+	assertEquals(c.undoCount, 1);	assertEquals(c.redoCount, 2);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: setIndexSignals
+function test_setIndexSignals() {
+	var x = new ag.undoredo.UndoStack();
+	var a = new ag.undoredo.MockUndoCommand();
+	var b = new ag.undoredo.MockUndoCommand();
+	var c = new ag.undoredo.MockUndoCommand();
+	x.push(a);
+	x.push(b);
+	x.push(c);
+
+	var spyCanRedoChanged = new ag.meta.SignalSpy(x, ag.undoredo.UndoStack.SignalType.CAN_REDO_CHANGED);
+	var spyCanUndoChanged = new ag.meta.SignalSpy(x, ag.undoredo.UndoStack.SignalType.CAN_UNDO_CHANGED);
+
+	x.setIndex(0);
+	assertEquals(spyCanRedoChanged.size(), 1);
+	assertEquals(spyCanRedoChanged.signals()[0][0], true);
+	assertEquals(spyCanUndoChanged.size(), 1);
+	assertEquals(spyCanUndoChanged.signals()[0][0], false);
+	spyCanRedoChanged.clear();
+	spyCanUndoChanged.clear();
+
+	x.setIndex(0);
+	assertEquals(spyCanRedoChanged.size(), 0);
+	assertEquals(spyCanUndoChanged.size(), 0);
+
+	x.setIndex(3);
+	assertEquals(spyCanRedoChanged.size(), 1);
+	assertEquals(spyCanRedoChanged.signals()[0][0], false);
+	assertEquals(spyCanUndoChanged.size(), 1);
+	assertEquals(spyCanUndoChanged.signals()[0][0], true);
+	spyCanRedoChanged.clear();
+	spyCanUndoChanged.clear();
+
+	x.setIndex(1);
+	assertEquals(spyCanRedoChanged.size(), 1);
+	assertEquals(spyCanRedoChanged.signals()[0][0], true);
+	assertEquals(spyCanUndoChanged.size(), 0);
+
+	x.setIndex(0);
+	spyCanRedoChanged.clear();
+	spyCanUndoChanged.clear();
+	x.setIndex(1);
+	assertEquals(spyCanRedoChanged.size(), 0);
+	assertEquals(spyCanUndoChanged.size(), 1);
+	assertEquals(spyCanUndoChanged.signals()[0][0], true);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: undo
+function test_undo() {
+	var x = new ag.undoredo.UndoStack();
+	x.undo();
+	assertEquals(x.index(), 0);
+	assertTrue(x.isClean());
+
+	var y = new ag.undoredo.MockUndoCommand();
+	x.push(y);
+	assertEquals(y.undoCount, 0);
+	x.undo();
+	assertEquals(y.undoCount, 1);
+	x.redo();
+	assertEquals(y.undoCount, 1);
+	x.undo();
+	assertEquals(y.undoCount, 2);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: redoSignals
+function test_undoSignals() {
+	var x = new ag.undoredo.UndoStack();
+	var y = new ag.undoredo.MockUndoCommand();
+	var z = new ag.undoredo.MockUndoCommand();
+
+	var spyCanUndoChanged = new ag.meta.SignalSpy(x, ag.undoredo.UndoStack.SignalType.CAN_UNDO_CHANGED);
+
+	x.push(y);
+	assertEquals(spyCanUndoChanged.size(), 1);
+	assertEquals(spyCanUndoChanged.signals()[0][0], true);
+	spyCanUndoChanged.clear();
+
+	x.push(z);
+	x.undo();
+	assertEquals(spyCanUndoChanged.size(), 0);
+
+	x.undo();
+	assertEquals(spyCanUndoChanged.size(), 1);
+	assertEquals(spyCanUndoChanged.signals()[0][0], false);
+	spyCanUndoChanged.clear();
+
+	x.redo();
+	assertEquals(spyCanUndoChanged.size(), 1);
+	assertEquals(spyCanUndoChanged.signals()[0][0], true);
+	spyCanUndoChanged.clear();
+
+	x.redo();
+	assertEquals(spyCanUndoChanged.size(), 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: removeUndoneCommands
+function test_removeUndoneCommands() {
+	var x = new ag.undoredo.UndoStack();
+
+	var y = new ag.undoredo.MockUndoCommand();
+	var z = new ag.undoredo.MockUndoCommand();
+	var z2 = new ag.undoredo.MockUndoCommand();
+	var x2 = new ag.undoredo.MockUndoCommand();
+
+	x.push(y);
+	x.push(z);
+	x.undo();
+	x.push(z2);
+	assertTrue(z.isDisposed());
+	assertEquals(x.count(), 2);
+	x.undo();
+	x.undo();
+	x.push(x2);
+	assertEquals(x.count(), 1);
+	assertTrue(y.isDisposed());
+	assertTrue(z2.isDisposed());
+};
+</script>
+</body>
+</html

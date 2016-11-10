@@ -1,0 +1,777 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.model.ItemSelectionModel</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.array');
+
+// goog.require('ag.core.UnitRect');
+// goog.require('ag.core.UnitRectSet');
+goog.require('ag.meta.SignalSpy');
+goog.require('ag.model.ItemSelection');
+goog.require('ag.model.ItemSelectionModel');
+goog.require('ag.model.ItemSelectionRange');
+goog.require('ag.model.AbstractItemModel');
+goog.require('ag.model.MockItemModel');
+goog.require('ag.model.ModelConstants');
+</script>
+<body>
+<script>
+// Aliases
+var array = goog.array;
+
+var AbstractItemModel = ag.model.AbstractItemModel;
+var ItemSelection = ag.model.ItemSelection;
+var ItemSelectionModel = ag.model.ItemSelectionModel;
+var ItemSelectionRange = ag.model.ItemSelectionRange;
+var MockItemModel = ag.model.MockItemModel;
+var ModelIndex = ag.model.ModelIndex;
+var ModelConstants = ag.model.ModelConstants;
+var SignalSpy = ag.meta.SignalSpy;
+// var UnitRect = ag.core.UnitRect;
+// var UnitRectSet = ag.core.UnitRectSet;
+
+var SelectionFlag = ModelConstants.SelectionFlag;
+var SignalType = ItemSelectionModel.SignalType;
+
+var mockModel;
+var index00;
+var index02;
+var index10;
+var index11;
+var index12;
+var index21;
+var invalidIndex;
+
+var x;
+var spyCurrentChanged;
+var spyCurrentColumnChanged;
+var spyCurrentRowChanged;
+var spySelectionChanged;
+
+// --------------------------------------------------------------------------------------------------------------------
+function setUp() {
+	mockModel = new MockItemModel();
+	mockModel.insertRows(MockItemModel.moreMockData(), mockModel.rowCount());
+	index00 = mockModel.index(0, 0);
+	index02 = mockModel.index(0, 2);
+	index10 = mockModel.index(1, 0);
+	index11 = mockModel.index(1, 1);
+	index12 = mockModel.index(1, 2);
+	index21 = mockModel.index(2, 1);
+	invalidIndex = new ModelIndex();
+
+	setUpX();
+};
+
+function setUpX() {
+	if (spyCurrentChanged) {
+		spyCurrentChanged.dispose();
+		spyCurrentColumnChanged.dispose();
+		spyCurrentRowChanged.dispose();
+		spySelectionChanged.dispose();
+	}
+
+	x = new ItemSelectionModel(mockModel);
+	spyCurrentChanged = new SignalSpy(x, SignalType.CURRENT_CHANGED);
+	spyCurrentColumnChanged = new SignalSpy(x, SignalType.CURRENT_COLUMN_CHANGED);
+	spyCurrentRowChanged = new SignalSpy(x, SignalType.CURRENT_ROW_CHANGED);
+	spySelectionChanged = new SignalSpy(x, SignalType.SELECTION_CHANGED);
+};
+
+function clearAllSpies() {
+	spyCurrentChanged.clear();
+	spyCurrentColumnChanged.clear();
+	spyCurrentRowChanged.clear();
+	spySelectionChanged.clear();
+}
+
+function tearDown() {
+	spyCurrentChanged.dispose();
+	spyCurrentColumnChanged.dispose();
+	spyCurrentRowChanged.dispose();
+	spySelectionChanged.dispose();
+
+	x.dispose();
+
+	index00 = null;
+	index02 = null;
+	index10 = null;
+	index11 = null;
+	index12 = null;
+	index21 = null;
+	invalidIndex = null;
+
+	mockModel.dispose();
+	mockModel = null;
+};
+
+// A cheap way to quickly create a selection from a string
+// '1,1;2,1'
+function createSelectionFromString(string) {
+	var selection = new ItemSelection();
+	var stringIndices = string.split(';');
+	for (var i=0; i<stringIndices.length; i++) {
+		var vals = stringIndices[i].split(',');
+		var row = parseInt(vals[0]);
+		var col = parseInt(vals[1]);
+		selection.select(mockModel.index(row, col));
+	}
+	return selection;
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_constructor() {
+	var x = new ItemSelectionModel(mockModel);
+
+	assertEquals(x.sourceModel(), mockModel);
+	assertFalse(x.currentIndex().isValid());
+	assertFalse(x.hasSelection());
+
+	x.dispose();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_clear() {
+	x.setCurrentIndex(index11, SelectionFlag.Select);
+	assertTrue(x.isSelected(index11));
+	assertTrue(x.currentIndex().eq(index11));
+
+	clearAllSpies();
+
+	x.clear();
+	assertFalse(x.currentIndex().isValid());
+	assertFalse(x.hasSelection());
+
+	// Check that the signals were emitted properly
+	assertEquals(spySelectionChanged.size(), 1);
+	assertTrue(spySelectionChanged.signals()[0][0].isEmpty());
+	var deselected = spySelectionChanged.signals()[0][1];
+	assertEquals(deselected.indices().length, 1);
+	assertTrue(deselected.indices()[0].eq(index11));
+
+	assertEquals(spyCurrentChanged.size(), 1);
+	assertTrue(spyCurrentChanged.signals()[0][0].eq(invalidIndex));
+	assertTrue(spyCurrentChanged.signals()[0][1].eq(index11));
+
+	assertEquals(spyCurrentRowChanged.size(), 1);
+	assertTrue(spyCurrentRowChanged.signals()[0][0].eq(invalidIndex));
+	assertTrue(spyCurrentRowChanged.signals()[0][1].eq(index11));
+
+	assertEquals(spyCurrentColumnChanged.size(), 1);
+	assertTrue(spyCurrentColumnChanged.signals()[0][0].eq(invalidIndex));
+	assertTrue(spyCurrentColumnChanged.signals()[0][1].eq(index11));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_clearSelection() {
+	x.selectIndex(index00, SelectionFlag.Select);
+	clearAllSpies();
+
+	assertTrue(x.hasSelection());
+	x.clearSelection();
+	assertFalse(x.hasSelection());
+
+	assertEquals(spySelectionChanged.size(), 1);
+	assertTrue(spySelectionChanged.signals()[0][0].isEmpty());
+	var deselected = spySelectionChanged.signals()[0][1];
+	assertEquals(deselected.indices().length, 1);
+	assertTrue(deselected.indices()[0].eq(index00));
+
+	// Mutiple selection
+	x.selectSelection(createSelectionFromString('0,0;1,2'), SelectionFlag.Select);
+	assertTrue(x.hasSelection());
+	clearAllSpies();
+	x.clearSelection();
+	assertFalse(x.hasSelection());
+
+	assertTrue(spySelectionChanged.signals()[0][0].isEmpty());
+	var deselected = spySelectionChanged.signals()[0][1];
+	assertEquals(deselected.indices().length, 2);
+	assertTrue(deselected.indices()[0].eq(index00) || deselected.indices()[1].eq(index00));
+	assertTrue(deselected.indices()[1].eq(index12) || deselected.indices()[1].eq(index12));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_entireSelectionSpace() {
+	var y = new ItemSelectionModel();
+	assertTrue(y.entireSelectionSpace().isEmpty());
+
+	var cells = [];
+	for (var i=0; i<mockModel.rowCount(); i++)
+		for (var j=0; j<mockModel.columnCount(); j++)
+			cells.push(i + ',' + j);
+	var selString = cells.join(';');
+
+	var expect = createSelectionFromString(selString);
+	var actual = x.entireSelectionSpace();
+	assertSelectionsAreEqual(actual, expect);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_hasSelection() {
+	assertFalse(x.hasSelection());
+	x.selectIndex(index00, SelectionFlag.Select);
+	assertTrue(x.hasSelection());
+	x.selectIndex(index00, SelectionFlag.Deselect);
+	assertFalse(x.hasSelection());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_isColumnSelected() {
+	for (var i=0; i<mockModel.columnCount(); i++)
+		assertFalse(x.isColumnSelected(i));
+
+	x.selectIndex(index00, SelectionFlag.Select | SelectionFlag.Columns);
+	x.selectIndex(index02, SelectionFlag.Select | SelectionFlag.Columns);
+
+	for (var i=0; i<mockModel.columnCount(); i++) {
+		assertEquals(x.isColumnSelected(i), i === 0 || i === 2);
+	}
+
+	x.selectIndex(index00, SelectionFlag.Deselect);
+	assertFalse(x.isColumnSelected(0));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_isRowSelected() {
+	for (var i=0; i<mockModel.rowCount(); i++)
+		assertFalse(x.isRowSelected(i));
+
+	x.selectIndex(index00, SelectionFlag.Select | SelectionFlag.Rows);
+	x.selectIndex(index21, SelectionFlag.Select | SelectionFlag.Rows);
+
+	for (var i=0; i<mockModel.columnCount(); i++) {
+		assertEquals(x.isRowSelected(i), i === 0 || i === 2);
+	}
+
+	x.selectIndex(index00, SelectionFlag.Deselect);
+	assertFalse(x.isRowSelected(0));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_isSelected() {
+	assertFalse(x.isSelected(index00));
+	x.selectIndex(index00, SelectionFlag.Select);
+	assertTrue(x.isSelected(index00));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_selectedColumns() {
+	x = new ItemSelectionModel();
+	assertTrue(x.selectedColumns().isEmpty());
+
+	x = new ItemSelectionModel(mockModel);
+	var rowCount = mockModel.rowCount();
+	for (var i=0; i<rowCount; i++)
+		assertEquals(x.selectedColumns(i).length, 0);
+
+	x.selectIndex(index00, SelectionFlag.Select | SelectionFlag.Columns);
+	var y = x.selectedColumns();
+	assertEquals(y.length, 1);
+	assertTrue(y[0].eq(index00));
+
+	x.selectIndex(index02, SelectionFlag.Select | SelectionFlag.Columns);
+	x.selectIndex(index10, SelectionFlag.Deselect);
+	y = x.selectedColumns(0);
+	assertEquals(y.length, 1);
+	assertTrue(y[0].eq(index02));
+	x.selectIndex(index02, SelectionFlag.Deselect);
+	assertTrue(x.selectedColumns().isEmpty());
+
+	// Check that the row parameter works sufficiently
+	x.clearSelection();
+	x.selectIndex(index00, SelectionFlag.Select | SelectionFlag.Columns);
+	x.selectIndex(index02, SelectionFlag.Select | SelectionFlag.Columns);
+	y = x.selectedColumns(1);
+	assertEquals(y.length, 2);
+	assertEquals(y[0].row(), 1);
+	assertEquals(y[1].row(), 1);
+	assertTrue((y[0].column() === 0 && y[1].column() === 2) ||
+			   (y[0].column() === 2 && y[1].column() === 0));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_selectedIndices() {
+	assertTrue(x.selectedIndices().isEmpty());
+
+	x.selectIndex(index11, SelectionFlag.Select);
+	assertEquals(x.selectedIndices().length, 1);
+	assertTrue(x.selectedIndices()[0].eq(index11));
+
+	x.selectIndex(index21, SelectionFlag.Select);
+	assertEquals(x.selectedIndices().length, 2);
+	var indices = x.selectedIndices();
+	assertTrue(indices[0].eq(index11) || indices[1].eq(index11));
+	assertTrue(indices[0].eq(index21) || indices[1].eq(index21));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_selectedRows() {
+	x = new ItemSelectionModel();
+	assertTrue(x.selectedRows().isEmpty());
+
+	x = new ItemSelectionModel(mockModel);
+	var rowCount = mockModel.rowCount();
+	for (var i=0; i<rowCount; i++)
+		assertEquals(x.selectedRows(i).length, 0);
+
+	x.selectIndex(index00, SelectionFlag.Select | SelectionFlag.Rows);
+	var y = x.selectedRows();
+	assertEquals(y.length, 1);
+	assertTrue(y[0].eq(index00));
+
+	x.selectIndex(index21, SelectionFlag.Select | SelectionFlag.Rows);
+	x.selectIndex(index02, SelectionFlag.Deselect);
+	y = x.selectedRows(0);
+	assertEquals(y.length, 1);
+	assertTrue(y[0].eq(mockModel.index(2, 0)));
+	x.selectIndex(index21, SelectionFlag.Deselect);
+	assertTrue(x.selectedRows().isEmpty());
+
+	// Check that the column parameter works sufficiently
+	x.clearSelection();
+	x.selectIndex(index00, SelectionFlag.Select | SelectionFlag.Rows);
+	x.selectIndex(index21, SelectionFlag.Select | SelectionFlag.Rows);
+	y = x.selectedRows(1);
+	assertEquals(y.length, 2);
+	assertEquals(y[0].column(), 1);
+	assertEquals(y[1].column(), 1);
+	assertTrue((y[0].row() === 0 && y[1].row() === 2) ||
+			   (y[0].row() === 2 && y[1].row() === 0));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_sourceModel() {
+	assertEquals(x.sourceModel(), mockModel);
+	x = new ItemSelectionModel();
+	assertNull(x.sourceModel());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_sourceModelChangeLayout() {
+	x.selectIndex(index10, SelectionFlag.Select | SelectionFlag.Rows);
+	x.selectIndex(mockModel.index(3, 1), SelectionFlag.Select);
+	x.setCurrentIndex(index21);
+	var savedSel = x.selection().clone();
+
+	// Reverse the rows - this triggers a change in the layout
+	var spySelLayoutAboutToBeChanged = new SignalSpy(x, ItemSelectionModel.SignalType.SELECTION_LAYOUT_ABOUT_TO_BE_CHANGED);
+	var spySelLayoutChanged = new SignalSpy(x, ItemSelectionModel.SignalType.SELECTION_LAYOUT_CHANGED);
+	mockModel.reverseRows();
+	assertSelectionsAreEqual(x.selection(), createSelectionFromString('4,1;6,0;6,1;6,2'));
+	assertTrue(x.currentIndex().eq(mockModel.index(5, 1)));
+
+	// Check that the layout change corresponds to two selection
+	assertEquals(spySelLayoutAboutToBeChanged.size(), 1);
+	assertEquals(spySelLayoutChanged.size(), 1);
+
+	mockModel.reverseRows();
+	assertSelectionsAreEqual(x.selection(), savedSel);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_sourceModelInsertRows() {
+	mockModel.insertRows(MockItemModel.moreMockData(), 0);
+	assertFalse(x.hasSelection());
+	setUpX();
+
+	x.selectIndex(index10, SelectionFlag.Select | SelectionFlag.Rows);
+	x.selectIndex(mockModel.index(3, 1), SelectionFlag.Select);
+	x.setCurrentIndex(index11);
+	var savedSel = x.selection().clone();
+
+	// Insert in mock model beyond the selection - should not change anything
+	mockModel.insertRow(MockItemModel.randomInsertRow(), mockModel.rowCount());
+	assertSelectionsAreEqual(savedSel, x.selection());
+	assertTrue(x.currentIndex().eq(index11));
+
+	// Insert into the middle
+	mockModel.insertRow(MockItemModel.randomInsertRow(), 2);
+	assertSelectionsAreEqual(x.selection(), createSelectionFromString('1,0;1,1;1,2;4,1'));
+	assertTrue(x.currentIndex().eq(index11));
+
+	// Insert at the beginning
+	mockModel.insertRows([MockItemModel.randomInsertRow(), MockItemModel.randomInsertRow()], 0);
+	assertSelectionsAreEqual(x.selection(), createSelectionFromString('3,0;3,1;3,2;6,1'));
+	assertTrue(x.currentIndex().eq(mockModel.index(3, 1)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_sourceModelMoveRows() {
+	mockModel.insertRows(MockItemModel.moreMockData(), mockModel.rowCount());
+
+	x.selectIndex(index10, SelectionFlag.Select | SelectionFlag.Rows);
+	x.selectIndex(index21, SelectionFlag.Select | SelectionFlag.Rows);
+	x.selectIndex(mockModel.index(3, 1), SelectionFlag.Select);
+	x.setCurrentIndex(mockModel.index(3, 1));
+	var savedSel = x.selection().clone();
+
+	// Move rows beyond selection should do nothing
+	mockModel.moveRows(4, 6, 5);
+	assertSelectionsAreEqual(x.selection(), savedSel);
+
+	// Move row 7 to first row and check that selection has moved appropriately
+	// Final id order: 70123456
+	//                   **|
+	mockModel.moveRows(7, 7, 0);
+	assertSelectionsAreEqual(x.selection(), createSelectionFromString('2,0;2,1;2,2;3,0;3,1;3,2;4,1'));
+	assertTrue(x.currentIndex().eq(mockModel.index(4, 1)));
+
+	// Move first two rows (ids: 7 and 0) to row 1 (between the selection)
+	// Final id order: 17023456
+	//                 *  *|
+	mockModel.moveRows(0, 1, 1);
+	assertSelectionsAreEqual(x.selection(), createSelectionFromString('0,0;0,1;0,2;3,0;3,1;3,2;4,1'));
+	assertTrue(x.currentIndex().eq(mockModel.index(4, 1)));
+
+	// Move the last row downwards
+	// Final id order: 17024563
+	//                 *  *   |
+	mockModel.moveRows(4, 4, 7);
+	assertSelectionsAreEqual(x.selection(), createSelectionFromString('0,0;0,1;0,2;3,0;3,1;3,2;7,1'));
+	assertTrue(x.currentIndex().eq(mockModel.index(7, 1)));
+
+	// Final id order: 17563024
+	//                 *   | *
+	mockModel.moveRows(2, 4, 5);
+	assertSelectionsAreEqual(x.selection(), createSelectionFromString('0,0;0,1;0,2;4,1;6,0;6,1;6,2'));
+	assertTrue(x.currentIndex().eq(mockModel.index(4, 1)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_sourceModelRemoveRows() {
+	x.selectIndex(index10, SelectionFlag.Select | SelectionFlag.Rows);
+	x.selectIndex(index21, SelectionFlag.Select | SelectionFlag.Rows);
+	x.selectIndex(mockModel.index(3, 1), SelectionFlag.Select);
+	x.setCurrentIndex(mockModel.index(3, 1));
+	var savedSel = x.selection().clone();
+	mockModel.insertRows(MockItemModel.moreMockData(), mockModel.rowCount());
+
+	// Remove rows beyond the selection - should not change anything
+	mockModel.removeRows(5, 2);
+	assertSelectionsAreEqual(savedSel, x.selection());
+	assertTrue(x.currentIndex().eq(mockModel.index(3, 1)));
+
+	// Remove rows from middle of selection
+	mockModel.removeRows(2, 1);
+	assertSelectionsAreEqual(x.selection(), createSelectionFromString('1,0;1,1;1,2;2,1'));
+	assertTrue(x.currentIndex().eq(index21));
+
+	// Remove rows from beginning of selection
+	mockModel.removeRows(1);
+	assertSelectionsAreEqual(x.selection(), createSelectionFromString('1,1'));
+	assertTrue(x.currentIndex().eq(index11));
+
+	mockModel.removeRows(0, 2);
+	assertFalse(x.hasSelection());
+	assertFalse(x.currentIndex().isValid());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_sourceModelReset() {
+	x.setCurrentIndex(index00, SelectionFlag.Select);
+	assertTrue(x.hasSelection());
+	assertTrue(x.currentIndex().isValid());
+	clearAllSpies();
+	mockModel.reset();
+	assertFalse(x.hasSelection());
+	assertFalse(x.currentIndex().isValid());
+
+	assertTrue(spySelectionChanged.isEmpty());
+	assertTrue(spyCurrentChanged.isEmpty());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function createSelectTest(startSelection,
+						  startCurrentIndex,
+						  input,
+						  command,
+						  expectSelection,
+						  expectCurrentIndex,
+						  deltaSelected,
+						  deltaDeselected) {
+	return {
+		startSelection: (startSelection instanceof ModelIndex) ? startSelection : createSelectionFromString(startSelection),
+		startSelectionIsIndex: (startSelection instanceof ModelIndex),
+		startCurrentIndex: startCurrentIndex,
+		input: (input instanceof ModelIndex) ? input : createSelectionFromString(input),
+		inputIsIndex: (input instanceof ModelIndex),
+		command: command,
+		expectSelection: createSelectionFromString(expectSelection),
+		expectCurrentIndex: expectCurrentIndex,
+		deltaSelected: (deltaSelected) ? createSelectionFromString(deltaSelected) : null,
+		deltaDeselected: (deltaDeselected) ? createSelectionFromString(deltaDeselected) : null
+	};
+};
+
+function coverageFromIndices(indices) {
+	var hash = {};
+	for (var i=0; i< indices.length; i++) {
+		var index = indices[i];
+		var key = index.row() + ',' + index.column();
+		if (hash.hasOwnProperty(key))
+			hash[key]++;
+		else
+			hash[key] = 1;
+	}
+	return hash;
+};
+
+function assertSelectionsAreEqual(sel1, sel2) {
+	var coverage1 = coverageFromIndices(sel1.indices());
+	var coverage2 = coverageFromIndices(sel2.indices());
+	assertHashEquals(coverage1, coverage2);
+};
+
+function initializeModelFromTestRow(testRow) {
+	setUpX();
+
+	// Configure the initial state
+	if (testRow.startSelectionIsIndex)
+		x.selectIndex(testRow.startSelection, SelectionFlag.Select);
+	else
+		x.selectSelection(testRow.startSelection, SelectionFlag.Select);
+	x.setCurrentIndex(testRow.startCurrentIndex, SelectionFlag.NoChange);
+
+	// As a consequence, this may have triggered some signals
+	clearAllSpies();
+};
+
+function checkResult(itemSelelectionModel, testRow) {
+	assertSelectionsAreEqual(itemSelelectionModel.selection(), testRow.expectSelection);
+	assertTrue(itemSelelectionModel.currentIndex().eq(testRow.expectCurrentIndex));
+
+	// -----------------
+	// Check the signals
+	// o selection changed
+	if (testRow.deltaSelected || testRow.deltaDeselected) {
+		assertEquals(spySelectionChanged.size(), 1);
+		var selected = spySelectionChanged.signals()[0][0];
+		var deselected = spySelectionChanged.signals()[0][1];
+
+		var expectSelected = (testRow.deltaSelected) ? testRow.deltaSelected : new ItemSelection();
+		var expectDeselected = (testRow.deltaDeselected) ? testRow.deltaDeselected : new ItemSelection();
+
+		assertEquals(selected.area(), expectSelected.area());
+		assertSelectionsAreEqual(selected, expectSelected);
+
+		assertEquals(deselected.area(), expectDeselected.area());
+		assertSelectionsAreEqual(deselected, expectDeselected);
+	}
+	else {
+		assertTrue(spySelectionChanged.isEmpty());
+	}
+
+	// o current*
+	if (!testRow.startCurrentIndex.eq(testRow.expectCurrentIndex)) {
+		assertEquals(spyCurrentChanged.size(), 1);
+		var newCurrent = spyCurrentChanged.signals()[0][0];
+		var oldCurrent = spyCurrentChanged.signals()[0][1];
+		assertTrue(newCurrent.eq(testRow.expectCurrentIndex));
+		assertTrue(oldCurrent.eq(testRow.startCurrentIndex));
+
+		if (testRow.startCurrentIndex.row() != testRow.expectCurrentIndex.row()) {
+			assertEquals(spyCurrentRowChanged.size(), 1);
+			assertTrue(spyCurrentRowChanged.signals()[0][0].eq(newCurrent));
+			assertTrue(spyCurrentRowChanged.signals()[0][1].eq(oldCurrent));
+		}
+		else {
+			assertTrue(spyCurrentRowChanged.isEmpty());
+		}
+
+		if (testRow.startCurrentIndex.column() != testRow.expectCurrentIndex.column()) {
+			assertEquals(spyCurrentColumnChanged.size(), 1);
+			assertTrue(spyCurrentColumnChanged.signals()[0][0].eq(newCurrent));
+			assertTrue(spyCurrentColumnChanged.signals()[0][1].eq(oldCurrent));
+		}
+		else {
+			assertTrue(spyCurrentColumnChanged.isEmpty());
+		}
+	}
+	else {
+		assertTrue(spyCurrentChanged.isEmpty());
+		assertTrue(spyCurrentRowChanged.isEmpty());
+		assertTrue(spyCurrentColumnChanged.isEmpty());
+	}
+};
+
+function test_selectIndexAndSelectSelection() {
+	var testRows = [];
+	// -------------------------------------------
+	// SUITE: (selection) single index input manipulations
+	// Nothing + nothing
+	testRows.push(createSelectTest('', invalidIndex, invalidIndex, SelectionFlag.Select, '', invalidIndex));
+	// Nothing + 1,1
+	testRows.push(createSelectTest('', invalidIndex, index11, SelectionFlag.Select, '1,1', invalidIndex, '1,1'));
+	// 1,1 + 1,1
+	testRows.push(createSelectTest('1,1', invalidIndex, index11, SelectionFlag.Select, '1,1', invalidIndex));
+	// 1,1 + 1,2
+	testRows.push(createSelectTest('1,1', invalidIndex, index12, SelectionFlag.Select, '1,1;1,2', invalidIndex, '1,2'));
+	// Clear and select individual index: 1,1 -> 1,2
+	testRows.push(createSelectTest('1,1', invalidIndex, index12, SelectionFlag.ClearAndSelect, '1,2', invalidIndex, '1,2', '1,1'));
+	// Clear and select same index: 1,1 -> clear -> 1,1
+	testRows.push(createSelectTest('1,1', invalidIndex, index11, SelectionFlag.ClearAndSelect, '1,1', invalidIndex));
+	testRows.push(createSelectTest('1,1', invalidIndex, index11, SelectionFlag.Clear | SelectionFlag.Toggle, '1,1', invalidIndex));
+
+	// Group 2 input expansions
+	// Current index
+	// Include invalid current index
+	testRows.push(createSelectTest('1,1', invalidIndex, index12, SelectionFlag.SelectCurrent, '1,1,;1,2', invalidIndex, '1,2'));
+	// Include valid current index that is already selected
+	testRows.push(createSelectTest('1,1', index11, index12, SelectionFlag.SelectCurrent, '1,1;1,2', index11, '1,2'));
+	// Include current index that is not already selected
+	testRows.push(createSelectTest('1,1', index00, index12, SelectionFlag.SelectCurrent, '0,0;1,1;1,2', index00, '0,0;1,2'));
+	// Clear, select, and current
+	testRows.push(createSelectTest('2,0', index21, index11, SelectionFlag.Clear | SelectionFlag.Current | SelectionFlag.Select, '1,1;2,1', index21, '1,1;2,1', '2,0'));
+
+	// Row expansion
+	// nothing + 1,1 => row expansion -> 1,0 .. 1,2
+	testRows.push(createSelectTest(invalidIndex, index00, '1,1', SelectionFlag.Rows | SelectionFlag.Select, '1,0;1,1;1,2', index00, '1,0;1,1;1,2'));
+	// 1,1 + 1,1 => row expansion -> 1,0 .. 1,2
+	testRows.push(createSelectTest('1,1', index00, '1,1', SelectionFlag.Rows | SelectionFlag.Select, '1,0;1,1;1,2', index00, '1,0;1,2'));
+	// 0,0;1,1 + 1,1 => row expansion -> '0,0' ; 1,0 .. 1,2
+	testRows.push(createSelectTest('0,0;1,1', index00, '1,1', SelectionFlag.Rows | SelectionFlag.Select, '0,0;1,0;1,1;1,2', index00, '1,0;1,2'));
+	// Clear, row, and select
+	testRows.push(createSelectTest('0,0;1,1', index21, '1,1', SelectionFlag.Clear | SelectionFlag.Rows | SelectionFlag.Select, '1,0;1,1;1,2', index21, '1,0;1,2', '0,0'));
+
+	// Column expansion
+	// nothing + 1,1 => column expansion -> 1,0 .. 1,7
+	testRows.push(createSelectTest(invalidIndex, index00, '1,1', SelectionFlag.Columns | SelectionFlag.Select, '0,1;1,1;2,1;3,1;4,1;5,1;6,1;7,1', index00, '0,1;1,1;2,1;3,1;4,1;5,1;6,1;7,1'));
+	// 1,1 + 1,1 => column expansion -> 1,0 .. 1,2
+	testRows.push(createSelectTest('1,1;5,1', index00, '1,1', SelectionFlag.Columns | SelectionFlag.Select, '0,1;1,1;2,1;3,1;4,1;5,1;6,1;7,1', index00, '0,1;2,1;3,1;4,1;6,1;7,1'));
+	// 0,0;1,1 + 1,1 => column expansion -> 1,0 .. 1,2
+	testRows.push(createSelectTest('0,0;1,1;5,1', index00, '1,1', SelectionFlag.Columns | SelectionFlag.Select, '0,0;0,1;1,1;2,1;3,1;4,1;5,1;6,1;7,1', index00, '0,1;2,1;3,1;4,1;6,1;7,1'));
+	// Clear, Columns, and select
+	testRows.push(createSelectTest('0,0;1,1;5,2', index02, '3,1', SelectionFlag.Clear | SelectionFlag.Columns | SelectionFlag.Select, '0,1;1,1;2,1;3,1;4,1;5,1;6,1;7,1', index02, '0,1;2,1;3,1;4,1;5,1;6,1;7,1', '0,0;5,2'));
+
+
+	// -------------------------------------------
+	// SUITE: selection (multiple indices) input manipulations
+	// Nothing + (0,0;0,1)
+	testRows.push(createSelectTest('', invalidIndex, '0,0;0,1', SelectionFlag.Select, '0,0;0,1', invalidIndex, '0,0;0,1'));
+	// Select partial overlap with existing selection: 1,1 + 1,1;1,2
+	testRows.push(createSelectTest('1,1', invalidIndex, '1,1;1,2', SelectionFlag.Select, '1,1;1,2', invalidIndex, '1,2'));
+	// Partial overlap
+	testRows.push(createSelectTest('0,0;1,1', invalidIndex, '0,0;0,1;1,0;1,1', SelectionFlag.Select, '0,0;0,1;1,0;1,1', invalidIndex, '0,1;1,0'));
+	// Clear and select with overlap
+	testRows.push(createSelectTest('0,0;0,1', invalidIndex, '0,1;1,1', SelectionFlag.ClearAndSelect, '0,1;1,1', invalidIndex, '1,1', '0,0'));
+
+	// -------------------------------------------
+	// SUITE: (deselection) input manipulations
+	testRows.push(createSelectTest('', invalidIndex, index00, SelectionFlag.Deselect, '', invalidIndex));
+	testRows.push(createSelectTest('0,0', invalidIndex, index00, SelectionFlag.Deselect, '', invalidIndex, null, '0,0'));
+	testRows.push(createSelectTest('1,1', index00, '0,0;1,1', SelectionFlag.Deselect, '', index00, null, '1,1'));
+
+	// Current expansion
+	testRows.push(createSelectTest('0,2;1,2;3,2', index02, '3,2', SelectionFlag.Deselect | SelectionFlag.Current, '1,2', index02, null, '0,2;3,2'));
+	// Row expansion
+	testRows.push(createSelectTest('1,2;3,0;3,2', index02, '3,1', SelectionFlag.Deselect | SelectionFlag.Rows, '1,2', index02, null, '3,0;3,2'));
+	// Column expansion
+	testRows.push(createSelectTest('1,2;3,0;3,2', index02, '2,2', SelectionFlag.Deselect | SelectionFlag.Columns, '3,0', index02, null, '1,2;3,2'));
+
+	// Clear and deselect
+	testRows.push(createSelectTest('0,0', index00, '1,0', SelectionFlag.Clear | SelectionFlag.Deselect, '', index00, null, '0,0'));
+
+	// -------------------------------------------
+	// SUITE: (toggle) input manipulations
+	testRows.push(createSelectTest('', invalidIndex, index00, SelectionFlag.Toggle, '0,0', invalidIndex, '0,0'));
+	testRows.push(createSelectTest('0,0', invalidIndex, index00, SelectionFlag.Toggle, '', invalidIndex, null, '0,0'));
+	testRows.push(createSelectTest('0,0', index00, '0,0;0,1', SelectionFlag.Toggle, '0,1', index00, '0,1', '0,0'));
+
+	// Current expansion
+	testRows.push(createSelectTest('0,0', index02, invalidIndex, SelectionFlag.Toggle | SelectionFlag.Current, '0,0;0,2', index02, '0,2'));
+	testRows.push(createSelectTest('0,0;0,2', index02, invalidIndex, SelectionFlag.Toggle | SelectionFlag.Current, '0,0', index02, null, '0,2'));
+
+	// Row expansion
+	testRows.push(createSelectTest('1,0', index02, '1,2', SelectionFlag.Toggle | SelectionFlag.Rows, '1,1;1,2', index02, '1,1;1,2', '1,0'));
+	// Columns expansion
+	testRows.push(createSelectTest('2,2;4,0;4,2', invalidIndex, '5,2', SelectionFlag.Toggle | SelectionFlag.Columns, '4,0;0,2;1,2;3,2;5,2;6,2;7,2', invalidIndex, '0,2;1,2;3,2;5,2;6,2;7,2', '2,2;4,2'));
+
+	// Clear and toggle
+	testRows.push(createSelectTest('0,0;1,1', index21, '2,2;1,1;4,0', SelectionFlag.Toggle | SelectionFlag.Clear, '1,1;2,2;4,0', index21, '2,2;4,0', '0,0'));
+
+	for (var i=0; i< testRows.length; i++) {
+		var testRow = testRows[i];
+		initializeModelFromTestRow(testRow);
+
+		// ----------------------
+		// Finally perform the actual select function
+		if (testRow.inputIsIndex)
+			x.selectIndex(testRow.input, testRow.command);
+		else
+			x.selectSelection(testRow.input, testRow.command);
+
+		checkResult(x, testRow);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Also tests currentIndex()
+function test_setCurrentIndex() {
+	var testRows = [];
+	// Merely changing the current index without changing the selection
+	testRows.push(createSelectTest('', invalidIndex, invalidIndex, SelectionFlag.NoChange, '', invalidIndex));
+	testRows.push(createSelectTest('', invalidIndex, index00, SelectionFlag.NoChange, '', index00));
+	testRows.push(createSelectTest('', index00, invalidIndex, SelectionFlag.NoChange, '', invalidIndex));
+	testRows.push(createSelectTest('', index00, index11, SelectionFlag.NoChange, '', index11));
+
+	// Changing current index without changing the selection
+	testRows.push(createSelectTest('2,1', index00, index21, SelectionFlag.NoChange, '2,1', index21));
+
+	// Select current index
+	testRows.push(createSelectTest('', index00, index00, SelectionFlag.Select, '0,0', index00, '0,0'));
+	testRows.push(createSelectTest('0,0', index00, index00, SelectionFlag.Select, '0,0', index00));
+	testRows.push(createSelectTest('0,0', index00, index11, SelectionFlag.Select, '0,0;1,1', index11, '1,1'));
+
+	// Clear and select
+	testRows.push(createSelectTest('0,0', index00, index11, SelectionFlag.ClearAndSelect, '1,1', index11, '1,1', '0,0'));
+	testRows.push(createSelectTest('0,0', index02, index11, SelectionFlag.ClearAndSelect, '1,1', index11, '1,1', '0,0'));
+
+	// Expand to rows
+	testRows.push(createSelectTest('0,0', index00, index21, SelectionFlag.Rows | SelectionFlag.Select, '0,0;2,0;2,1;2,2', index21, '2,0;2,1;2,2'));
+	testRows.push(createSelectTest('1,0;1,1', index00, index12, SelectionFlag.Rows | SelectionFlag.Deselect, '', index12, null, '1,0;1,1'));
+	testRows.push(createSelectTest('1,0;1,1', index00, index12, SelectionFlag.Rows | SelectionFlag.Toggle, '1,2', index12, '1,2', '1,0;1,1'));
+
+	// Expand to columns
+	testRows.push(createSelectTest('0,1', index00, index10, SelectionFlag.Columns | SelectionFlag.Select, '0,0;1,0;2,0;3,0;4,0;5,0;6,0;7,0;0,1', index10, '0,0;1,0;2,0;3,0;4,0;5,0;6,0;7,0'));
+
+	// Expand to current
+	testRows.push(createSelectTest('0,1', index00, index10, SelectionFlag.Current | SelectionFlag.Select, '0,1;1,0', index10, '1,0'));
+
+	// Move the current with group 2 expansion, but nochange
+	testRows.push(createSelectTest('0,0', invalidIndex, index00, SelectionFlag.Columns, '0,0', index00));
+	testRows.push(createSelectTest('0,0', invalidIndex, index00, SelectionFlag.Rows, '0,0', index00));
+	testRows.push(createSelectTest('0,0', invalidIndex, index00, SelectionFlag.Current, '0,0', index00));
+
+	// Set current index and deselect
+	testRows.push(createSelectTest('0,0', index00, index00, SelectionFlag.Deselect, '', index00, null, '0,0'));
+	testRows.push(createSelectTest('0,0', invalidIndex, index00, SelectionFlag.Deselect, '', index00, null, '0,0'));
+
+	// Set current and toggle
+	testRows.push(createSelectTest('0,0', index00, index00, SelectionFlag.Toggle, '', index00, null, '0,0'));
+	testRows.push(createSelectTest('', index00, index00, SelectionFlag.Toggle, '0,0', index00, '0,0'));
+
+	for (var i=0; i< testRows.length; i++) {
+		var testRow = testRows[i];
+		initializeModelFromTestRow(testRow);
+
+		// ----------------------
+		// Set the current index
+		assertTrue(testRow.inputIsIndex);
+		x.setCurrentIndex(testRow.input, testRow.command);
+		checkResult(x, testRow);
+	}
+};
+
+
+</script>
+</body>
+</html>

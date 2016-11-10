@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.undoredo.UndoCommand</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.undoredo.UndoCommand');
+goog.require('ag.undoredo.MockUndoCommand');
+</script>
+<body>
+<script>
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function testConstructor() {
+	var x = new ag.undoredo.UndoCommand();
+	assertTrue(goog.isNull(x.text()));
+	delete x;
+
+	x = new ag.undoredo.UndoCommand('Test text');
+	assertEquals(x.text(), 'Test text');
+	delete x;
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: childCount and child
+function testChildAndChildCount() {
+	var x = new ag.undoredo.UndoCommand();
+	assertEquals(x.childCount(), 0);
+
+	var y = new ag.undoredo.UndoCommand(null, x);
+	assertEquals(x.childCount(), 1);
+	assertEquals(x.child(0), y);
+
+	var z = new ag.undoredo.UndoCommand(null, x);
+	assertEquals(x.childCount(), 2);
+	assertEquals(x.child(0), y);
+	assertEquals(x.child(1), z);
+
+	var yy = new ag.undoredo.UndoCommand(null, y);
+	assertEquals(x.childCount(), 2);
+	assertEquals(x.child(0), y);
+	assertEquals(x.child(1), z);
+	assertEquals(y.childCount(), 1);
+	assertEquals(y.child(0), yy);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: text / setText
+function testTextAndSetText() {
+	var x = new ag.undoredo.UndoCommand();
+	assertTrue(goog.isNull(x.text()));
+
+	x.setText('Undo');
+	assertEquals(x.text(), 'Undo');
+
+	x.setText('Redo');
+	assertEquals(x.text(), 'Redo');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: undo
+function testUndo() {
+	var x = new ag.undoredo.MockUndoCommand();
+	x.undo();
+	assertEquals(x.undoCount, 1);
+	delete x;
+
+	// Test that calling undo on parent calls undo on children
+	var x = new ag.undoredo.UndoCommand();
+	var y = new ag.undoredo.MockUndoCommand(null, x);
+	var z = new ag.undoredo.MockUndoCommand(null, x);
+	x.undo();
+	assertEquals(y.undoCount, 1);
+	assertEquals(z.undoCount, 1);
+	delete x;
+	delete y;
+	delete z;
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: redo
+function testRedo() {
+	var x = new ag.undoredo.MockUndoCommand();
+	x.redo();
+	assertEquals(x.redoCount, 1);
+	delete x;
+
+	// Test that calling undo on parent calls undo on children
+	var x = new ag.undoredo.UndoCommand();
+	var y = new ag.undoredo.MockUndoCommand(null, x);
+	var z = new ag.undoredo.MockUndoCommand(null, x);
+	x.redo();
+	assertEquals(y.redoCount, 1);
+	assertEquals(z.redoCount, 1);
+	delete x;
+	delete y;
+	delete z;
+};
+
+</script>
+</body>
+</html>

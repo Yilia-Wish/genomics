@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.bio.primer.PrimerPairFinder</title>
+	<meta charset="utf-8">
+</head>
+
+<script src='../../goog/base.js'></script>
+<script src="../../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.bio.grammar');
+goog.require('ag.bio.BioString');
+goog.require('ag.bio.primer.PrimerPairFinder');
+goog.require('ag.bio.primer.PrimerSearchParameters');
+goog.require('ag.core.ClosedIntRange');
+</script>
+<body>
+<script>
+// Aliases
+var grammar = ag.bio.grammar;
+
+var BioString = ag.bio.BioString;
+var ClosedIntRange = ag.core.ClosedIntRange;
+var PrimerPairFinder = ag.bio.primer.PrimerPairFinder;
+var PrimerSearchParameters = ag.bio.primer.PrimerSearchParameters;
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: findPrimerPairs
+function test_findPrimerPairs() {
+	var x = new PrimerPairFinder();
+
+    var psp = new PrimerSearchParameters();
+
+    // 918 long
+    var dnaString = new BioString("ATGAATATTCGTGATCTTGAGTACCTGGTGGCATTGGCTGAACACCGCCATTTTCGGCGTGCGGCAGATTCCTGCCACGTTAGCCAGCCGACGCTTAGCGGGCAAATTCGTAAGCTGGAAGATGAGTTGGGCGTGATGTTGCTGGAGCGGACCAGCCGTAAAGTGTTGTTCACCCAGGCGGGAATGCTGCTGGTGGATCAGGCGCGTACCGTGCTGCGTGAGGTGAAAGTCCTTAAAGAGATGGCAAGCCAGCAGGGCGAGACGATGTCCGGACCGCTGCATATTGGTTTGATTCCCACGGTTGGACCGTACCTGCTACCGCATATTATCCCGATGCTGCACCAGACCTTTCCAAAGCTGGAAATGTATCTGCATGAAGCACAGACCCACCAGTTACTGGCGCAACTGGACAGTGGCAAACTCGATTGCGTGATCCTCGCGCTGGTGAAAGAGAGCGAAGCATTCATTGAAGTGCCGTTGTTTGATGAGCCAATGTTGCTGGCTATCTATGAAGATCACCCGTGGGCGAACCGCGAATGCGTACCGATGGCCGATCTGGCAGGGGAAAAACTGCTGATGCTGGAAGATGGTCACTGTTTGCGCGATCAGGCAATGGGTTTCTGCTTTGAAGCCGGGGCGGATGAAGATACACACTTCCGCGCGACCAGCCTGGAGACACTGCGTAACATGGTGGCGGCAGGTAGCGGGATCACTTTACTGCCTGCGCTGGCTGTGCCGCCGGAGCGCAAACGCGATGGGGTTGTTTATTTGCCGTGTATTAAGCCGGAACCTCGCCGCACGATTGGCCTGGTTTATCGTCCTGGCTCACCGCTGCGCAGCCGCTATGAGCAGCTGGCAGAGGCCATCCGCGCAAGAATGGATGGCCATTTCGATAAAGTGTTAAAACAGGCGGTTTAA", grammar.DNA);
+
+    // 888 -> 918
+    psp.ampliconLengthRange.begin = 700 - 30;
+    psp.ampliconLengthRange.end = 719;
+
+    var primerPairFinder = new PrimerPairFinder();
+
+    var primerPairs = primerPairFinder.findPrimerPairs(dnaString, new ClosedIntRange(100, 818), psp);
+    // assertEquals(primerPairs.length, 2357);
+    console.log(primerPairs.length);
+};
+
+</script>
+</body>
+</html>

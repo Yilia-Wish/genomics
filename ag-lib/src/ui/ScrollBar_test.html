@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.ui.ScrollBar</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="ui_test-deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.dom');
+goog.require('ag.ui');
+goog.require('ag.ui.ScrollBar');
+</script>
+<body>
+<div>
+	<div id="decorate" style="background-color: red;"></div>
+</div>
+<script>
+// Aliases
+var dom = goog.dom;
+
+var ScrollBar = ag.ui.ScrollBar;
+
+var x, y;
+
+// --------------------------------------------------------------------------------------------------------------------
+function setUp() {
+	// x = new ScrollBar();
+}
+
+function tearDown() {
+	// x.dispose();	
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	// y = new ScrollBar(ag.ui.Orientation.HORIZONTAL);
+	y = new ScrollBar(ag.ui.Orientation.VERTICAL);
+	y.decorate(dom.getElement('decorate'));
+
+	y.setValue(50);
+
+	// y.setMinimum(75);
+
+	// y.setRange(-100, -12);;
+};
+
+</script>
+</body>
+</html>

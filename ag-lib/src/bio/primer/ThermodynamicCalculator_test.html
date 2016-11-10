@@ -1,0 +1,195 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.bio.primer.ThermodynamicCalculator</title>
+	<meta charset="utf-8">
+</head>
+
+<script src='../../goog/base.js'></script>
+<script src="../../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.bio.primer.ThermodynamicConstants');
+goog.require('ag.bio.primer.ThermodynamicCalculator');
+</script>
+<body>
+<script>
+// Aliases
+var grammar = ag.bio.grammar;
+
+var BioString = ag.bio.BioString;
+var ThermodynamicCalculator = ag.bio.primer.ThermodynamicCalculator;
+
+var ThermodynamicConstants = ag.bio.primer.ThermodynamicConstants;
+var ENTHALPY_MONOMER_KCAL_PER_MOLE = ThermodynamicConstants.ENTHALPY_MONOMER_KCAL_PER_MOLE;
+var ENTHALPY_DIMER_KCAL_PER_MOLE = ThermodynamicConstants.ENTHALPY_DIMER_KCAL_PER_MOLE;
+var ENTROPY_MONOMER_CAL_PER_K_PER_MOLE = ThermodynamicConstants.ENTROPY_MONOMER_CAL_PER_K_PER_MOLE;
+var ENTROPY_DIMER_CAL_PER_K_PER_MOLE = ThermodynamicConstants.ENTROPY_DIMER_CAL_PER_K_PER_MOLE;
+
+var tolerance = .00001;
+
+var A = 'A'.charCodeAt(0);
+var C = 'C'.charCodeAt(0);
+var G = 'G'.charCodeAt(0);
+var T = 'T'.charCodeAt(0);
+var codes = ['A', A, 'C', C, 'G', G, 'T', T];
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: enthalpyBioString
+function test_enthalpyBioString() {
+	assertEquals(ThermodynamicCalculator.enthalpy(new BioString(null, grammar.DNA)), 0);
+
+	for (var i=0; i<codes.length; i+=2) {
+		var l = codes[i];
+		var c = codes[i+1];
+		assertEquals(ThermodynamicCalculator.enthalpy(new BioString(l, grammar.DNA)), ENTHALPY_MONOMER_KCAL_PER_MOLE[c]);
+		for (var j=0; j<codes.length; j+=2) {
+			var l2 = codes[j];
+			var c2 = codes[j+1]
+			var bs = new BioString(l + l2, grammar.DNA);
+			var expect = ENTHALPY_MONOMER_KCAL_PER_MOLE[c] + ENTHALPY_DIMER_KCAL_PER_MOLE[c][c2] + ENTHALPY_MONOMER_KCAL_PER_MOLE[c2];
+			if (bs.isPalindrome())
+				expect += ThermodynamicConstants.ENTHALPY_SYMMETRY_CORRECTION;
+			assertEquals(ThermodynamicCalculator.enthalpy(bs), expect);
+		}
+	}
+
+	// Longer strings
+	var expected = ENTHALPY_MONOMER_KCAL_PER_MOLE[A] +
+				   ENTHALPY_DIMER_KCAL_PER_MOLE[A][T] +
+				   ENTHALPY_DIMER_KCAL_PER_MOLE[T][C] +
+				   ENTHALPY_DIMER_KCAL_PER_MOLE[C][G] +
+				   ENTHALPY_MONOMER_KCAL_PER_MOLE[G];
+	assertEquals(ThermodynamicCalculator.enthalpy(new BioString('ATCG', grammar.DNA)), expected);
+
+	var expected = ENTHALPY_MONOMER_KCAL_PER_MOLE[A] +
+				   ENTHALPY_DIMER_KCAL_PER_MOLE[A][G] +
+				   ENTHALPY_DIMER_KCAL_PER_MOLE[G][C] +
+				   ENTHALPY_DIMER_KCAL_PER_MOLE[C][G] +
+				   ENTHALPY_DIMER_KCAL_PER_MOLE[G][G] +
+				   ENTHALPY_DIMER_KCAL_PER_MOLE[G][A] +
+				   ENTHALPY_DIMER_KCAL_PER_MOLE[A][T] +
+				   ENTHALPY_DIMER_KCAL_PER_MOLE[T][A] +
+				   ENTHALPY_DIMER_KCAL_PER_MOLE[A][A] +
+				   ENTHALPY_MONOMER_KCAL_PER_MOLE[A];
+	assertEquals(ThermodynamicCalculator.enthalpy(new BioString('AGCGGATAA', grammar.DNA)), expected);
+
+	// Symmetrical longer string
+	var expected = ENTHALPY_MONOMER_KCAL_PER_MOLE[G] +
+				   ENTHALPY_DIMER_KCAL_PER_MOLE[G][A] +
+				   ENTHALPY_DIMER_KCAL_PER_MOLE[A][A] +
+				   ENTHALPY_DIMER_KCAL_PER_MOLE[A][T] +
+				   ENTHALPY_DIMER_KCAL_PER_MOLE[T][T] +
+				   ENTHALPY_DIMER_KCAL_PER_MOLE[T][C] +
+				   ENTHALPY_MONOMER_KCAL_PER_MOLE[C] +
+				   ThermodynamicConstants.ENTHALPY_SYMMETRY_CORRECTION;	
+	assertEquals(ThermodynamicCalculator.enthalpy(new BioString('GAATTC', grammar.DNA)), expected);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: test_entropyBioString
+function test_entropyBioString() {
+	assertEquals(ThermodynamicCalculator.entropy(new BioString(null, grammar.DNA)), 0);
+
+	for (var i=0; i<codes.length; i+=2) {
+		var l = codes[i];
+		var c = codes[i+1];
+		assertEquals(ThermodynamicCalculator.entropy(new BioString(l, grammar.DNA)), ENTROPY_MONOMER_CAL_PER_K_PER_MOLE[c]);
+		for (var j=0; j<codes.length; j+=2) {
+			var l2 = codes[j];
+			var c2 = codes[j+1]
+			var bs = new BioString(l + l2, grammar.DNA);
+			var expect = ENTROPY_MONOMER_CAL_PER_K_PER_MOLE[c] + ENTROPY_DIMER_CAL_PER_K_PER_MOLE[c][c2] + ENTROPY_MONOMER_CAL_PER_K_PER_MOLE[c2];
+			if (bs.isPalindrome())
+				expect += ThermodynamicConstants.ENTROPY_SYMMETRY_CORRECTION;
+			assertEquals(ThermodynamicCalculator.entropy(bs), expect);
+		}
+	}
+
+	// Longer strings
+	var expected = ENTROPY_MONOMER_CAL_PER_K_PER_MOLE[A] +
+				   ENTROPY_DIMER_CAL_PER_K_PER_MOLE[A][T] +
+				   ENTROPY_DIMER_CAL_PER_K_PER_MOLE[T][C] +
+				   ENTROPY_DIMER_CAL_PER_K_PER_MOLE[C][G] +
+				   ENTROPY_MONOMER_CAL_PER_K_PER_MOLE[G];
+	assertEquals(ThermodynamicCalculator.entropy(new BioString('ATCG', grammar.DNA)), expected);
+
+	var expected = ENTROPY_MONOMER_CAL_PER_K_PER_MOLE[A] +
+				   ENTROPY_DIMER_CAL_PER_K_PER_MOLE[A][G] +
+				   ENTROPY_DIMER_CAL_PER_K_PER_MOLE[G][C] +
+				   ENTROPY_DIMER_CAL_PER_K_PER_MOLE[C][G] +
+				   ENTROPY_DIMER_CAL_PER_K_PER_MOLE[G][G] +
+				   ENTROPY_DIMER_CAL_PER_K_PER_MOLE[G][A] +
+				   ENTROPY_DIMER_CAL_PER_K_PER_MOLE[A][T] +
+				   ENTROPY_DIMER_CAL_PER_K_PER_MOLE[T][A] +
+				   ENTROPY_DIMER_CAL_PER_K_PER_MOLE[A][A] +
+				   ENTROPY_MONOMER_CAL_PER_K_PER_MOLE[A];
+	assertEquals(ThermodynamicCalculator.entropy(new BioString('AGCGGATAA', grammar.DNA)), expected);
+
+	// Symmetrical longer string
+	var expected = ENTROPY_MONOMER_CAL_PER_K_PER_MOLE[G] +
+				   ENTROPY_DIMER_CAL_PER_K_PER_MOLE[G][A] +
+				   ENTROPY_DIMER_CAL_PER_K_PER_MOLE[A][A] +
+				   ENTROPY_DIMER_CAL_PER_K_PER_MOLE[A][T] +
+				   ENTROPY_DIMER_CAL_PER_K_PER_MOLE[T][T] +
+				   ENTROPY_DIMER_CAL_PER_K_PER_MOLE[T][C] +
+				   ENTROPY_MONOMER_CAL_PER_K_PER_MOLE[C] +
+				   ThermodynamicConstants.ENTROPY_SYMMETRY_CORRECTION;	
+	assertEquals(ThermodynamicCalculator.entropy(new BioString('GAATTC', grammar.DNA)), expected);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: meltingTemperature
+function test_meltingTemperature() {
+    var list = ['AT', 'GCGC', 'TTT', 'ACGCGTCAG'];
+
+    for (var naConc = 1; naConc < 6.7; naConc += 2.470) {
+        for (var primerConc = 0.000001; primerConc < 0.0053; primerConc += .000043) {
+            var dnaString = new BioString(null, grammar.DNA);
+            assertEquals(ThermodynamicCalculator.meltingTemperature(dnaString, naConc, primerConc), 0.);
+
+            for (var i=0; i<list.length; i++) {
+                dnaString.setString(list[i]);
+                assertEquals(ThermodynamicCalculator.meltingTemperature(dnaString, naConc, primerConc),
+                         ThermodynamicCalculator.meltingTemperatureFromEnthalpy(ThermodynamicCalculator.enthalpy(dnaString),
+                                              ThermodynamicCalculator.sodiumCorrectedEntropy(ThermodynamicCalculator.entropy(dnaString), dnaString.length(), naConc),
+                                              primerConc,
+                                              dnaString.isPalindrome()));
+            }
+        }
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: meltingTemperatureFromEnthalpy
+function test_meltingTemperatureFromEnthalpy() {
+    for (var enthalpy = -40.; enthalpy < 50.; enthalpy += 20.5)
+    {
+        for (var sodiumCorrectedEntropy = -123.5; sodiumCorrectedEntropy < -68; sodiumCorrectedEntropy += 15.823)
+        {
+            for (var primerConc = .000001; primerConc < .0001; primerConc += .00008)
+            {
+                // First case: no palindrome
+                assertRoughlyEquals(ThermodynamicCalculator.meltingTemperatureFromEnthalpy(enthalpy, sodiumCorrectedEntropy, primerConc, false),
+                         1000. * enthalpy / (sodiumCorrectedEntropy + ThermodynamicConstants.R * Math.log(primerConc / 2.)) - 273.15, tolerance);
+
+                // Second case: with palindrome
+                assertRoughlyEquals(ThermodynamicCalculator.meltingTemperatureFromEnthalpy(enthalpy, sodiumCorrectedEntropy, primerConc, true),
+                         1000. * enthalpy / (sodiumCorrectedEntropy + ThermodynamicConstants.R * Math.log(primerConc)) - 273.15, tolerance);
+            }
+        }
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: sodiumCorrectedEntropy
+function test_sodiumCorrectedEntropy() {
+    for (var entropy = -50.; entropy< 100.; entropy += 4.5)
+        for (var n = 1; n< 9; ++n)
+            for (var naConc = 0.0003; naConc< 5.; naConc += .93)
+                assertRoughlyEquals(ThermodynamicCalculator.sodiumCorrectedEntropy(entropy, n, naConc), entropy + 0.368 * (n - 1) * Math.log(naConc), tolerance);
+};
+
+</script>
+</body>
+</html>

@@ -1,0 +1,507 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.bio.primer.Primer</title>
+	<meta charset='utf-8'>
+</head>
+
+<script src='../goog/base.js'></script>
+<script src='../../deps.js'></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.bio.grammar');
+goog.require('ag.core.ClosedIntRange');
+
+goog.require('ag.bio.BioString');
+goog.require('ag.bio.DnaPattern');
+goog.require('ag.bio.RestrictionEnzyme');
+goog.require('ag.bio.primer.Primer');
+goog.require('ag.bio.primer.PrimerSearchParameters');
+</script>
+<body>
+<script>
+// Aliases
+
+var grammar = ag.bio.grammar;
+
+var BioString = ag.bio.BioString;
+var ClosedIntRange = ag.core.ClosedIntRange;
+var DnaPattern = ag.bio.DnaPattern;
+var Primer = ag.bio.primer.Primer;
+var PrimerSearchParameters = ag.bio.primer.PrimerSearchParameters;
+var RestrictionEnzyme = ag.bio.RestrictionEnzyme;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	var x = new Primer();
+
+	assertEquals(x.coreSequence().grammar(), grammar.DNA);
+    assertTrue(x.coreSequence().isEmpty());
+    assertTrue(x.restrictionEnzyme().isEmpty());
+    assertTrue(x.sequence().isEmpty());
+    assertEquals(x.isNull(), true);
+    assertEquals(x.tm(), 0.);
+    assertEquals(x.homoDimerScore(), 0.);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: fromToSerialObject
+function test_fromToSerialObject() {
+    var psp = new PrimerSearchParameters();
+    psp.ampliconLengthRange.begin = 12;
+    psp.ampliconLengthRange.end = 541;
+    psp.primerLengthRange.begin = 18;
+    psp.primerLengthRange.end = 26;
+    psp.forwardRestrictionEnzyme = new RestrictionEnzyme('Bam', new BioString('TATA', grammar.DNA), [1, 2], null);
+    psp.reverseRestrictionEnzyme = new RestrictionEnzyme('EcoR1', new BioString('CCCGGG', grammar.DNA), null, [1, 10]);
+    psp.forwardTerminalPattern = new DnaPattern('R D');
+    psp.reverseTerminalPattern = new DnaPattern(' AC');
+    psp.individualPrimerTmRange.begin = 50;
+    psp.individualPrimerTmRange.end = 76;
+    psp.sodiumConcentration = .3;
+    psp.primerDnaConcentration = .00000001;
+    psp.maximumPrimerPairDeltaTm = 8;
+
+    var cases = [
+        new Primer(),
+        new Primer('TbAPR'),
+        new Primer(null, new BioString('ACGGTA', grammar.DNA)),
+        new Primer('Seq1', new BioString('ACGGTAGA', grammar.DNA), psp.forwardRestrictionEnzyme, 56.3, 32.8, psp)
+    ];
+
+    for (var i=0; i<cases.length; i++) {
+        var to = cases[i].toSerialObject();
+        var from = Primer.fromSerialObject(to);
+        assertTrue(cases[i].eq(from));
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: eq
+function test_eq() {
+	var x = new Primer();
+	assertTrue(x.eq(new Primer()));
+
+	var y = new Primer('TestPrimer', new BioString('ABCD', grammar.DNA),
+		new RestrictionEnzyme('AanI', 'TTATTA', [3, 3], null),
+		5.,
+		34.);
+	assertTrue(y.eq(y));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: coreSequence
+function test_coreSequence() {
+	var x = new Primer('TestPrimer', new BioString('ABCD', grammar.DNA));
+    assertTrue(x.coreSequence().eq(new BioString('ABCD', grammar.DNA)));
+
+	var y = new Primer('TestPrimer', new BioString('ABCD', grammar.DNA),
+		new RestrictionEnzyme('AanI', 'TTATTA', [3, 3], null),
+		5.,
+		34.);
+    assertTrue(y.coreSequence().eq(new BioString('ABCD', grammar.DNA)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: countCoreSequenceForwardMatchesIn
+function test_countCoreSequenceForwardMatchesIn() {
+    var emptyDnaString = new BioString(null, grammar.DNA);
+    var dnaString = new BioString('ATGTTGCAAGTATG', grammar.DNA);
+    // Reverse complement: CATACTTGCAACAT
+    var rcDnaString = dnaString.reverseComplement();
+    var emptyPrimer = new Primer();
+    var primer = new Primer('TestPrimer', new BioString('ATG', grammar.DNA), new RestrictionEnzyme('AanI', 'TTATTA', [], []), 0., 0.);
+
+    assertEquals(emptyPrimer.countCoreSequenceForwardMatchesIn(emptyDnaString), 0);
+    assertEquals(emptyPrimer.countCoreSequenceForwardMatchesIn(dnaString), 0);
+    assertEquals(primer.countCoreSequenceForwardMatchesIn(emptyDnaString), 0);
+    assertEquals(emptyPrimer.countCoreSequenceForwardMatchesIn(rcDnaString), 0);
+
+    // Test: simple non-overlapping matches
+    assertEquals(primer.countCoreSequenceForwardMatchesIn(dnaString), 2);
+    assertEquals(primer.countCoreSequenceForwardMatchesIn(rcDnaString), 0);
+
+    // Test: overlapping matches
+    var primer2 = new Primer('TestPrimer', new BioString('ATGATG', grammar.DNA), new RestrictionEnzyme(), 0., 0.);
+    dnaString.setString('ATGATGATGCGTAATGATG');
+    assertEquals(primer2.countCoreSequenceForwardMatchesIn(dnaString), 3);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: countCoreSequenceMatchesIn
+function test_countCoreSequenceMatchesIn() {
+    var emptyDnaString = new BioString(null, grammar.DNA);
+    var dnaString = new BioString('ATGTTGCATAGTATG', grammar.DNA);
+    // Reverse complement: CATACTATGCAACAT
+    var rcDnaString = dnaString.reverseComplement();
+    var emptyPrimer = new Primer();
+    var primer = new Primer('TestPrimer', new BioString('ATG', grammar.DNA), new RestrictionEnzyme('AanI', 'TTATTA', [], []), 0., 0.);
+
+    assertEquals(emptyPrimer.countCoreSequenceMatchesIn(emptyDnaString), 0);
+    assertEquals(emptyPrimer.countCoreSequenceMatchesIn(dnaString), 0);
+    assertEquals(primer.countCoreSequenceMatchesIn(emptyDnaString), 0);
+
+    // Test: simple non-overlapping test
+    assertEquals(primer.countCoreSequenceMatchesIn(dnaString), 3);  // 2 in the forward strand, 1 one in the reverse
+    assertEquals(primer.countCoreSequenceMatchesIn(rcDnaString), 3);  // 2 in the reverse strand, 1 one in the forward
+
+    // Test: overlapping matches
+    var primer2 = new Primer('TestPrimer', new BioString('CATCAT', grammar.DNA), new RestrictionEnzyme(), 0., 0.);
+    dnaString.setString('ATGATGATGCGTAATGATG');
+    assertEquals(primer2.countCoreSequenceMatchesIn(dnaString), 3);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: countCoreSequenceReverseMatchesIn
+function test_countCoreSequenceReverseMatchesIn() {
+    var emptyDnaString = new BioString(null, grammar.DNA);
+    var dnaString = new BioString('ATGTTGCAAGTATG', grammar.DNA);
+    // Reverse complement: CATACTTGCAACAT
+    var rcDnaString = dnaString.reverseComplement();
+    var emptyPrimer = new Primer();
+    var primer = new Primer('TestPrimer', new BioString('CAT', grammar.DNA), new RestrictionEnzyme('AanI', 'TTATTA', [], []), 0., 0.);
+
+    assertEquals(emptyPrimer.countCoreSequenceReverseMatchesIn(emptyDnaString), 0);
+    assertEquals(emptyPrimer.countCoreSequenceReverseMatchesIn(dnaString), 0);
+    assertEquals(primer.countCoreSequenceReverseMatchesIn(emptyDnaString), 0);
+    assertEquals(emptyPrimer.countCoreSequenceReverseMatchesIn(rcDnaString), 0);
+
+    // Test: simple non-overlapping matches
+    assertEquals(primer.countCoreSequenceReverseMatchesIn(dnaString), 2);
+    assertEquals(primer.countCoreSequenceReverseMatchesIn(rcDnaString), 0);
+
+    // Test: overlapping matches
+    var primer2 = new Primer('TestPrimer', new BioString('CATCAT', grammar.DNA), new RestrictionEnzyme(), 0., 0.);
+    dnaString.setString('ATGATGATGCGTAATGATG');
+    assertEquals(primer2.countCoreSequenceReverseMatchesIn(dnaString), 3);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: coreSequenceForwardLocationsIn
+function test_coreSequenceForwardLocationsIn() {
+    var emptyDnaString = new BioString(null, grammar.DNA);
+    //                   12345678901234
+    var dnaString = new BioString('ATGTTGCAAGTATG', grammar.DNA);
+    // Reverse complement: CATACTTGCAACAT
+    var rcDnaString = dnaString.reverseComplement();
+    var emptyPrimer = new Primer();
+    var primer = new Primer('TestPrimer', new BioString('ATG', grammar.DNA), new RestrictionEnzyme('AanI', 'TTATTA', [], []), 0., 0.);
+
+    assertTrue(emptyPrimer.coreSequenceForwardLocationsIn(emptyDnaString).length === 0);
+    assertTrue(emptyPrimer.coreSequenceForwardLocationsIn(dnaString).length === 0);
+    assertTrue(primer.coreSequenceForwardLocationsIn(emptyDnaString).length === 0);
+
+    // Test: simple non-overlapping test
+    var locations = primer.coreSequenceForwardLocationsIn(dnaString);
+    assertArrayEquals(locations, [new ClosedIntRange(1, 3), new ClosedIntRange(12, 14)]);
+    assertTrue(primer.coreSequenceForwardLocationsIn(rcDnaString).length === 0);
+
+    // Test: overlapping matches
+    var primer2 = new Primer('TestPrimer', new BioString('ATGATG', grammar.DNA), new RestrictionEnzyme(), 0., 0.);
+    //           1234567890123456789
+    dnaString.setString('ATGATGATGCGTAATGATG');
+    locations = primer2.coreSequenceForwardLocationsIn(dnaString);
+    assertArrayEquals(locations, [new ClosedIntRange(1, 6), new ClosedIntRange(4, 9), new ClosedIntRange(14, 19)]);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: coreSequenceReverseLocationsIn
+function test_coreSequenceReverseLocationsIn() {
+    var emptyDnaString = new BioString(null, grammar.DNA);
+    var dnaString = new BioString('ATGTTGCAAGTATG', grammar.DNA);
+    // Reverse complement: CATACTTGCAACAT
+    //                     12345678901234
+    var rcDnaString = dnaString.reverseComplement();
+    var emptyPrimer = new Primer();
+    var primer = new Primer('TestPrimer', new BioString('CAT', grammar.DNA), new RestrictionEnzyme('AanI', 'TTATTA', [], []), 0., 0.);
+
+    assertTrue(emptyPrimer.coreSequenceReverseLocationsIn(emptyDnaString).length === 0);
+    assertTrue(emptyPrimer.coreSequenceReverseLocationsIn(dnaString).length === 0);
+    assertTrue(primer.coreSequenceReverseLocationsIn(emptyDnaString).length === 0);
+
+    // Test: simple non-overlapping matches
+    var locations = primer.coreSequenceReverseLocationsIn(dnaString);
+    assertArrayEquals(locations, [new ClosedIntRange(1, 3), new ClosedIntRange(12, 14)]);
+    assertTrue(primer.coreSequenceReverseLocationsIn(rcDnaString).length === 0);
+
+    // Test: overlapping matches
+    var primer2 = new Primer('TestPrimer', new BioString('CATCAT', grammar.DNA), new RestrictionEnzyme(), 0., 0.);
+    dnaString.setString('ATGATGATGCGTAATGATG');
+    // RC =      CATCATTACGCATCATCAT
+    //           1234567890123456789
+    locations = primer2.coreSequenceReverseLocationsIn(dnaString);
+    assertArrayEquals(locations, [new ClosedIntRange(1, 6), new ClosedIntRange(4, 9), new ClosedIntRange(14, 19)]);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: homoDimerScore
+function test_homoDimerScore() {
+    var primer = new Primer('TestPrimer', new BioString('ABCD', grammar.DNA), new RestrictionEnzyme(), 0., 36.7);
+
+    assertEquals(primer.homoDimerScore(), 36.7);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: isNull
+function test_isNull() {
+    // Test: Empty biostring for core sequence
+    var primer = new Primer('TestPrimer', new BioString(null, grammar.DNA), new RestrictionEnzyme(), 0., 0.);
+    assertTrue(primer.isNull());
+
+    // Test: non-empty core biostring sequence
+    var primer = new Primer('TestPrimer', new BioString('ABCD', grammar.DNA), new RestrictionEnzyme(), 0., 0.);
+    assertFalse(primer.isNull());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: locateCoreSequenceIn
+function test_locateCoreSequenceIn() {
+    var primer = new Primer('TestPrimer', new BioString('ATG', grammar.DNA), new RestrictionEnzyme(), 0., 0.);
+
+    var bioString = new BioString();
+    assertNull(primer.locateCoreSequenceIn(bioString));
+    bioString.setString('AT');
+    assertNull(primer.locateCoreSequenceIn(bioString));
+    bioString.setString('ATG');
+    assertTrue(primer.locateCoreSequenceIn(bioString).eq(new ClosedIntRange(1, 3)));
+
+    //                   1234567890
+    bioString.setString('ACAGATGACG');
+    assertTrue(primer.locateCoreSequenceIn(bioString).eq(new ClosedIntRange(5, 7)));
+
+    // Test: should return the first range that it appears in
+    bioString.setString('ACAGATGACGATG');
+    assertTrue(primer.locateCoreSequenceIn(bioString).eq(new ClosedIntRange(5, 7)));
+
+    // Test: check that restriction enzyme does not change things
+    var re = new RestrictionEnzyme('AanI', 'TTATTA', [3, 3], []);
+    var primer2 = new Primer('TestPrimer', new BioString('ATG', grammar.DNA), re, 0., 0.);
+    assertTrue(primer2.locateCoreSequenceIn(bioString).eq(new ClosedIntRange(5, 7)));
+
+    // Test: empty core sequence
+    var primer3 = new Primer();
+    assertNull(primer3.locateCoreSequenceIn(bioString));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: locateCoreSequenceStartIn
+function test_locateCoreSequenceStartIn() {
+    var primer = new Primer('TestPrimer', new BioString('ATG', grammar.DNA), new RestrictionEnzyme(), 0., 0.);
+
+    var bioString = new BioString();
+    assertEquals(primer.locateCoreSequenceStartIn(bioString), -1);
+    bioString.setString('AT');
+    assertEquals(primer.locateCoreSequenceStartIn(bioString), -1);
+    bioString.setString('ATG');
+    assertEquals(primer.locateCoreSequenceStartIn(bioString), 1);
+
+    //                   1234567890
+    bioString.setString('ACAGATGACG');
+    assertEquals(primer.locateCoreSequenceStartIn(bioString), 5);
+
+    // Test: should return the first range that it appears in
+    bioString.setString('ACAGATGACGATG');
+    assertEquals(primer.locateCoreSequenceStartIn(bioString), 5);
+
+    // Test: check that restriction enzyme does not change things
+    var re = new RestrictionEnzyme('AanI', 'TTATTA', [3, 3], []);
+    var primer2 = new Primer('TestPrimer', new BioString('ATG', grammar.DNA), re, 0., 0.);
+    assertEquals(primer2.locateCoreSequenceStartIn(bioString), 5);
+
+    // Test: empty core sequence
+    var primer3 = new Primer();
+    assertEquals(primer3.locateCoreSequenceStartIn(bioString), -1);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: locateCoreSequenceStopIn
+function test_locateCoreSequenceStopIn() {
+    var primer = new Primer('TestPrimer', new BioString('ATG', grammar.DNA), new RestrictionEnzyme(), 0., 0.);
+
+    var bioString = new BioString();
+    assertEquals(primer.locateCoreSequenceStopIn(bioString), -1);
+    bioString.setString('AT');
+    assertEquals(primer.locateCoreSequenceStopIn(bioString), -1);
+    bioString.setString('ATG');
+    assertEquals(primer.locateCoreSequenceStopIn(bioString), 3);
+
+    //                   1234567890
+    bioString.setString('ACAGATGACG');
+    assertEquals(primer.locateCoreSequenceStopIn(bioString), 7);
+
+    // Test: should return the first range that it appears in
+    bioString.setString('ACAGATGACGATG');
+    assertEquals(primer.locateCoreSequenceStopIn(bioString), 7);
+
+    // Test: check that restriction enzyme does not change things
+    var re = new RestrictionEnzyme('AanI', 'TTATTA', [3, 3], []);
+    var primer2 = new Primer('TestPrimer', new BioString('ATG', grammar.DNA), re, 0., 0.);
+    assertEquals(primer2.locateCoreSequenceStopIn(bioString), 7);
+
+    // Test: empty core sequence
+    var primer3 = new Primer();
+    assertEquals(primer3.locateCoreSequenceStopIn(bioString), -1);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: locateCoreSequenceInCognateStrand
+function test_locateCoreSequenceInCognateStrand() {
+    var primer = new Primer('TestPrimer', new BioString('ATG', grammar.DNA), new RestrictionEnzyme(), 0., 0.);
+
+    var bioString = new BioString();
+    assertNull(primer.locateCoreSequenceInCognateStrand(bioString));
+    bioString.setString('AT');
+    assertNull(primer.locateCoreSequenceInCognateStrand(bioString));
+    bioString.setString('ATG');
+    assertNull(primer.locateCoreSequenceInCognateStrand(bioString));
+
+    // Test: perfect match
+    assertTrue(primer.locateCoreSequenceInCognateStrand(new BioString('CAT', grammar.DNA)).eq(new ClosedIntRange(1, 3)));
+
+    //           1234567890
+    bioString.setString('ACAGATGACG');
+    assertNull(primer.locateCoreSequenceInCognateStrand(bioString));
+
+    bioString.setString('ACACATGACG');
+    assertTrue(primer.locateCoreSequenceInCognateStrand(bioString).eq(new ClosedIntRange(4, 6)));
+
+    // Test: should return the first range that it appears in - note: this is from the rightmost end of the sequence
+    bioString.setString('ACACATGACGCAT');
+    assertTrue(primer.locateCoreSequenceInCognateStrand(bioString).eq(new ClosedIntRange(11, 13)));
+
+    // Test: check that restriction enzyme does not change things
+    var re = new RestrictionEnzyme('AanI', 'TTATTA', [3, 3], []);
+    var primer2 = new Primer('TestPrimer', new BioString('ATG', grammar.DNA), re, 0., 0.);
+    assertTrue(primer2.locateCoreSequenceInCognateStrand(bioString).eq(new ClosedIntRange(11, 13)));
+
+    // Test: empty core sequence
+    var primer3 = new Primer();
+    assertNull(primer3.locateCoreSequenceInCognateStrand(bioString));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: locateCoreSequenceStartInCognateStrand
+function test_locateCoreSequenceStartInCognateStrand() {
+    var primer = new Primer('TestPrimer', new BioString('ATG', grammar.DNA), new RestrictionEnzyme(), 0., 0.);
+
+    var bioString = new BioString();
+    assertEquals(primer.locateCoreSequenceStartInCognateStrand(bioString), -1);
+    bioString.setString('AT');
+    assertEquals(primer.locateCoreSequenceStartInCognateStrand(bioString), -1);
+    bioString.setString('ATG');
+    assertEquals(primer.locateCoreSequenceStartInCognateStrand(bioString), -1);
+
+    // Test: perfect match
+    assertEquals(primer.locateCoreSequenceStartInCognateStrand(new BioString('CAT', grammar.DNA)), 1);
+
+    //                   1234567890
+    bioString.setString('ACAGATGACG');
+    assertEquals(primer.locateCoreSequenceStartInCognateStrand(bioString), -1);
+
+    bioString.setString('ACACATGACG');
+    assertEquals(primer.locateCoreSequenceStartInCognateStrand(bioString), 4);
+
+    // Test: should return the first range that it appears in
+    bioString.setString('ACACATGACGCAT');
+    assertEquals(primer.locateCoreSequenceStartInCognateStrand(bioString), 11);
+
+    // Test: check that restriction enzyme does not change things
+    var re = new RestrictionEnzyme('AanI', 'TTATTA', [3, 3], []);
+    var primer2 = new Primer('TestPrimer', new BioString('ATG', grammar.DNA), re, 0., 0.);
+    assertEquals(primer2.locateCoreSequenceStartInCognateStrand(bioString), 11);
+
+    // Test: empty core sequence
+    var primer3 = new Primer();
+    assertEquals(primer3.locateCoreSequenceStartInCognateStrand(bioString), -1);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: locateCoreSequenceStopInCognateStrand
+function test_locateCoreSequenceStopInCognateStrand() {
+    var primer = new Primer('TestPrimer', new BioString('ATG', grammar.DNA), new RestrictionEnzyme(), 0., 0.);
+
+    var bioString = new BioString();
+    assertEquals(primer.locateCoreSequenceStopInCognateStrand(bioString), -1);
+    bioString.setString('AT');
+    assertEquals(primer.locateCoreSequenceStopInCognateStrand(bioString), -1);
+    bioString.setString('ATG');
+    assertEquals(primer.locateCoreSequenceStopInCognateStrand(bioString), -1);
+
+    // Test: perfect match
+    assertEquals(primer.locateCoreSequenceStopInCognateStrand(new BioString('CAT', grammar.DNA)), 3);
+
+    //           1234567890
+    bioString.setString('ACAGATGACG');
+    assertEquals(primer.locateCoreSequenceStopInCognateStrand(bioString), -1);
+
+    bioString.setString('ACACATGACG');
+    assertEquals(primer.locateCoreSequenceStopInCognateStrand(bioString), 6);
+
+    // Test: should return the first range that it appears in
+    bioString.setString('ACACATGACGCAT');
+    assertEquals(primer.locateCoreSequenceStopInCognateStrand(bioString), 13);
+
+    // Test: check that restriction enzyme does not change things
+    var re = new RestrictionEnzyme('AanI', 'TTATTA', [3, 3], []);
+    var primer2 = new Primer('TestPrimer', new BioString('ATG', grammar.DNA), re, 0., 0.);
+    assertEquals(primer2.locateCoreSequenceStopInCognateStrand(bioString), 13);
+
+    // Test: empty core sequence
+    var primer3 = new Primer();
+    assertEquals(primer3.locateCoreSequenceStopInCognateStrand(bioString), -1);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: restrictionEnzyme
+function test_restrictionEnzyme() {
+    var re = new RestrictionEnzyme('AanI', 'TTATTA', [3, 3], []);
+
+    var primer = new Primer('TestPrimer', new BioString('ABCD', grammar.DNA), re, 0., 0.);
+    assertEquals(primer.restrictionEnzyme(), re);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: sequence
+function test_sequence() {
+    var re = new RestrictionEnzyme('AanI', 'TTATTA', [3, 3], []);
+
+    // Test: with empty core sequence but restriction enzyme
+    var primer = new Primer('TestPrimer', new BioString(null, grammar.DNA), re, 0., 0.);
+    assertTrue(primer.sequence().eq(re.recognitionSite));
+
+    // Test: core sequence but no restriction enzyme
+    primer = new Primer('TestPrimer', new BioString('ABCD', grammar.DNA), new RestrictionEnzyme(), 0., 0.);
+    assertTrue(primer.sequence().eq(new BioString('ABCD', grammar.DNA)));
+
+    // Test: both core sequence and restriction enzyme
+    primer = new Primer('TestPrimer', new BioString('ABCD', grammar.DNA), re, 0., 0.);
+    assertTrue(primer.sequence().eq(new BioString('TTATTAABCD', grammar.DNA)));
+
+    // Static sequence method
+    assertTrue(Primer.sequence(new BioString('ABCD', grammar.DNA), re).eq(new BioString('TTATTAABCD', grammar.DNA)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_sequenceString() {
+    var primer = new Primer('TestPrimer', new BioString(null, grammar.DNA), null, 0., 0.);
+    assertEquals(primer.sequenceString(), '');
+
+    primer = new Primer('TestPrimer', new BioString('ATCGT', grammar.DNA), null, 0., 0.);
+    assertEquals(primer.sequenceString(), 'ATCGT');
+
+    var re = new RestrictionEnzyme('AanI', 'TTATTA', [3, 3], []);
+    primer = new Primer('TestPrimer', new BioString('ATCGT', grammar.DNA), re, 0., 0.);
+    assertEquals(primer.sequenceString(), 'TTATTAATCGT');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: tm
+function test_tm() {
+    var primer = new Primer('TestPrimer', new BioString('ABCD', grammar.DNA), new RestrictionEnzyme(), 35., 0.);
+    assertEquals(primer.tm(), 35.0);
+};
+
+</script>
+</body>
+</html>

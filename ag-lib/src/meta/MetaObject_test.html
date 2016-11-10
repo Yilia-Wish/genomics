@@ -1,0 +1,305 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.meta.MetaObject</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.meta.MetaObject');
+goog.require('ag.meta.MockSourceObject');
+goog.require('ag.meta.MockDestObject');
+</script>
+<body>
+<script>
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: clear
+function test_clear() {
+	var meta = ag.meta.MetaObject.getInstance();
+
+	var source = new ag.meta.MockSourceObject('source');
+	var dest0 = new ag.meta.MockDestObject('dest0');
+	var dest1 = new ag.meta.MockDestObject('dest1');
+	var dest2 = new ag.meta.MockDestObject('dest2');
+	meta.connect(source, 'noarg', dest0, dest0.noArgMethod);
+	meta.connect(source, 'onearg', dest1, dest1.oneArgMethod);
+	meta.connect(source, 'twoarg', dest2, dest2.twoArgMethod);
+
+	meta.clear();
+
+	assertFalse(meta.disconnect(source, 'noarg', dest0, dest0.noArgMethod));
+	assertFalse(meta.disconnect(source, 'onearg', dest1, dest1.oneArgMethod));
+	assertFalse(meta.disconnect(source, 'twoarg', dest2, dest2.twoArgMethod));
+
+	assertEquals(dest0.callList.length, 0);
+	assertEquals(dest1.callList.length, 0);
+	assertEquals(dest2.callList.length, 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: connect
+function test_connect() {
+	var meta = ag.meta.MetaObject.getInstance();
+
+	var source = new ag.meta.MockSourceObject('source');
+	var dest0 = new ag.meta.MockDestObject('dest0');
+	var dest1 = new ag.meta.MockDestObject('dest1');
+	var dest2 = new ag.meta.MockDestObject('dest2');
+
+	meta.connect(source, 'noarg', dest0, dest0.noArgMethod);
+	meta.connect(source, 'onearg', dest1, dest1.oneArgMethod);
+	meta.connect(source, 'twoarg', dest2, dest2.twoArgMethod);
+
+	// No-arg method
+	meta.emit(source, 'noarg');
+	assertEquals(dest0.arguments.length, 0);
+	assertEquals(dest0.callList.length, 1);
+	assertEquals(dest0.callList[0], 0);
+	assertEquals(dest1.arguments.length, 0);
+	assertEquals(dest1.callList.length, 0);
+	assertEquals(dest2.arguments.length, 0);
+	assertEquals(dest2.callList.length, 0);
+
+	dest0.callList.length = 0;
+
+	// One-arg method
+	meta.emit(source, 'onearg', 'ABC');
+	assertEquals(dest0.arguments.length, 0);
+	assertEquals(dest0.callList.length, 0);
+	assertEquals(dest1.callList.length, 1);
+	assertEquals(dest1.callList[0], 1);
+	assertEquals(dest1.arguments.length, 1);
+	assertEquals(dest1.arguments[0], 'ABC');
+	assertEquals(dest2.callList.length, 0);
+	assertEquals(dest2.arguments.length, 0);
+
+	dest1.callList.length = 0;
+	dest1.arguments.length = 0;
+
+	// Two-arg method
+	meta.emit(source, 'twoarg', 'DEF', 34);
+	assertEquals(dest0.callList.length, 0);
+	assertEquals(dest0.arguments.length, 0);
+	assertEquals(dest1.callList.length, 0);
+	assertEquals(dest1.arguments.length, 0);
+	assertEquals(dest2.callList.length, 1);
+	assertEquals(dest2.callList[0], 2);
+	assertEquals(dest2.arguments.length, 2);
+	assertEquals(dest2.arguments[0], 'DEF');
+	assertEquals(dest2.arguments[1], 34);
+
+	dest2.arguments.length = 0;
+
+	meta.clear();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: connectSignalSignal
+function test_connectSignalSignal() {
+	var meta = ag.meta.MetaObject.getInstance();
+
+	var source = new ag.meta.MockSourceObject('source');
+	var source2 = new ag.meta.MockSourceObject('source2');
+	var dest0 = new ag.meta.MockDestObject('dest0');
+	var dest1 = new ag.meta.MockDestObject('dest1');
+	var dest2 = new ag.meta.MockDestObject('dest2');
+
+	meta.connect(source, 'noarg', source2, 'noarg');
+	meta.connect(source, 'onearg', source2, 'onearg');
+	meta.connect(source, 'twoarg', source2, 'twoarg');
+	meta.connect(source2, 'noarg', dest0, dest0.noArgMethod);
+	meta.connect(source2, 'onearg', dest1, dest1.oneArgMethod);
+	meta.connect(source2, 'twoarg', dest2, dest2.twoArgMethod);
+
+	// No-arg method
+	meta.emit(source, 'noarg');
+	assertEquals(dest0.arguments.length, 0);
+	assertEquals(dest0.callList.length, 1);
+	assertEquals(dest0.callList[0], 0);
+	assertEquals(dest1.arguments.length, 0);
+	assertEquals(dest1.callList.length, 0);
+	assertEquals(dest2.arguments.length, 0);
+	assertEquals(dest2.callList.length, 0);
+
+	dest0.callList.length = 0;
+
+	// One-arg method
+	meta.emit(source, 'onearg', 'ABC');
+	assertEquals(dest0.arguments.length, 0);
+	assertEquals(dest0.callList.length, 0);
+	assertEquals(dest1.callList.length, 1);
+	assertEquals(dest1.callList[0], 1);
+	assertEquals(dest1.arguments.length, 1);
+	assertEquals(dest1.arguments[0], 'ABC');
+	assertEquals(dest2.callList.length, 0);
+	assertEquals(dest2.arguments.length, 0);
+
+	dest1.callList.length = 0;
+	dest1.arguments.length = 0;
+
+	// Two-arg method
+	meta.emit(source, 'twoarg', 'DEF', 34);
+	assertEquals(dest0.callList.length, 0);
+	assertEquals(dest0.arguments.length, 0);
+	assertEquals(dest1.callList.length, 0);
+	assertEquals(dest1.arguments.length, 0);
+	assertEquals(dest2.callList.length, 1);
+	assertEquals(dest2.callList[0], 2);
+	assertEquals(dest2.arguments.length, 2);
+	assertEquals(dest2.arguments[0], 'DEF');
+	assertEquals(dest2.arguments[1], 34);
+
+	dest2.arguments.length = 0;
+
+	meta.clear();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+function test_sender() {
+	var meta = ag.meta.MetaObject.getInstance();
+
+	assertTrue(goog.isNull(meta.sender()));
+	assertTrue(goog.isNull(meta.signalName()));
+
+	var source = new ag.meta.MockSourceObject('source');
+	var dest0a = new ag.meta.MockDestObject('dest0a');
+
+	meta.connect(source, 'noarg', dest0a, dest0a.noArgMethod);
+	meta.emit(source, 'noarg');
+
+	assertTrue(goog.isNull(meta.sender()));
+	assertTrue(goog.isNull(meta.signalName()));
+
+	assertEquals('noarg', dest0a.signalName);
+	assertEquals(source, dest0a.sender);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: connectCallOrder
+function test_connectCallOrder() {
+	// Reset the call id sequence
+	ag.meta.MockDestObject.callIdSequence = 0;
+
+	var meta = ag.meta.MetaObject.getInstance();
+
+	var source = new ag.meta.MockSourceObject('source');
+	var dest0a = new ag.meta.MockDestObject('dest0a');
+	var dest0b = new ag.meta.MockDestObject('dest0b');
+
+	meta.connect(source, 'noarg', dest0a, dest0a.noArgMethod);
+	meta.connect(source, 'noarg', dest0b, dest0b.noArgMethod);
+	meta.emit(source, 'noarg');
+
+	assertEquals(dest0a.callId, 1);
+	assertEquals(dest0b.callId, 2);
+
+	meta.clear();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: connectDuplicateCalls
+function test_connectDuplicateCalls() {
+	var meta = ag.meta.MetaObject.getInstance();
+
+	var source = new ag.meta.MockSourceObject('source');
+	var dest0 = new ag.meta.MockDestObject('dest0');
+
+	meta.connect(source, 'noarg', dest0, dest0.noArgMethod);
+	meta.connect(source, 'noarg', dest0, dest0.noArgMethod);
+	meta.emit(source, 'noarg');
+
+	assertEquals(dest0.callList.length, 2);
+	assertEquals(dest0.callList[0], 0);
+	assertEquals(dest0.callList[1], 0);
+
+	meta.clear();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: disconnect
+function test_disconnect() {
+	var meta = ag.meta.MetaObject.getInstance();
+
+	var source = new ag.meta.MockSourceObject('source');
+	var dest0 = new ag.meta.MockDestObject('dest0');
+
+	assertFalse(meta.disconnect(source, 'noarg', dest0, dest0.noArgMethod));
+	meta.connect(source, 'noarg', dest0, dest0.noArgMethod);
+	assertTrue(meta.disconnect(source, 'noarg', dest0, dest0.noArgMethod));
+	assertFalse(meta.disconnect(source, 'noarg', dest0, dest0.noArgMethod));
+
+	// Multiple disconnects
+	meta.connect(source, 'noarg', dest0, dest0.noArgMethod);
+	meta.connect(source, 'noarg', dest0, dest0.noArgMethod);
+	assertTrue(meta.disconnect(source, 'noarg', dest0, dest0.noArgMethod));
+	assertTrue(meta.disconnect(source, 'noarg', dest0, dest0.noArgMethod));
+	assertFalse(meta.disconnect(source, 'noarg', dest0, dest0.noArgMethod));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: disconnectSignalSignal
+function test_disconnectSignalSignal() {
+	var meta = ag.meta.MetaObject.getInstance();
+
+	var source = new ag.meta.MockSourceObject('source');
+	var source2 = new ag.meta.MockSourceObject('source2');
+
+	assertFalse(meta.disconnect(source, 'noarg', source2, 'noarg'));
+	meta.connect(source, 'noarg', source2, 'noarg');
+	assertTrue(meta.disconnect(source, 'noarg', source2, 'noarg'));
+
+	// Multiple disconnects
+	meta.connect(source, 'noarg', source2, 'noarg');
+	meta.connect(source, 'noarg', source2, 'noarg');
+	assertTrue(meta.disconnect(source, 'noarg', source2, 'noarg'));
+	assertTrue(meta.disconnect(source, 'noarg', source2, 'noarg'));
+	assertFalse(meta.disconnect(source, 'noarg', source2, 'noarg'));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
+// Method: multipleSources
+function test_multipleSources() {
+	var meta = ag.meta.MetaObject.getInstance();
+
+	var source1 = new ag.meta.MockSourceObject('source1');
+	var source2 = new ag.meta.MockSourceObject('source2');
+	var dest = new ag.meta.MockDestObject('dest');
+
+	meta.connect(source1, 'noarg', dest, dest.noArgMethod);
+	meta.connect(source2, 'noarg', dest, dest.oneArgMethod);
+
+	assertFalse(meta.disconnect(source2, 'noarg', dest, dest.noArgMethod));
+	assertFalse(meta.disconnect(source1, 'noarg', dest, dest.oneArgMethod));
+	assertTrue(meta.disconnect(source2, 'noarg', dest, dest.oneArgMethod));
+	assertTrue(meta.disconnect(source1, 'noarg', dest, dest.noArgMethod));
+
+	meta.connect(source1, 'noarg', dest, dest.noArgMethod);
+	meta.connect(source2, 'noarg', dest, dest.noArgMethod);
+
+	meta.emit(source1, 'noarg');
+	assertEquals(dest.callList.length, 1);
+	assertEquals(dest.callList[0], 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// One signal that triggers a related object to emit a signal with the same number of arguments should not override
+// arguments of first signal.
+//
+// This test only applies if using predefined arrays for sending out arguments rather than creating a new array
+// every time.
+function test_signalArgsPreserved() {
+};
+
+</script>
+</body>
+</html>

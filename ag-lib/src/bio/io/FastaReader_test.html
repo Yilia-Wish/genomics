@@ -1,0 +1,160 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - ag.bio.io.FastaReader</title>
+    <meta charset='utf-8'>
+</head>
+
+<script src='../../goog/base.js'></script>
+<script src='../../deps.js'></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.array');
+goog.require('ag.bio.io.FastaReader');
+</script>
+<body>
+<script>
+// Aliases
+var array = goog.array;
+var FastaReader = ag.bio.io.FastaReader;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_constructor() {
+    var x = new FastaReader();
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_isCompatibleString() {
+    var x = new FastaReader();
+
+    var fixtures = [
+        [null, false],
+        ['', false],
+        ['\n\n\n', false],
+        // Clustal header line
+        ['CLUSTAL W(1.83) - multiple sequence alignment\n', false],
+        // First character is not >
+        ['\n\n    \n\t\r\n\nWow\n', false],
+        // first non-whitespace character is > but does not occur immediately after newline
+        ['  >', false],
+        ['\n\n >', false],
+        ['\r\n\t>\nATG\n', false],
+
+        ['>test sequence', true],
+        ['>test sequence\n', true],
+        ['>test sequence\nATGC\n', true],
+        ['>test sequence\nATGC\n>test sequence2\nATGC', true]
+    ];
+
+    array.forEach(fixtures, function(fixture) {
+        assertEquals(fixture[1], x.isCompatibleString(fixture[0]));
+    });
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_next() {
+    var x = new FastaReader();
+
+    var fixtures = [
+        ['', true],
+        // Whitespace before the > symbol, no sequence
+        ['  >My header', true],
+        // Only the > symbol
+        ['>', false, [['', '']]],
+        // Junk before the > symbol
+        ['a>', true],
+        // Leading whitespace before valid sequence
+        ['\t\r\v\f\n \n>Header\nABC', false, [['Header', 'ABC']]],
+        // Pure header
+        ['>Header', false, [['Header', '']]],
+        // Solely header containing additional > symbols
+        ['>>Header>text', false, [['>Header>text', '']]],
+        // Solely header, leading and termianl whitespace
+        ['>  Header  ', false, [['Header', '']]],
+        // Header and newline, but no sequence data
+        ['>Header\n', false, [['Header', '']]],
+        // No terminal newline after sequence
+        ['>Header\nABC', false, [['Header', 'ABC']]],
+        // Terminal newline after sequence
+        ['>Header\nABC\n', false, [['Header', 'ABC']]],
+        // > embedded in sequence
+        ['>Header\nABC\nDEF>\n >GHI', false, [['Header', 'ABC\nDEF>\n >GHI']]],
+        ['>\n>', false, [['', ''], ['', '']]],
+        ['>\n>\n', false, [['', ''], ['', '']]],
+        ['>\n>\n>\n>\n', false, [['', ''], ['', ''], ['', ''], ['', '']]],
+        // Multiple sequences without terminal newline
+        ['>123\nABC\n>456\nDEF', false, [['123', 'ABC'], ['456', 'DEF']]],
+        // Multiple sequences with terminal newline
+        ['>123\nABC\n>456\nDEF\n', false, [['123', 'ABC'], ['456', 'DEF']]],
+        // Empty header and valid sequence; vice versa
+        ['>\nABC\n>456\n', false, [['', 'ABC'], ['456', '']]],
+        // Multiple terminal newline in sequence
+        ['>123\nABC\n>456\n\n', false, [['123', 'ABC'], ['456', '']]],
+        // Embedded whitespace in sequence
+        ['>Header\n\nA\tB\fC\rD\vE  F\n>Header2', false, [['Header', '\nA\tB\fC\rD\vE  F'], ['Header2', '']]],
+        // Several normal sequences
+        ['>1\nA\n>2\nB\n>3\nC\n>4\nD\n>5\nE\n', false, [['1', 'A'], ['2', 'B'], ['3', 'C'], ['4', 'D'], ['5', 'E']]],
+        // Multi-line sequence data
+        ['>Header\nABC\nDEF\nGHI\n>Header2\nJKL\n', false, [['Header', 'ABC\nDEF\nGHI'], ['Header2', 'JKL']]],
+        // Two sequences with empty sequence
+        ['>ABC\n\n>', false, [['ABC', ''], ['', '']]]
+    ];
+
+    array.forEach(fixtures, function(fixture) {
+        var buffer = fixture[0];
+        var expectError = fixture[1];
+        var expect = fixture[2];
+
+        // console.log('Buffer', buffer);
+        // console.log('Expect', expect);
+        try {
+            x.setBuffer(buffer);
+            assertFalse(expectError);
+            var actual = [];
+            var seq;
+            while (seq = x.next()) {
+                actual.push(seq);
+            }
+
+            // console.log('Actual', actual);
+
+            assertEquals(expect.length, actual.length);
+            for (var i=0; i<expect.length; i++) {
+                assertEquals(expect[i][0], actual[i][0]);
+                assertEquals(expect[i][1], actual[i][1]);
+            }
+        }
+        catch (e) {
+            assertTrue(expectError);
+        }
+    });
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setBuffer() {
+    var x = new FastaReader();
+
+    var fixtures = [
+        ['', true],
+        ['  ', true],
+        [' >', true],
+        ['>'],
+        ['\n>'],
+        ['a>]', true]
+    ];
+
+    array.forEach(fixtures, function(fixture) {
+        var expectError = fixture.length === 2 && fixture[1] === true;
+        try {
+            x.setBuffer(fixture[0]);
+            assertFalse(expectError);
+        }
+        catch (e) {
+            assertTrue(expectError);
+        }
+    });
+};
+
+</script>
+</body>
+</html>

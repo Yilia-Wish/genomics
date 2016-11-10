@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.bio.primer.DimerScoreCalculator</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../../goog/base.js"></script>
+<script src="../../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.bio.BioString');
+goog.require('ag.bio.grammar');
+goog.require('ag.bio.primer.DimerScoreCalculator');
+</script>
+<body>
+<script>
+// Aliases
+var grammar = ag.bio.grammar;
+
+var BioString = ag.bio.BioString;
+var DimerScoreCalculator = ag.bio.primer.DimerScoreCalculator;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: dimerScore
+function test_constructor() {
+	var x = new DimerScoreCalculator();
+	
+	assertEquals(x.dimerScore(new BioString(null, grammar.DNA), new BioString(null, grammar.DNA)), 0);
+	assertEquals(x.dimerScore(new BioString('CCTCACATCGATTA', grammar.DNA), new BioString('GGCCG', grammar.DNA)), 6 * DimerScoreCalculator.STANDARD_PRIMER_LENGTH / 5);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: homoDimerScore
+function test_homoDimerScore() {
+	var cases = [
+		['A', 0],
+		['AAAAA', 0],
+		['CCCCCC', 0],
+		['ATATG', 8 * DimerScoreCalculator.STANDARD_PRIMER_LENGTH / 5],
+		['GCGCGC', 6 * 3 * DimerScoreCalculator.STANDARD_PRIMER_LENGTH / 6],
+		['GATCG', (3 + 2 + 2 + 3) * DimerScoreCalculator.STANDARD_PRIMER_LENGTH / 5],
+		['GGATGCT', (3 + 2 + 2 + 3) * DimerScoreCalculator.STANDARD_PRIMER_LENGTH / 7]
+	];
+
+	var x = new DimerScoreCalculator();
+	for (var i=0; i< cases.length; i++) {
+		var biostring = new BioString(cases[i][0], grammar.DNA); 
+		assertRoughlyEquals(x.homoDimerScore(biostring), cases[i][1], .00001);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: maximumHydrogenBonds
+function test_maximumHydrogenBonds() {
+	var cases = [
+		['A', 0],
+		['AAAAA', 0],
+		['CCCCCC', 0],
+		['ATATG', 8],
+		['GCGCGC', 6 * 3],
+		['GATCG', (3 + 2 + 2 + 3)],
+		['GGATGCT', (3 + 2 + 2 + 3)]
+	];
+
+	var x = new DimerScoreCalculator();
+	for (var i=0; i< cases.length; i++) {
+		var biostring = new BioString(cases[i][0], grammar.DNA); 
+		assertEquals(x.maximumHydrogenBonds(biostring, biostring), cases[i][1]);
+	}	
+};
+
+</script>
+</body>
+</html>

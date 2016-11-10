@@ -1,0 +1,105 @@
+.ag-headerView {
+  /* The following is necessary for constraining the header view when part of a larger widget (e.g.
+     TableView) to the relevant scrollable portion. More specifically, if a vertical scrollbar is
+     visible within the tableview, the header view likely needs to be resized to be width of the
+     TableView less the scroll bar width in which case this overflow is necessary to properly
+     provide for scrolling. */
+  overflow: hidden;
+}
+
+.ag-headerView table {
+  table-layout: fixed;
+  width: 10px;
+/*^^^^^^^^^^^ For the browser to render fixed columns properly, a base width must be
+  provided. Since we are working with pixels, a pixel value is given here, but any number
+  should work since it is overridden in the Javascript.
+
+  This also applies to the table view css.
+  */
+  cursor: default;
+}
+/* FF-specific rule: table must have separate borders to render properly (tested version 13.0.1) */
+@-moz-document url-prefix() {
+  .ag-headerView table {
+    border-collapse: separate;
+  }
+}
+
+.ag-headerView th {
+  text-overflow: ellipsis;
+  -o-text-overflow: ellipsis;
+  -webkit-text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  border-right: 1px solid black;
+
+  width: 100px;
+/*^^^^^^^^^^^^ default column width */
+
+  position: relative; /* Necessary for displaying sort/asc sort/desc arrows */
+  display: inline-block;
+}
+
+.ag-headerView.click-enabled th:hover {
+  cursor: pointer;
+}
+
+/* Assign the cursor to the entire table so that there is no cursor-flickering when mousing over
+   borders. This is not a problem since there is no data inside this table - only header labels. */
+.ag-headerView table.resize-hover th:hover {
+  cursor: col-resize;
+}
+
+.ag-headerView th.sort-asc:after {
+  content: ' ';
+  width: 0;
+  height: 0;
+  position: absolute;
+
+  border-style: solid;
+  border-color: transparent;
+  border-width: 6px 4px;      /* 8px (wide) by 12px (tall) */
+  border-bottom-color: #666;
+  right: 5px;
+}
+
+.ag-headerView th.sort-desc:after {
+  content: ' ';
+  width: 0;
+  height: 0;
+  position: absolute;
+
+  border-style: solid;
+  border-color: transparent;
+  border-width: 6px 4px;
+  border-top-color: #666;
+
+  right: 5px;
+  top: 50%;
+  margin-top: -3px;
+}
+
+
+.ag-headerView th {
+  background: #ffffff; /* Old browsers */
+  background: -moz-linear-gradient(top,  #ffffff 0%, #e5e5e5 100%); /* FF3.6+ */
+  background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#ffffff), color-stop(100%,#e5e5e5)); /* Chrome,Safari4+ */
+  background: -webkit-linear-gradient(top,  #ffffff 0%,#e5e5e5 100%); /* Chrome10+,Safari5.1+ */
+  background: -o-linear-gradient(top,  #ffffff 0%,#e5e5e5 100%); /* Opera 11.10+ */
+  background: -ms-linear-gradient(top,  #ffffff 0%,#e5e5e5 100%); /* IE10+ */
+  background: linear-gradient(to bottom,  #ffffff 0%,#e5e5e5 100%); /* W3C */
+  filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#ffffff', endColorstr='#e5e5e5',GradientType=0 ); /* IE6-9 */
+  padding: 4px;
+
+  border-right: 1px solid #aaa;
+}
+.ag-headerView th.section-active:hover {
+  background: #e5e5e5; /* Old browsers */
+  background: -moz-linear-gradient(top, #e5e5e5 0%, #ffffff 100%); /* FF3.6+ */
+  background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#e5e5e5), color-stop(100%,#ffffff)); /* Chrome,Safari4+ */
+  background: -webkit-linear-gradient(top, #e5e5e5 0%,#ffffff 100%); /* Chrome10+,Safari5.1+ */
+  background: -o-linear-gradient(top, #e5e5e5 0%,#ffffff 100%); /* Opera 11.10+ */
+  background: -ms-linear-gradient(top, #e5e5e5 0%,#ffffff 100%); /* IE10+ */
+  background: linear-gradient(to bottom, #e5e5e5 0%,#ffffff 100%); /* W3C */
+  filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#e5e5e5', endColorstr='#ffffff',GradientType=0 ); /* IE6-9 */
+}

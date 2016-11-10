@@ -1,0 +1,505 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - ag.core.CharCountDistribution</title>
+    <meta charset='utf-8'>
+</head>
+
+<script src='../goog/base.js'></script>
+<script src='../deps.js'></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.array');
+goog.require('ag.bio.BioString');
+goog.require('ag.core.ClosedIntRange');
+goog.require('ag.core.CharCountDistribution');
+</script>
+<body>
+<script>
+// Aliases
+var array = goog.array;
+
+var BioString = ag.bio.BioString;
+var ClosedIntRange = ag.core.ClosedIntRange;
+var CharCountDistribution = ag.core.CharCountDistribution;
+
+var sampleData = function(positive) {
+    positive = goog.isDefAndNotNull(positive) ? positive : true;
+
+    return [
+        {A: positive ? 2 : -2, C: positive ? 2 : -2},
+        {T: positive ? 1 : -1, G: positive ? 3 : -3}
+    ];
+};
+
+var sampleDataCoded = function(positive) {
+    positive = goog.isDefAndNotNull(positive) ? positive : true;
+
+    var arr = [];
+    var hash = {};
+    hash['A'.charCodeAt(0)] = positive ? 2 : -2;
+    hash['C'.charCodeAt(0)] = positive ? 2 : -2;
+    arr.push(hash);
+    hash = {};
+    hash['T'.charCodeAt(0)] = positive ? 1 : -1;
+    hash['G'.charCodeAt(0)] = positive ? 3 : -3;
+    arr.push(hash);
+
+    return arr;
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_constructor() {
+    // ------------------------------------------------------------------------
+    // Test: empty char counts
+    var x = new CharCountDistribution();
+
+    assertEquals(0, x.length());
+    assertArrayEquals([], x.charCounts());
+
+    // ------------------------------------------------------------------------
+    // Test: 1 column, non-empty char counts
+    var charCounts = [
+        {A: 10, C: 3}
+    ];
+
+    x = new CharCountDistribution(charCounts);
+
+    assertEquals(1, x.length());
+    assertEquals(charCounts, x.charCounts());
+
+    // ------------------------------------------------------------------------
+    // Test: 2 column, non-empty char counts
+    charCounts = [
+        {A: 10, C: 3},
+        {T: 5, G: 8}
+    ];
+
+    x = new CharCountDistribution(charCounts);
+    assertEquals(2, x.length());
+    assertEquals(charCounts, x.charCounts());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_insertBlanks() {
+    // ------------------------------------------------------------------------
+    // Test: insert blanks into non-empty distribution
+    var data = sampleData();
+    var x = new CharCountDistribution(data);
+
+    // Test: insert zero before the first column
+    x.insertBlanks(1, 0);
+    assertEquals(data, x.charCounts());
+
+    // Test: insert in the first column
+    var expectedX = sampleData();
+    array.insertAt(expectedX, {}, 0);
+
+    x.insertBlanks(1, 1);
+    assertTrue(CharCountDistribution.rawCountsEqual(expectedX, x.charCounts()));
+
+    // Test: insert at end
+    expectedX.push({});
+    x.insertBlanks(4, 1);
+    assertTrue(CharCountDistribution.rawCountsEqual(expectedX, x.charCounts()));
+
+    // Test: insert multiple in the middle
+    array.insertAt(expectedX, {}, 2);
+    array.insertAt(expectedX, {}, 2);
+    var retval = x.insertBlanks(3, 2);
+    assertTrue(CharCountDistribution.rawCountsEqual(expectedX, x.charCounts()));
+    assertTrue(retval === x);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_remove() {
+    var data = sampleData();
+    array.insertAt(data, {}, 1);
+    var x = new CharCountDistribution(data);
+
+    var expectedX = sampleData();
+    array.insertAt(expectedX, {}, 1);
+
+    // ------------------------------------------------------------------------
+    // Test: removing zero should do nothing
+    var retval = x.remove(1, 0);
+    assertTrue(retval === x);
+    retval = x.remove(2, 0);
+    assertTrue(retval === x);
+    assertTrue(CharCountDistribution.rawCountsEqual(expectedX, x.charCounts()));
+
+    // ------------------------------------------------------------------------
+    // Test: remove blank column from middle
+    expectedX = sampleData();
+    x.remove(2, 1);
+    assertTrue(CharCountDistribution.rawCountsEqual(expectedX, x.charCounts()));
+
+    // ------------------------------------------------------------------------
+    // Test: remove both columns
+    x.remove(1, 2);
+    assertEquals(0, x.charCounts().length);
+
+
+    data = sampleData();
+    x = new CharCountDistribution(data);
+
+    // ------------------------------------------------------------------------
+    // Test: 1 parameter version
+    x.remove(2);
+    expectedX = sampleData();
+    array.removeAt(expectedX, 1);
+    assertTrue(CharCountDistribution.rawCountsEqual(expectedX, x.charCounts()));
+
+    x.remove(1);
+    assertEquals(0, x.charCounts().length);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_add() {
+    var fixtures = [
+        [sampleData(), [], 1, sampleData(), "adding empty distribution"],
+        [[{}, {}], sampleData(), 1, sampleData(), "adding to distribution with two columns but no values"]
+    ];
+
+    var data = sampleData();
+    data[0]['G'] = 2;
+    data[1]['A'] = 1;
+    data[1]['C'] = 1;
+    fixtures.push([sampleData(), [{G: 2}, {A: 1, C: 1}], 1, data, "adding distribution of equal length but completely unique characters"]);
+
+    data = sampleData();
+    data[0]['A'] = 3;
+    data[0]['G'] = 1;
+    data[1]['G'] = 4;
+    fixtures.push([sampleData(), [{A: 1, G: 1}, {G: 1}], 1, data, "adding distribution of equal length and partially unique characters"]);
+
+    data = sampleData();
+    data[0]['G'] = 2;
+    data[0]['T'] = 1;
+    fixtures.push([sampleData(), [{G: 2, T: 1}], 1, data, "adding distribution of unequal length with specific offset of 1"]);
+
+    data = sampleData();
+    data[1]['G'] = 5;
+    data[1]['T'] = 2;
+    fixtures.push([sampleData(), [{G: 2, T: 1}], 2, data, "adding distribution of unequal length with specific offset of 2"]);
+
+    for (var i=0; i<fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var x = new CharCountDistribution(fixture[0]);
+        var y = new CharCountDistribution(fixture[1]);
+        var offset = fixture[2];
+        var expect = fixture[3];
+        var label = fixture[4];
+
+        var retval = x.add(y, offset);
+        assertTrue(CharCountDistribution.rawCountsEqual(expect, x.charCounts()));
+        assertTrue(retval === x);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_addBioString() {
+    var fixtures = [
+        [sampleDataCoded(), '', '\0', 1, sampleDataCoded()],
+        [sampleDataCoded(), '--', '-', 1, sampleDataCoded()],
+        [sampleDataCoded(), '-', '-', 1, sampleDataCoded()],
+        [sampleDataCoded(), '-', '-', 2, sampleDataCoded()]
+    ];
+
+    var expect = sampleDataCoded();
+    expect[0]['G'.charCodeAt(0)] = 1;
+    expect[1]['A'.charCodeAt(0)] = 1;
+    fixtures.push([sampleDataCoded(), 'GA', '\0', 1, expect]);
+
+    var expect = sampleDataCoded();
+    expect[0]['C'.charCodeAt(0)] = 3;
+    fixtures.push([sampleDataCoded(), 'C', '\0', 1, expect]);
+
+    var expect = sampleDataCoded();
+    expect[1]['T'.charCodeAt(0)] = 2;
+    fixtures.push([sampleDataCoded(), 'T', '\0', 2, expect]);
+
+    var expect = sampleDataCoded();
+    expect[1]['T'.charCodeAt(0)] = 2;
+    fixtures.push([sampleDataCoded(), '-T', '-', 1, expect]);
+
+    var expect = sampleDataCoded();
+    expect[0]['T'.charCodeAt(0)] = 1;
+    fixtures.push([sampleDataCoded(), 'T-', '-', 1, expect]);
+
+    for (var i=0; i<fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var x = new CharCountDistribution(fixture[0]);
+        var bioString = new BioString(fixture[1]);
+        var skipChar = fixture[2];
+        var offset = fixture[3];
+        var expect = fixture[4];
+
+        // console.log(i);
+        // console.log(fixture);
+
+        var retval = x.addBioString(bioString, skipChar, offset);
+        assertTrue(CharCountDistribution.rawCountsEqual(expect, x.charCounts()));
+        assertTrue(retval === x);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_allColumnsAreEmpty() {
+    var x = new CharCountDistribution();
+    assertTrue(x.allColumnsAreEmpty());
+
+    var data = [{A: 2}];
+    x = new CharCountDistribution(data);
+    assertFalse(x.allColumnsAreEmpty());
+
+    x = new CharCountDistribution([{}, {}]);
+    assertTrue(x.allColumnsAreEmpty());
+
+    x = new CharCountDistribution([{}, {x: 12}, {}]);
+    assertFalse(x.allColumnsAreEmpty());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_clear() {
+    var x = new CharCountDistribution(sampleData());
+    var retval = x.clear();
+    assertTrue(retval === x);
+
+    assertEquals(0, x.length());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_divide() {
+    var x = new CharCountDistribution();
+    assertEquals(0, x.divide(1).length);
+
+    x = new CharCountDistribution(sampleData());
+    var y = x.divide(4);
+    var expect = [
+        {A: .5, C: .5},
+        {T: .25, G: .75}
+    ];
+    assertTrue(CharCountDistribution.rawCountsEqual(expect, y));
+
+    y = x.divide(4, new ClosedIntRange(1, 2));
+    assertTrue(CharCountDistribution.rawCountsEqual(expect, y));
+
+    x = new CharCountDistribution(sampleData());
+    y = x.divide(4, new ClosedIntRange(1, 1));
+    expect = [{A: .5, C: .5}];
+    assertTrue(CharCountDistribution.rawCountsEqual(expect, y));
+
+    y = x.divide(4, new ClosedIntRange(2, 2));
+    expect = [{T: .25, G: .75}];
+    assertTrue(CharCountDistribution.rawCountsEqual(expect, y));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_mid() {
+    var data = [
+        {A: 1, C: 2},
+        {C: 1, T: 1, G: 1},
+        {T: 1, G: 1},
+        {A: 1, C: 1, G: 1}
+    ];
+    var x = new CharCountDistribution(data);
+
+    var actual = x.mid(new ClosedIntRange(1, 4)).charCounts();
+    assertTrue(CharCountDistribution.rawCountsEqual(data, actual));
+
+    actual = x.mid(new ClosedIntRange(2, 3)).charCounts();
+    var expect = array.slice(data, 1, 3);
+    assertTrue(CharCountDistribution.rawCountsEqual(expect, actual));
+
+    actual = x.mid(new ClosedIntRange(4, 4)).charCounts();
+    expect = array.slice(data, 3, 4);
+    assertTrue(CharCountDistribution.rawCountsEqual(expect, actual));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function baseData() {
+    return [
+        {A: 5, C: 3},
+        {G: 8}
+    ];
+};
+function test_removeZeroValueKeys() {
+    var fixtures = [
+        [baseData(), null, null, baseData()],
+        [baseData(), 1, 2, baseData()],
+        [baseData(), 1, 1, baseData()],
+        [baseData(), 2, 2, baseData()]
+    ];
+
+    var data = baseData();
+    data[1]['T'] = 0;
+    fixtures.push([data, null, null, baseData()]);
+
+    data = baseData();
+    data[0]['z'] = 0;
+    data[0]['O'] = 0;
+    fixtures.push([data, null, null, baseData()]);
+
+    data = baseData();
+    data[0]['z'] = 0;
+    data[1]['O'] = 0;
+    fixtures.push([data, null, null, baseData()]);
+
+    data = baseData();
+    fixtures.push([data, 1, 0, baseData()]);
+    fixtures.push([data, 2, 0, baseData()]);
+
+    data = baseData();
+    data[0]['Z'] = 0;
+    fixtures.push([data, 1, 0, baseData()]);
+
+    data = baseData();
+    data[0]['Z'] = 0;
+    fixtures.push([data, 2, 0, data]);
+
+    // 11
+    data = baseData();
+    data[0]['Y'] = 0;
+    data[1]['X'] = 0;
+    var expect = baseData();
+    expect[1]['X'] = 0;
+    fixtures.push([data, 1, 0, expect]);
+
+    data = baseData();
+    data[0]['X'] = 0;
+    data[1]['Y'] = 0;
+    expect = baseData();
+    expect[0]['X'] = 0;
+    fixtures.push([data, 2, 0, expect]);
+
+    data = baseData();
+    data[0]['Y'] = 0;
+    data[1]['Z'] = 0;
+    fixtures.push([data, 1, 2, baseData()]);
+
+    data = baseData();
+    data[0]['Y'] = 0;
+    data[1]['Z'] = 0;
+    expect = baseData();
+    expect[1]['Z'] = 0;
+    fixtures.push([data, 1, 1, expect]);
+
+    for (var i=11; i<fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var x = new CharCountDistribution(fixture[0]);
+        var from = fixture[1];
+        var to = fixture[2];
+        var expect = fixture[3];
+        var range = null;
+        if (from && to)
+            range = new ClosedIntRange(from, to);
+        else if (from)
+            range = new ClosedIntRange(from);
+        var retval;
+        if (range)
+            retval = x.removeZeroValueKeys(range);
+        else
+            retval = x.removeZeroValueKeys();
+
+        // console.log(i);
+        // console.log(fixture);
+
+        assertTrue(CharCountDistribution.rawCountsEqual(expect, x.charCounts()));
+        assertTrue(retval === x);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_subtract() {
+    var fixtures = [
+        [sampleData(), [], 1, sampleData(), "adding empty distribution"],
+        [[{}, {}], sampleData(), 1, sampleData(false), "adding to distribution with two columns but no values"]
+    ];
+
+    var data = sampleData();
+    data[0]['G'] = -2;
+    data[1]['A'] = -1;
+    data[1]['C'] = -1;
+    fixtures.push([sampleData(), [{G: 2}, {A: 1, C: 1}], 1, data, "adding distribution of equal length but completely unique characters"]);
+
+    data = sampleData();
+    data[0]['A'] = 1;
+    data[0]['G'] = -1;
+    data[1]['G'] = 2;
+    fixtures.push([sampleData(), [{A: 1, G: 1}, {G: 1}], 1, data, "adding distribution of equal length and partially unique characters"]);
+
+    data = sampleData();
+    data[0]['G'] = -2;
+    data[0]['T'] = -1;
+    fixtures.push([sampleData(), [{G: 2, T: 1}], 1, data, "adding distribution of unequal length with specific offset of 1"]);
+
+    data = sampleData();
+    data[1]['G'] = 1;
+    data[1]['T'] = 0;
+    fixtures.push([sampleData(), [{G: 2, T: 1}], 2, data, "adding distribution of unequal length with specific offset of 2"]);
+
+    for (var i=0; i<fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var x = new CharCountDistribution(fixture[0]);
+        var y = new CharCountDistribution(fixture[1]);
+        var offset = fixture[2];
+        var expect = fixture[3];
+        var label = fixture[4];
+
+        var retval = x.subtract(y, offset);
+        assertTrue(CharCountDistribution.rawCountsEqual(expect, x.charCounts()));
+        assertTrue(retval === x);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_subtractBioString() {
+    var fixtures = [
+        [sampleDataCoded(), '', '\0', 1, sampleDataCoded()],
+        [sampleDataCoded(), '--', '-', 1, sampleDataCoded()],
+        [sampleDataCoded(), '-', '-', 1, sampleDataCoded()],
+        [sampleDataCoded(), '-', '-', 2, sampleDataCoded()]
+    ];
+
+    var expect = sampleDataCoded();
+    expect[0]['G'.charCodeAt(0)] = -1;
+    expect[1]['A'.charCodeAt(0)] = -1;
+    fixtures.push([sampleDataCoded(), 'GA', '\0', 1, expect]);
+
+    var expect = sampleDataCoded();
+    expect[0]['C'.charCodeAt(0)] = 1;
+    fixtures.push([sampleDataCoded(), 'C', '\0', 1, expect]);
+
+    var expect = sampleDataCoded();
+    expect[1]['T'.charCodeAt(0)] = 0;
+    fixtures.push([sampleDataCoded(), 'T', '\0', 2, expect]);
+
+    var expect = sampleDataCoded();
+    expect[1]['T'.charCodeAt(0)] = 0;
+    fixtures.push([sampleDataCoded(), '-T', '-', 1, expect]);
+
+    var expect = sampleDataCoded();
+    expect[0]['T'.charCodeAt(0)] = -1;
+    fixtures.push([sampleDataCoded(), 'T-', '-', 1, expect]);
+
+    for (var i=0; i<fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var x = new CharCountDistribution(fixture[0]);
+        var bioString = new BioString(fixture[1]);
+        var skipChar = fixture[2];
+        var offset = fixture[3];
+        var expect = fixture[4];
+
+        // console.log(i);
+        // console.log(fixture);
+
+        var retval = x.subtractBioString(bioString, skipChar, offset);
+        assertTrue(CharCountDistribution.rawCountsEqual(expect, x.charCounts()));
+        assertTrue(retval === x);
+    }
+};
+
+</script>
+</body>
+</html>

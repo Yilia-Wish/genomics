@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.statemachine.AbstractTransition</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.events.Event');
+
+goog.require('ag.statemachine.MockState');
+goog.require('ag.statemachine.MockTransition');
+goog.require('ag.statemachine.State');
+
+goog.require('ag.meta.SignalSpy');
+</script>
+<body>
+
+<script>
+// Aliases
+var AbstractTransition = ag.statemachine.AbstractTransition;
+var MockState = ag.statemachine.MockState;
+var MockTransition =ag.statemachine.MockTransition;
+var SignalSpy = ag.meta.SignalSpy;
+var State = ag.statemachine.State;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_stateMachine() {
+	var x = new MockTransition();
+	assertNull(x.stateMachine());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_targetState() {
+	var x = new MockTransition();
+	assertNull(x.targetState());
+
+	var state = new MockState();
+	x.setTargetState(state);
+
+	assertEquals(x.targetState(), state);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_trigger() {
+	var x = new MockTransition();
+
+	assertEquals(x.transitionEventLog.length, 0);
+
+	var spy = new SignalSpy(x, AbstractTransition.SignalType.TRIGGERED);
+	var e = new goog.events.Event('TestEvent');
+	x.trigger(e);
+
+	assertEquals(x.transitionEventLog.length, 1);
+	assertEquals(x.transitionEventLog[0], e);
+
+	assertEquals(spy.size(), 1);
+};
+
+</script>
+</body>
+</html>

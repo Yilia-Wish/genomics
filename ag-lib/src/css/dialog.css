@@ -1,0 +1,53 @@
+.modal-dialog-title-close {
+  /* Client apps may override the URL at which they serve the sprite. */
+  background: #e0edfe url(//ssl.gstatic.com/editor/editortoolbar.png) no-repeat -528px 0;
+  cursor: default;
+  height: 15px;
+  position: absolute;
+  right: 10px;
+  top: 8px;
+  width: 15px;
+  vertical-align: middle;
+}
+
+.modal-dialog {
+    /*background: #c98e25;*/
+    border: 1px solid #000;
+    position: absolute;
+}
+
+.modal-dialog-bg {
+    background: #666;
+    left: 0;
+    top: 0;
+    position: absolute;
+}
+
+.modal-dialog-title {
+    background: #fef1e0;
+    cursor: pointer;
+    font-size: 110%;
+    font-weight: bold;
+    font-family: sans-serif;
+
+    position: relative;
+    padding: 4px 31px 4px 4px;
+    _zoom: 1;
+}
+
+.modal-dialog-buttons, .modal-dialog-content {
+    padding: 8px;
+    background-color: #fff;
+}
+
+.goog-buttonset-default {
+    font-weight: bold;
+}
+
+.modal-dialog-buttons button:first-child {
+    margin-left: 0;
+}
+
+.modal-dialog-buttons .goog-buttonset-default {
+    margin-right: 0;
+}

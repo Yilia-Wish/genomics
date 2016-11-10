@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.painting.CharPixelMetrics</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.dom');
+goog.require('ag.painting.CharPixelMetrics');
+</script>
+<body>
+<canvas id="canvas" width="200" height="200" style="border: 1px solid black;"></canvas>
+
+<script>
+// Aliases
+var CharPixelMetrics = ag.painting.CharPixelMetrics;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	var ch = 'q';
+	var ascii = ch.charCodeAt(0);
+	var s = 1;
+	var x = new CharPixelMetrics('144px monospace', s);
+	
+	// Ink-only
+	var canvas = goog.dom.getElement('canvas');
+	var context = canvas.getContext('2d');
+
+	canvas.width = x.inkWidth(ascii);
+	canvas.height = x.inkHeight(ascii);
+	context.font = x.font();
+	context.textBaseline = 'alphabetic';
+
+	var d = x.inkOnlyOrigin(ascii);
+	context.translate(d.x, d.y);
+	context.scale(s, s);
+	context.fillText(ch, 0, 0);
+
+	// Block
+	// canvas.width = x.blockWidth();
+	// canvas.height = x.blockHeight();
+	// var context = canvas.getContext('2d');
+	// context.font = x.font();
+	// context.textBaseline = 'top';
+
+	// console.log(x.blockSize());
+
+	// var d = x.blockOrigin(ascii);
+	// context.fillText(ch, d.x, d.y);
+};
+
+</script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - ag.ui.ThreePrimeInput</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="/css/reset/meyer-min.css">
+    <link rel="stylesheet" href="/js/ag/css/ui.css">
+<style type="text/css">
+</style>
+</head>
+
+<script src="../../goog/base.js"></script>
+<script src="../../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.dom');
+goog.require('ag.bio.ui.ThreePrimeInput');
+</script>
+<body>
+
+<div id="space"></div>
+
+<script>
+var dom = goog.dom;
+
+var ThreePrimeInput = ag.bio.ui.ThreePrimeInput;
+
+var x;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_it() {
+    var div = dom.getElement('space');
+
+    x = new ThreePrimeInput();
+    x.decorate(div);
+};
+</script>
+
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.ui.Label</title>
+	<meta charset="utf-8">
+	<link rel="stylesheet" href="/css/reset/meyer-min.css">
+	<link rel="stylesheet" href="/js/ag/css/ui.css">
+<style type="text/css">
+</style>
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.dom');
+goog.require('ag.ui.Label');
+</script>
+<body>
+
+<div>
+	<span id="label"></div>
+</div>
+
+<script>
+var dom = goog.dom;
+
+var Label = ag.ui.Label;
+
+var x;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_it() {
+	var label = dom.getElement('label');
+
+	x = new Label('Test label');
+	x.decorate(label);
+};
+</script>
+
+</body>
+</html>

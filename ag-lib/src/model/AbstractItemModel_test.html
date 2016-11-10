@@ -1,0 +1,509 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.model.AbstractItemModel</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.object');
+goog.require('ag.model.AbstractItemModel');
+goog.require('ag.model.MockItemModel');
+goog.require('ag.meta.SignalSpy');
+</script>
+<body>
+<script>
+// Aliases
+var object = goog.object;
+
+var AbstractItemModel = ag.model.AbstractItemModel;
+var MockItemModel = ag.model.MockItemModel;
+var ModelIndex = ag.model.ModelIndex;
+var PersistentModelIndex = ag.model.PersistentModelIndex;
+var SignalSpy = ag.meta.SignalSpy;
+
+var Columns = MockItemModel.Columns;
+var DataRole = AbstractItemModel.DataRole;
+var SignalType = AbstractItemModel.SignalType;
+
+var x;
+
+// --------------------------------------------------------------------------------------------------------------------
+function setUp() {
+	x = new MockItemModel();
+};
+
+function tearDown() {
+	x.dispose();
+	x = null;
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_clear() {
+	var x = new MockItemModel();
+
+	var aboutToRemoveSpy = new SignalSpy(x, SignalType.ROWS_ABOUT_TO_BE_REMOVED);
+	var removedSpy = new SignalSpy(x, SignalType.ROWS_REMOVED);
+
+	assertEquals(x.rowCount(), 4);
+	x.clear();
+	assertEquals(x.rowCount(), 0);
+	assertEquals(aboutToRemoveSpy.size(), 1);
+	assertArrayEquals(aboutToRemoveSpy.signals()[0], [0, 3]);
+	aboutToRemoveSpy.clear();
+	assertEquals(removedSpy.size(), 1);
+	assertArrayEquals(removedSpy.signals()[0], [0, 3]);
+	removedSpy.clear();
+
+	x.clear();
+	assertTrue(aboutToRemoveSpy.isEmpty());
+	assertTrue(removedSpy.isEmpty());
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: clearInvalidPersistentIndices
+function test_clearInvalidPersistentIndices() {
+	var index = x.index(0, 0);
+	assertTrue(index.isValid());
+	var pIndex = new PersistentModelIndex(index);
+
+	// HACK! Testing its private member status
+	assertFalse(object.isEmpty(x.persistentModelIndices_));
+	assertTrue(pIndex.isValid());
+
+	x.clearInvalidPersistentIndices();
+	assertTrue(pIndex.isValid());
+	pIndex.invalidate();
+	x.clearInvalidPersistentIndices();
+
+	// HACK! Testing its private member status
+	assertTrue(object.isEmpty(x.persistentModelIndices_));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: columnCount
+function test_columnCount() {
+	assertEquals(x.columnCount(), 3);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: data
+function test_data() {
+	var y = new ModelIndex();
+	assertNull(x.data(y));
+	assertNull(x.data(y, DataRole.kDisplay));
+	assertNull(x.data(y, DataRole.kEdit));
+
+	var mockData = MockItemModel.mockData();
+	var columnNames = ['id', 'name', 'age'];
+	for (var i=0; i< mockData.length; i++) {
+		for (var j=0; j<columnNames.length; j++) {
+			var expect = mockData[i][columnNames[j]];
+
+			var index = x.index(i, j);
+
+			assertEquals(x.data(index), expect);
+			assertEquals(x.data(index, DataRole.kDisplay), expect);
+			assertEquals(x.data(index, DataRole.kEdit), 'edit-' + expect);
+		}
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: dispose
+function test_dispose() {
+	var pIndex = new PersistentModelIndex(x.index(0, 0));
+	assertTrue(pIndex.isValid());
+	x.dispose();
+	assertFalse(pIndex.isValid());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: headerData
+function test_headerData() {
+	for (var i=-5; i<10; i++)
+		// Note - we are calling a pseudo method that simply calls AbstractItemModel.headerData directly
+		// rather than the overridden headerData method. The rationale for this is that when testing proxy
+		// models it is necessary to have a valid headerData method (one that does not always return null),
+		// yet using that implementation here would not test the base class implementation.
+		//
+		// This also applies to setData.
+		assertNull(x.headerDataBase(i));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: index
+function test_index() {
+	for (var i=-2; i< x.rowCount() + 2; i++) {
+		for (var j=-2; j< x.columnCount() + 2; j++) {
+			var index = x.index(i, j);
+
+			assertEquals(index.isValid(), i >= 0 && i < x.rowCount() && j >= 0 && j < x.columnCount());
+			if (index.isValid()) {
+				assertEquals(index.row(), i);
+				assertEquals(index.column(), j);
+				assertEquals(index.model(), x);
+				assertNull(index.internalData());
+			}
+		}
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: insert
+function test_insert() {
+	var pIndexRow = 0;
+	var pIndex2Row = 3;
+
+	var insertPositions = [0, 2, MockItemModel.mockData().length];
+	for (var a=0; a< insertPositions.length; a++) {
+		// Check that any persistent indices are invalidated
+		var pIndex = new PersistentModelIndex(x.index(pIndexRow, 0));
+		var pIndex2 = new PersistentModelIndex(x.index(pIndex2Row, 2));
+
+		// Also checking for the proper signals to be emitted
+		var spyAbout = new SignalSpy(x, SignalType.ROWS_ABOUT_TO_BE_INSERTED);
+		var spyInserted = new SignalSpy(x, SignalType.ROWS_INSERTED);
+
+		var nInitialRows = x.rowCount();
+
+		var newRow = MockItemModel.randomInsertRow();
+		var insertPos = insertPositions[a];
+		x.insertRow(newRow, insertPos);
+		assertEquals(x.rowCount(), nInitialRows + 1);
+		// Make sure the data was inserted
+		for (var i=0; i<x.columnCount(); i++) {
+			assertEquals(x.index(insertPos, Columns.ID).data(), newRow.id);
+			assertEquals(x.index(insertPos, Columns.NAME).data(), newRow.name);
+			assertEquals(x.index(insertPos, Columns.AGE).data(), newRow.age);
+		}
+		// Make sure the signals were emitted
+		assertEquals(spyAbout.size(), 1);
+		assertEquals(spyAbout.signals()[0][0], insertPos);
+		assertEquals(spyAbout.signals()[0][1], insertPos);
+
+		assertEquals(spyInserted.size(), 1);
+		assertArrayEquals(spyAbout.signals(), spyInserted.signals());
+
+		if (insertPos <= pIndexRow)
+			assertEquals(pIndex.row(), pIndexRow + 1);
+		else
+			assertEquals(pIndex.row(), pIndexRow);
+
+		if (insertPos <= pIndex2Row)
+			assertEquals(pIndex2.row(), pIndex2Row + 1);
+		else
+			assertEquals(pIndex2.row(), pIndex2Row);
+
+		assertTrue(pIndex.isValid());
+		assertTrue(pIndex2.isValid());
+
+		spyAbout.clear();
+		spyInserted.clear();
+		x.reset();
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: insertRows
+function test_insertRows() {
+	var pIndexRow = 0;
+	var pIndex2Row = 3;
+
+	var insertPositions = [0, 2, MockItemModel.mockData().length];
+	for (var a=0; a< insertPositions.length; a++) {
+		// Check that any persistent indices are invalidated
+		var pIndex = new PersistentModelIndex(x.index(pIndexRow, 0));
+		var pIndex2 = new PersistentModelIndex(x.index(pIndex2Row, 2));
+
+		// Also checking for the proper signals to be emitted
+		var spyAbout = new SignalSpy(x, SignalType.ROWS_ABOUT_TO_BE_INSERTED);
+		var spyInserted = new SignalSpy(x, SignalType.ROWS_INSERTED);
+
+		var nInitialRows = x.rowCount();
+
+		var newRows = [ MockItemModel.randomInsertRow(), MockItemModel.randomInsertRow() ];
+		var expectedTotalRows = x.rowCount() + newRows.length;
+		// Insert at beginning
+		var insertPos = insertPositions[a];
+		x.insertRows(newRows, insertPos);
+		assertEquals(x.rowCount(), expectedTotalRows);
+		// Make sure the data was inserted
+		for (var i=0; i< newRows.length; i++) {
+			for (var j=0; j<x.columnCount(); j++) {
+				assertEquals(x.index(insertPos + i, Columns.ID).data(), newRows[i].id);
+				assertEquals(x.index(insertPos + i, Columns.NAME).data(), newRows[i].name);
+				assertEquals(x.index(insertPos + i, Columns.AGE).data(), newRows[i].age);
+			}
+		}
+		// Make sure the signals were emitted
+		assertEquals(spyAbout.size(), 1);
+		assertEquals(spyAbout.signals()[0][0], insertPos);
+		assertEquals(spyAbout.signals()[0][1], insertPos + newRows.length - 1);
+
+		assertEquals(spyInserted.size(), 1);
+		assertArrayEquals(spyAbout.signals(), spyInserted.signals());
+
+		if (insertPos <= pIndexRow)
+			assertEquals(pIndex.row(), pIndexRow + newRows.length);
+		else
+			assertEquals(pIndex.row(), pIndexRow);
+
+		if (insertPos <= pIndex2Row)
+			assertEquals(pIndex2.row(), pIndex2Row + newRows.length);
+		else
+			assertEquals(pIndex2.row(), pIndex2Row);
+
+		assertTrue(pIndex.isValid());
+		assertTrue(pIndex2.isValid());
+
+		spyAbout.clear();
+		spyInserted.clear();
+		x.reset();
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: isValidColumn
+function test_isValidColumn() {
+	for (var i=-5; i<10; i++)
+		assertEquals(x.isValidColumn(i), i >= 0 && i < x.columnCount());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: isValidIndex
+function test_isValidIndex() {
+	var y = new ModelIndex();
+	assertFalse(y.isValid());
+	assertFalse(x.isValidIndex(y));
+
+	y = x.index(0, 0);
+	assertTrue(y.isValid());
+	assertTrue(x.isValidIndex(y));
+
+	y = x.index(5, 2);
+	assertFalse(y.isValid());
+	assertFalse(x.isValidIndex(y));
+
+
+	// Items from other models are not valid relative to that model
+	y = x.index(0, 2);
+	assertTrue(y.isValid());
+	assertTrue(x.isValidIndex(y));
+
+	var model2 = new MockItemModel();
+	assertFalse(model2.isValidIndex(y));
+
+	var y2 = model2.index(0, 0);
+	assertTrue(y2.isValid());
+	assertTrue(model2.isValidIndex(y2));
+	assertFalse(x.isValidIndex(y2));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: isValidInsertRow
+function test_isValidInsertRow() {
+	for (var i=-5; i< x.rowCount() + 5; i++)
+		assertEquals(x.isValidInsertRow(i), i >= 0 && i <= x.rowCount());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: isValidRow
+function test_isValidRow() {
+	for (var i=-5; i<10; i++)
+		assertEquals(x.isValidRow(i), i >= 0 && i < x.rowCount());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function checkRowOrder(expectedIdOrder) {
+	var idOrder = expectedIdOrder.split('');
+	assertEquals(x.rowCount(), idOrder.length);
+	for (var i=0; i<x.rowCount(); i++)
+		assertEquals(x.index(i, Columns.ID).data(), parseInt(idOrder[i]));
+};
+
+// Method: moveRows
+function test_moveRows() {
+	var cases = [
+		[3, 4, 0, '34012567', 3, 5],
+		[3, 4, 1, '03412567', 3, 5],
+		[3, 4, 2, '01342567', 1, 5],
+		[3, 4, 4, '01253467', 1, 3],
+		[3, 4, 5, '01256347', 1, 3],
+		[3, 4, 6, '01256734', 1, 3],
+	];
+
+	var pIndexRow = 1;
+	var pIndex2Row = 5;
+
+	for (var i=0; i<cases.length; i++) {
+		var moveStartRow = cases[i][0];
+		var moveStopRow = cases[i][1];
+		var moveDestRow = cases[i][2];
+		var expIdOrder = cases[i][3];
+		var expPIndex1Row = cases[i][4];
+		var expPIndex2Row = cases[i][5];
+
+		// Add another 4 indices of data to work with
+		x.insertRows(MockItemModel.moreMockData(), x.rowCount());
+
+		// Also checking for the proper signals to be emitted
+		var spyAbout = new SignalSpy(x, SignalType.ROWS_ABOUT_TO_BE_MOVED);
+		var spyMoved = new SignalSpy(x, SignalType.ROWS_MOVED);
+
+		var pIndex = new PersistentModelIndex(x.index(pIndexRow, 0));
+		var pIndex2 = new PersistentModelIndex(x.index(pIndex2Row, 2));
+
+		// These two persistent indices correspond to the rows being moved
+		var insidePindex1 = new PersistentModelIndex(x.index(moveStartRow, 1));
+		var insidePindex2 = new PersistentModelIndex(x.index(moveStopRow, 1));
+
+		x.moveRows(moveStartRow, moveStopRow, moveDestRow);
+		checkRowOrder(expIdOrder);
+
+		// Check that the signals were emitted properly
+		assertEquals(spyAbout.size(), 1);
+		assertEquals(spyAbout.signals()[0][0], moveStartRow);
+		assertEquals(spyAbout.signals()[0][1], moveStopRow);
+		assertEquals(spyAbout.signals()[0][2], moveDestRow);
+
+		assertEquals(spyMoved.size(), 1);
+		assertArrayEquals(spyAbout.signals(), spyMoved.signals());
+
+		// Check that the persistent rows were updated as expected
+		assertTrue(pIndex.isValid());
+		assertTrue(pIndex2.isValid());
+		assertTrue(insidePindex1.isValid());
+		assertTrue(insidePindex2.isValid());
+
+		assertEquals(pIndex.row(), expPIndex1Row);
+		assertEquals(pIndex2.row(), expPIndex2Row);
+		assertEquals(insidePindex1.row(), moveDestRow);
+		assertEquals(insidePindex2.row(), moveDestRow + (moveStopRow - moveStartRow));
+
+		x.reset();
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: remove
+function test_remove() {
+	var pIndexRow = 0;
+	var pIndex2Row = 3;
+
+	for (var b=1; b<2; b++) {
+		var rowsToRemove = b;
+		var removePositions = [0, 1, MockItemModel.mockData().length - rowsToRemove];
+		for (var a=0; a< removePositions.length; a++) {
+			// Check that any persistent indices are invalidated
+			var pIndex = new PersistentModelIndex(x.index(pIndexRow, 0));
+			var pIndex2 = new PersistentModelIndex(x.index(pIndex2Row, 2));
+
+			// Also checking for the proper signals to be emitted
+			var spyAbout = new SignalSpy(x, SignalType.ROWS_ABOUT_TO_BE_REMOVED);
+			var spyRemoved = new SignalSpy(x, SignalType.ROWS_REMOVED);
+
+			var nInitialRows = x.rowCount();
+
+			var removePos = removePositions[a];
+			x.removeRows(removePos, rowsToRemove);
+			assertEquals(x.rowCount(), nInitialRows - rowsToRemove);
+			// Make sure the signals were emitted
+			var endRemoveRow = removePos + rowsToRemove - 1;
+			assertEquals(spyAbout.size(), 1);
+			assertEquals(spyAbout.signals()[0][0], removePos);
+			assertEquals(spyAbout.signals()[0][1], endRemoveRow);
+
+			assertEquals(spyRemoved.size(), 1);
+			assertArrayEquals(spyAbout.signals(), spyRemoved.signals());
+
+			if (pIndexRow < removePos)
+				assertEquals(pIndex.row(), pIndexRow);
+			else if (pIndexRow <= endRemoveRow)
+				assertFalse(pIndex.isValid())
+			else
+				assertEquals(pIndex.row(), pIndexRow - rowsToRemove);
+
+			if (pIndex2Row < removePos)
+				assertEquals(pIndex2.row(), pIndex2Row);
+			else if (pIndex2Row <= endRemoveRow)
+				assertFalse(pIndex2.isValid())
+			else
+				assertEquals(pIndex2.row(), pIndex2Row - rowsToRemove);
+
+			spyAbout.clear();
+			spyRemoved.clear();
+			x.reset();
+		}
+	}
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: reset
+function test_reset() {
+	var spyAbout = new SignalSpy(x, SignalType.MODEL_ABOUT_TO_BE_RESET);
+	var spyReset = new SignalSpy(x, SignalType.MODEL_RESET);
+
+	var initialRowCount = x.rowCount();
+	// Add a row
+	x.insertRow(MockItemModel.randomInsertRow(), 0);
+
+	x.reset();
+	assertEquals(x.rowCount(), initialRowCount);
+	assertEquals(spyAbout.size(), 1);
+	assertEquals(spyReset.size(), 1);
+	spyAbout.clear();
+	spyReset.clear();
+
+	// Check that any persistent indices are invalidated
+	var pIndex = new PersistentModelIndex(x.index(0, 0));
+	var pIndex2 = new PersistentModelIndex(x.index(3, 2));
+
+	assertTrue(pIndex.isValid());
+	assertTrue(pIndex2.isValid());
+
+	x.reset();
+
+	assertFalse(pIndex.isValid());
+	assertFalse(pIndex2.isValid());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: rowCount
+function test_rowCount() {
+	assertEquals(x.rowCount(), MockItemModel.mockData().length);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: setData
+function test_setData() {
+	for (var i=-2; i< x.rowCount() + 2; i++) {
+		for (var j=-2; j< x.columnCount() + 2; j++) {
+			var index = x.index(i, j);
+			assertFalse(x.setDataBase(index, 'blargh'));
+			assertFalse(x.setDataBase(index, 'blargh', DataRole.kDisplay));
+			assertFalse(x.setDataBase(index, 'blargh', DataRole.kEdit));
+		}
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: sort
+function test_sort() {
+	// Base implementation should do absolutely nothing
+	for (var i=0; i< x.columnCount(); i++)
+		x.sort(i, i % 2 === 0 ? AbstractItemModel.SortOrder.kAsc : AbstractItemModel.SortOrder.kDesc);
+
+	test_data();
+};
+
+
+</script>
+</body>
+</html>

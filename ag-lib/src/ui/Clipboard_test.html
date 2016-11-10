@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.ui.Clipboard</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.ui.Clipboard');
+</script>
+<body>
+<script>
+// Aliases
+var Clipboard = ag.ui.Clipboard.getInstance;
+
+// --------------------------------------------------------------------------------------------------------------------
+function setUp() {
+	
+}
+
+function tearDown() {
+	
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	Clipboard().copy('Blargh');
+	Clipboard().copy('swine');
+};
+
+</script>
+</body>
+</html>

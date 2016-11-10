@@ -1,0 +1,109 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - ag.bio.io.ClustalReader</title>
+    <meta charset='utf-8'>
+</head>
+
+<script src='../../goog/base.js'></script>
+<script src='../../deps.js'></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.array');
+goog.require('ag.bio.io.ClustalReader');
+goog.require('ag.bio.io.ClustalStringsWithErrors');
+goog.require('ag.bio.io.ClustalStringsGood');
+</script>
+<body>
+<script>
+// Aliases
+var array = goog.array;
+
+var ClustalReader = ag.bio.io.ClustalReader;
+var ClustalStringsWithErrors = ag.bio.io.ClustalStringsWithErrors;
+var ClustalStringsGood = ag.bio.io.ClustalStringsGood;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_constructor() {
+    var x = new ClustalReader();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_isCompatibleString() {
+    var x = new ClustalReader();
+
+    var fixtures = [
+        [null, false],
+        ['', false],
+        ['\n\n\n', false],
+        // Fasta/Clustal header line
+        ['>CLUSTAL W(1.83) - multiple sequence alignment\n', false],
+        // First characters are not CLUSTAL
+        ['\n\n    \n\t\r\n\nWow\n', false],
+        ['CLUSTA W(1.83) - multiple sequence alignment\n', false],
+        // first non-whitespace character is CLUSTAL but does not occur immediately after newline
+        ['  CLUSTAL', false],
+        ['\n\n CLUSTAL', false],
+        ['\r\n\tCLUSTAL', false],
+
+        ['CLUSTAL', true],
+        ['CLUSTAL W(1.83) - multiple sequence alignment', true],
+        ["CLUSTAL\n\nTest1  AT-G\nTest2  ATCG\n", true],
+        ["\n\n   \nCLUSTAL\n\nTest1  AT-G\nTest2  ATCG\n", true]
+    ];
+
+    for (var i=0; i< fixtures.length; i++) {
+        var input = fixtures[i][0];
+        var expect = fixtures[i][1];
+
+        // console.log(i);
+        // console.log(input);
+
+        assertEquals(expect, x.isCompatibleString(input));
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_parseString_WithError() {
+    var x = new ClustalReader();
+    var fixtures = ClustalStringsWithErrors;
+
+    for (var i=0; i< fixtures.length; i++) {
+        var fileName = fixtures[i][0];
+        var alignment = fixtures[i][1];
+        var threwError = null
+
+        try {
+            var result = x.parseString(alignment);
+            threwError = false
+        }
+        catch (error) {
+            threwError = true
+        }
+        assertTrue(threwError);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_parseString_Good() {
+    var x = new ClustalReader();
+    var fixtures = ClustalStringsGood;
+
+    for (var i=0; i< fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var description = fixture[0];
+        var alignment = fixture[1];
+        var expect = fixture[2];
+
+        var result = x.parseString(alignment);
+        assertEquals('Wrong number of entries', expect.length, result.length);
+        for (var j=0; j< expect.length; j++) {
+            assertEquals(expect[j][0], result[j][0]);
+            assertEquals(expect[j][1], result[j][1]);
+        }
+    }
+};
+
+</script>
+</body>
+</html>

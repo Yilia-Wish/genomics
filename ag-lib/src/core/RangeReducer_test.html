@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.core.RangeReducer</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.math.Coordinate');
+goog.require('goog.math.Size');
+goog.require('goog.object');
+goog.require('ag.core.ClosedIntRange');
+goog.require('ag.core.RangeReducer');
+</script>
+<body>
+<script>
+var object = goog.object;
+
+var ClosedIntRange = ag.core.ClosedIntRange;
+var RangeReducer = ag.core.RangeReducer;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_reduce() {
+	var x = RangeReducer.getInstance();
+
+	var testRows = [
+		// Empty input
+		{input: [], expect: []},
+
+		// Single range
+		{input: [new ClosedIntRange(0, 1)],
+		 expect: [0, 1]},
+
+		// Two non-overlapping ranges
+		// X _ O
+		{input: [new ClosedIntRange(0), new ClosedIntRange(2)],
+		 expect: [0, 2]},
+
+		// Two ranges just touching
+		{input: [new ClosedIntRange(0, 1), new ClosedIntRange(2, 3)],
+		 expect: [0, 1, 2, 3]},
+
+		// Two ranges exactly overlapping
+		{input: [new ClosedIntRange(), new ClosedIntRange()],
+		 expect: [0]},
+
+		// Two partially overlapping ranges
+		{input: [new ClosedIntRange(0, 1), new ClosedIntRange(1, 2)],
+		 expect: [0, 1, 2]},
+
+		// One range completely encompassing other range
+		{input: [new ClosedIntRange(0, 5), new ClosedIntRange(2, 4)],
+		 expect: [0, 1, 2, 3, 4, 5]},
+
+		{input: [new ClosedIntRange(2, 3), new ClosedIntRange(0, 4)],
+		 expect: [0, 1, 2, 3, 4]},
+
+		// Three overlapping ranges
+		{input: [new ClosedIntRange(0, 2), new ClosedIntRange(3, 0), new ClosedIntRange(0, -1)],
+		 expect: [-1, 0, 1, 2, 3]}
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var testRow = testRows[i];
+		var input = testRow.input;
+		var expect = testRow.expect;
+
+		var result = x.reduce(input);
+		var resultCoverage = ClosedIntRange.coverage(result);
+		assertEquals(object.getKeys(resultCoverage).length, expect.length);
+		for (var j=0; j<expect.length; j++) {
+			var key = expect[j];
+			assertTrue(object.containsKey(resultCoverage, key));
+			assertEquals(resultCoverage[key], 1);
+		}
+	}
+};
+
+
+</script>
+</body>
+</html>

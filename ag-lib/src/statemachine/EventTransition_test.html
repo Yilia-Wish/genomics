@@ -1,0 +1,164 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - ag.statemachine.EventTransition</title>
+    <meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.events.Event');
+
+goog.require('ag.statemachine.EventTransition');
+goog.require('ag.statemachine.MockState');
+goog.require('ag.statemachine.StateMachine');
+</script>
+<body>
+
+<script>
+// Aliases
+var Event = goog.events.Event;
+
+var EventTransition = ag.statemachine.EventTransition;
+var StateMachine = ag.statemachine.StateMachine;
+var MockState = ag.statemachine.MockState;
+
+// --------------------------------------------------------------------------------------------------------------------
+/*
+    o possible signals:
+    forward
+    backward
+
+    o source objects
+    source1
+    source2
+
+    o states
+    stateA
+    stateB
+    stateC
+
+    stateA -> stateB when source1 emits forward
+    stateB -> stateA when source1 emits backward
+    stateB -> stateC when source2 emits forward
+    stateC -> stateB when source2 emits backward
+    stateB -> stateA when source2 emits forward
+*/
+function test_transitionOnSignal() {
+    x = new StateMachine();
+    stateA = new MockState();
+    x.addState(stateA);
+    x.setInitialState(stateA);
+
+    stateB = new MockState();
+    x.addState(stateB);
+
+    stateC = new MockState();
+    x.addState(stateC);
+
+    var source1 = {};
+    var source2 = {};
+
+    var a2b = new EventTransition('forward', source1);
+    a2b.setTargetState(stateB);
+    stateA.addTransition(a2b);
+
+    var b2a = new EventTransition('backward', source1);
+    b2a.setTargetState(stateA);
+    stateB.addTransition(b2a);
+
+    var b2c = new EventTransition('forward', source2);
+    b2c.setTargetState(stateC);
+    stateB.addTransition(b2c);
+
+    var c2b = new EventTransition('backward', source2);
+    c2b.setTargetState(stateB);
+    stateC.addTransition(c2b);
+
+    var c2a = new EventTransition('forward', source2);
+    c2a.setTargetState(stateA);
+    stateC.addTransition(c2a);
+
+    x.start();
+
+    var s1_f = new Event('forward', source1);
+    var s1_b = new Event('backward', source1);
+    var s2_f = new Event('forward', source2);
+    var s2_b = new Event('backward', source2);
+
+    x.postEvent(s1_b);
+    x.postEvent(s2_f);
+    x.postEvent(s2_b);
+    checkEventCounts(stateA, 3, 0, 0);
+    checkEventCounts(stateB, 0, 0, 0);
+    checkEventCounts(stateC, 0, 0, 0);
+    stateA.clear();
+
+    // Move from stateA -> stateB
+    x.postEvent(s1_f);
+    checkEventCounts(stateA, 0, 0, 1);
+    checkEventCounts(stateB, 1, 1, 0);
+    checkEventCounts(stateC, 0, 0, 0);
+    stateA.clear();
+    stateB.clear();
+
+    // Bogus events
+    x.postEvent(s1_f);
+    x.postEvent(s2_b);
+    checkEventCounts(stateA, 0, 0, 0);
+    checkEventCounts(stateB, 2, 0, 0);
+    checkEventCounts(stateC, 0, 0, 0);
+    stateB.clear();
+
+    // Move from stateB -> stateA and back to stateB
+    x.postEvent(s1_b);
+    checkEventCounts(stateA, 1, 1, 0);
+    checkEventCounts(stateB, 0, 0, 1);
+    checkEventCounts(stateC, 0, 0, 0);
+    x.postEvent(s1_f);
+    stateA.clear();
+    stateB.clear();
+
+    // Move from stateB -> stateC
+    x.postEvent(s2_f);
+    checkEventCounts(stateA, 0, 0, 0);
+    checkEventCounts(stateB, 0, 0, 1);
+    checkEventCounts(stateC, 1, 1, 0);
+    stateB.clear();
+    stateC.clear();
+
+    // Bogus events
+    x.postEvent(s1_f);
+    x.postEvent(s1_b);
+    checkEventCounts(stateA, 0, 0, 0);
+    checkEventCounts(stateB, 0, 0, 0);
+    checkEventCounts(stateC, 2, 0, 0);
+    stateC.clear();
+
+    // Move from stateC -> stateB and back to stateC
+    x.postEvent(s2_b);
+    checkEventCounts(stateA, 0, 0, 0);
+    checkEventCounts(stateB, 1, 1, 0);
+    checkEventCounts(stateC, 0, 0, 1);
+    x.postEvent(s2_f);
+    stateB.clear();
+    stateC.clear();
+
+    // Move from stateC -> stateA
+    x.postEvent(s2_f);
+    checkEventCounts(stateA, 1, 1, 0);
+    checkEventCounts(stateB, 0, 0, 0);
+    checkEventCounts(stateC, 0, 0, 1);
+};
+
+function checkEventCounts(state, nProcessed, nEntry, nExit) {
+    assertEquals(nProcessed, state.processedEvents.length);
+    assertEquals(nEntry, state.entryEvents.length);
+    assertEquals(nExit, state.exitEvents.length);
+};
+
+</script>
+</body>
+</html>

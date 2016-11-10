@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - ag.statemachine.RadioGroupState</title>
+    <meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+
+goog.require('ag.statemachine.RadioGroupState');
+goog.require('ag.statemachine.RadioEvent');
+goog.require('ag.statemachine.RadioState');
+goog.require('ag.statemachine.StateMachine');
+
+goog.require('ag.meta.SignalSpy');
+</script>
+<body>
+
+<script>
+// Aliases
+var RadioGroupState = ag.statemachine.RadioGroupState;
+var RadioEvent = ag.statemachine.RadioEvent;
+var StateMachine = ag.statemachine.StateMachine;
+var RadioState = ag.statemachine.RadioState;
+
+var SignalSpy = ag.meta.SignalSpy;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_processEvent() {
+    x = new StateMachine();
+
+    var radioGroup = x.addState(new RadioGroupState('radioGroup'));
+    var stateA = radioGroup.addRadioState(new RadioState('A'));
+    var stateB = radioGroup.addRadioState(new RadioState('B'));
+    var stateC = radioGroup.addRadioState(new RadioState('C'));
+
+    var enteredType = ag.statemachine.AbstractState.SignalType.ENTERED;
+    var exitedType = ag.statemachine.AbstractState.SignalType.EXITED;
+
+    var spyStateAEnter = new SignalSpy(stateA, enteredType);
+    var spyStateAExit = new SignalSpy(stateA, exitedType);
+    var spyStateBEnter = new SignalSpy(stateB, enteredType);
+    var spyStateBExit = new SignalSpy(stateB, exitedType);
+    var spyStateCEnter = new SignalSpy(stateC, enteredType);
+    var spyStateCExit = new SignalSpy(stateC, exitedType);
+
+    var fixtures = [
+        ['D', [0, 0, 0, 0, 0, 0]],
+        ['B', [0, 1, 0, 0, 0, 0]],
+        ['B', [0, 0, 0, 0, 0, 0]],
+        ['C', [0, 0, 1, 0, 1, 0]],
+        ['A', [1, 0, 0, 0, 0, 1]],
+        ['D', [0, 0, 0, 0, 0, 0]],
+    ];
+
+    x.setInitialState(radioGroup);
+    x.start();
+
+    var i=-1;
+    while (++i < fixtures.length) {
+        var fixture = fixtures[i];
+
+        var id = fixture[0];
+        x.postEvent(new RadioEvent(id));
+
+        var counts = fixture[1];
+        assertEquals(counts[0], spyStateAEnter.size())
+        assertEquals(counts[1], spyStateBEnter.size())
+        assertEquals(counts[2], spyStateCEnter.size())
+
+        assertEquals(counts[3], spyStateAExit.size())
+        assertEquals(counts[4], spyStateBExit.size())
+        assertEquals(counts[5], spyStateCExit.size())
+
+        spyStateAEnter.clear();
+        spyStateBEnter.clear();
+        spyStateCEnter.clear();
+
+        spyStateAExit.clear();
+        spyStateBExit.clear();
+        spyStateCExit.clear();
+    }
+};
+
+
+</script>
+</body>
+</html>

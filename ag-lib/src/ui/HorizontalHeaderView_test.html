@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.ui.HorizontalHeaderView</title>
+	<meta charset="utf-8">
+	<link rel="stylesheet" href="/css/reset/meyer-min.css">
+	<link rel="stylesheet" href="/js/ag/css/ui.css">
+	<link rel="stylesheet" href="/js/ag/css/headerView.css">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.dom');
+goog.require('ag.model.AbstractItemModel');
+goog.require('ag.model.MockItemModel');
+
+goog.require('ag.ui.HorizontalHeaderView');
+</script>
+<body>
+<div id="testDiv" style="width: 800px;"></div>
+
+<script>
+// Aliases
+var dom = goog.dom;
+
+var MockItemModel = ag.model.MockItemModel;
+var HorizontalHeaderView = ag.ui.HorizontalHeaderView;
+
+var x;
+var model = new MockItemModel();
+var testDiv = dom.getElement('testDiv');
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_headerView() {
+	x = new HorizontalHeaderView();
+	x.render(testDiv);
+	x.setModel(model);
+};
+
+
+</script>
+</body>
+</html>

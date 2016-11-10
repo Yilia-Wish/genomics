@@ -1,0 +1,256 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - ag.bio.SymbolStringCalculator</title>
+    <meta charset='utf-8'>
+</head>
+
+<script src='../goog/base.js'></script>
+<script src='../deps.js'></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.math');
+goog.require('ag.bio.BioSymbol');
+goog.require('ag.bio.BioSymbolGroup');
+goog.require('ag.service.SymbolStringCalculator');
+goog.require('ag.core.CharCountDistribution');
+goog.require('ag.core.ClosedIntRange');
+goog.require('ag.core.UnitRect');
+</script>
+<body>
+<script>
+// Aliases
+var math = goog.math;
+
+var BioSymbol = ag.bio.BioSymbol;
+var BioSymbolGroup = ag.bio.BioSymbolGroup;
+var CharCountDistribution = ag.core.CharCountDistribution;
+var ClosedIntRange = ag.core.ClosedIntRange;
+var SymbolStringCalculator = ag.service.SymbolStringCalculator;
+var UnitRect = ag.core.UnitRect;
+
+var aminoCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+var isGapCharacter = ag.bio.isGapCharacter;
+
+function randCharCode() {
+    return aminoCharacters[math.randomInt(aminoCharacters.length)].charCodeAt(0);
+};
+
+function toCharCodes(arr) {
+    var result = [];
+    for (var i=0; i<arr.length; i++) {
+        var tmp = arr[i];
+        var newTmp = {};
+        for (var ch in tmp)
+            newTmp[ch.charCodeAt(0)] = tmp[ch];
+        result.push(newTmp);
+    }
+    return result;
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_constructor() {
+    var group = new BioSymbolGroup();
+    var x = new SymbolStringCalculator(group);
+    assertEquals(' ', x.defaultSymbol());
+
+    x = new SymbolStringCalculator(group, 'X');
+    assertEquals('X', x.defaultSymbol());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_computeSymbolString() {
+    var fixtures = [];
+
+    // ------------------------------------------------------------------------
+    // Test: completely empty BioSymbolGroup and empty VectorHashCharDouble except dimensionally
+    //
+    // Subtest 1: [ {} ]
+    // Subtest 2: [ {}, {}, ]
+    // ...
+    for (var i=0; i<3; ++i) {
+        var dist = Array();
+        for (var j=0; j<i+1; ++j)
+            dist.push({});
+
+        fixtures.push([new BioSymbolGroup(), ' ', dist, ' '.repeated(i+1)]);
+    }
+
+    // ------------------------------------------------------------------------
+    // Test: completely empty BioSymbolGroup and single element VectorHashCharDoubles
+    //
+    // Subtest 1: [ {A} ]
+    // Subtest 2: [ {A}, {B}, ]
+    // ...
+    for (var i=0; i<3; ++i) {
+        var dist = Array();
+        for (var j=0; j<i+1; ++j) {
+            var ch = randCharCode();
+            var counts = {};
+            counts[randCharCode()] = Math.random();
+            dist.push(counts);
+        }
+
+        fixtures.push([new BioSymbolGroup(), '%', dist, '%'.repeated(i+1)]);
+    }
+
+    // ------------------------------------------------------------------------
+    // Test: completely empty BioSymbolGroup and multi-element VectorHashCharDoubles
+    //
+    // Subtest 1: [ {A, B, ... ?} ]
+    // Subtest 2: [ {A, ...?}, {B, ... ?}, ]
+    // ...
+    for (var i=0; i<3; ++i) {
+        var dist = Array();
+        for (var j=0; j<i+1; ++j) {
+            var pool = 100;
+            var counts = {};
+            for (var k=0, z=1+math.randomInt(10); k<z; k++) {
+                var amt = math.randomInt(pool);
+                var ch = aminoCharacters[k];
+                counts[ch] = amt / 100.0;
+                pool -= amt;
+            }
+
+            dist.push(counts);
+        }
+
+        fixtures.push([new BioSymbolGroup(), '-', dist, '-'.repeated(i+1)]);
+    }
+
+    // ------------------------------------------------------------------------
+    // Test: Single rule, single character must exceed threshold
+    //       [ {A => .49},
+    //         {A => .5, a => .25, C => .1},
+    //         {A => .51},
+    //         {A => .4, P => .5, C => .1} ]
+    //       Cutoff = A for .5
+    var counts = [
+        {A: .49},
+        {A: .5, a: .25, C: .1},
+        {A: .51},
+        {A: .4, P: .5, C: .1}
+    ];
+    var group = new BioSymbolGroup();
+    group.add(new BioSymbol('a', "A", .5));
+    fixtures.push([group, '_', toCharCodes(counts), '_aa_']);
+
+    // ------------------------------------------------------------------------
+    // Test: single rule, sum of multiple characters must exceed threshold
+    counts = [
+        {A: .25, B: .24, C: .5},
+        {A: .49, B: .01, a: .25, C: .1},
+        {A: .51},
+        {B: .5}
+    ];
+    group = new BioSymbolGroup();
+    group.add(new BioSymbol('a', "AB", .5));
+    fixtures.push([group, '_', toCharCodes(counts), '_aaa']);
+
+    // ------------------------------------------------------------------------
+    // Test: multiple non-overlapping rules, overlapping and non-overlapping columns
+    // There are two possibilites to test here, each possibility is tested in a
+    // different column
+    // These are:
+    // sum(AB) < .5
+    // sum(AB) = .5
+    // sum(AB) > .5
+    // sum(CD) < .3
+    // sum(CD) = .3
+    // sum(CD) > .3
+    //
+    // Options dealing with both rules in the same column
+    // sum(AB) < .5, sum(CD) < .3
+    // sum(AB) > .5, sum(CD) < .3
+    // sum(AB) < .5, sum(CD) > .3
+    // sum(AB) > .5, sum(CD) > .3
+    counts = [
+        // sum(AB) < .5
+        {A: .25, B: .24},
+        // sum(AB) = .5
+        {A: .49, B: .01, a: .25, C: .1},
+        // sum(AB) > .5
+        {A: .51},
+        // sum(CD) < .3
+        {C: .1, D: .1},
+        // sum(CD) = .3
+        {C: .2, D: .1},
+        // sum(CD) > .3
+        {C: .3, D: .3},
+        // sum(AB) < .5, sum(CD) < .3
+        {A: .07, B: .03, C: .05, D: .1},
+        // sum(AB) > .5, sum(CD) < .3
+        {A: .7, B: .01, C: .05, D: .1},
+        // sum(AB) < .5, sum(CD) > .3
+        {A: .3, B: .1, C: .25, D: .2},
+        // sum(AB) > .5, sum(CD) > .3
+        // Result should be the AB rule wins because it has the same number of characters and a higher threshold
+        {A: .3, B: .25, C: .15, D: .2},
+
+    ];
+    group = new BioSymbolGroup();
+    group.add(new BioSymbol('a', "AB", .5));
+    group.add(new BioSymbol('c', "CD", .3));
+    fixtures.push([group, '_', toCharCodes(counts), '_aa_cc_aca']);
+
+    // ------------------------------------------------------------------------
+    // Test: Two rules, same number of characters, same thresholds
+    counts = [
+        // sum(AB) = .5, sum(CD) = .4; both rules match, but since sum(AB) / 2 = .25 > sum(CD) / 2 = .2, AB wins
+        {A: .3, B: .2, C: .15, D: .25},
+        // sum(AB) == sum(CD) == .3; tie, first rule wins
+        {A: .15, B: .15, C: .15, D: .15},
+        // sum(AB) = .4, sum(CD) = .6; both rules match, but since sum(AB) / 2 = .2 < sum(CD) / 2 = .3, CD wins
+        {A: .3, B: .1, C: .3, D: .3}
+    ];
+    group = new BioSymbolGroup();
+    group.add(new BioSymbol('a', "AB", .3));
+    group.add(new BioSymbol('c', "CD", .3));
+    fixtures.push([group, '_', toCharCodes(counts), 'aac']);
+
+    // ------------------------------------------------------------------------
+    // Test: Two rules, different number of characters, same thresholds
+    counts = [
+        // sum(AB) == sum(C) == .3; C wins
+        {A: .2, B: .1, C: .3},
+        // sum(AB) = .59, sum(CD) = .3; C wins
+        {A: .29, B: .3, C: .3},
+        // sum(AB) = .6, sum(CD) = .3; AB wins because of tie and it is first rule
+        {A: .3, B: .3, C: .3},
+        // sum(AB) = .7 sum(CD) = .3; AB wins
+        {B: .7, C: .3}
+    ];
+    group = new BioSymbolGroup();
+    group.add(new BioSymbol('a', "AB", .3));
+    group.add(new BioSymbol('c', "C", .3));
+    fixtures.push([group, '_', toCharCodes(counts), 'ccaa']);
+
+
+    // ------------------------------------
+    // ------------------------------------
+    for (var i=0; i<fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var bioSymbolGroup = fixture[0];
+        var defaultSymbol = fixture[1];
+        var dist = fixture[2];
+        var expect = fixture[3];
+
+        console.log(i);
+        console.log(fixture);
+
+        var x = new SymbolStringCalculator(bioSymbolGroup, defaultSymbol);
+        var actual = x.computeSymbolString(dist);
+        assertEquals(expect, actual);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setDefaultSymbol() {
+    var x = new SymbolStringCalculator(new BioSymbolGroup());
+    x.setDefaultSymbol('d');
+    assertEquals('d', x.defaultSymbol());
+};
+
+</script>
+</body>
+</html>

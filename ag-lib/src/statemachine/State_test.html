@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.statemachine.State</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.statemachine.MockState');
+goog.require('ag.statemachine.MockTransition');
+goog.require('ag.statemachine.State');
+</script>
+<body>
+
+<script>
+// Aliases
+var MockState = ag.statemachine.MockState;
+var MockTransition =ag.statemachine.MockTransition;
+var State = ag.statemachine.State;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_addTransition() {
+	var x = new MockState();
+	var y = new MockState();
+
+	assertEquals(x.transitions().length, 0);
+
+	var t = new MockTransition();
+	t.setTargetState(y);
+	x.addTransition(t);
+
+	assertEquals(x.transitions().length, 1);
+	assertEquals(x.transitions()[0], t);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_addTransitionForSignal() {
+	var x = new MockState();
+	var y = new MockState();
+
+	var obj = {};
+	var signal = 'test';
+
+	x.addTransitionForSignal(obj, signal, y);
+	var ts = x.transitions();
+	assertEquals(1, ts.length);
+	assertEquals(obj, ts[0].sender());
+	assertEquals(signal, ts[0].signalName());
+	assertEquals(y, ts[0].targetState());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_dispose() {
+	var x = new MockState();
+	x.dispose();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_name() {
+	var x = new MockState();
+	assertNull(x.name());
+
+	x = new MockState('test');
+	assertEquals(x.name(), 'test');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_stateMachine() {
+	var x = new MockState();
+	assertNull(x.stateMachine());
+};
+
+</script>
+</body>
+</html>

@@ -1,0 +1,711 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.core.RangeSet</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.object');
+goog.require('ag.core.ClosedIntRange');
+goog.require('ag.core.RangeSet');
+goog.require('ag.core.RangeReducer');
+</script>
+<body>
+<script>
+// Aliases
+var object = goog.object;
+
+var ClosedIntRange = ag.core.ClosedIntRange;
+var RangeSet = ag.core.RangeSet;
+
+var rangeReducer = ag.core.RangeReducer.getInstance;
+
+
+var baseRanges = [
+	new ClosedIntRange(0, 0),
+	new ClosedIntRange(-1, 1)
+];
+
+var testRangeArray = [
+	new ClosedIntRange(0),
+	new ClosedIntRange(-3, -6),
+	new ClosedIntRange(9, 16),
+	new ClosedIntRange(5, 6),
+	new ClosedIntRange(-5, 3)
+];
+
+var testRangeArrayArray = [
+	[],
+	[new ClosedIntRange(0)],
+	[new ClosedIntRange(-3, -6), new ClosedIntRange(9, 16)],
+	[new ClosedIntRange(5, 6), new ClosedIntRange(3, 12), new ClosedIntRange(8, -11)]
+];
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_constructor() {
+	var x = new RangeSet();
+	assertEquals(x.ranges().length, 0);
+
+	// Test: input of single range
+	var range = new ClosedIntRange(0);
+	x = new RangeSet(range);
+	assertEquals(x.ranges().length, 1);
+	assertTrue(x.ranges()[0].eq(range));
+
+	// Test: ClosedIntRangeArray
+	var ranges = [range, new ClosedIntRange(0)];
+	x = new RangeSet(ranges);
+	var actualCoverage = ClosedIntRange.coverage(x.ranges());
+	var expectedCoverage = ClosedIntRange.coverage(rangeReducer().reduce(ranges));
+	assertHashEquals(actualCoverage, expectedCoverage);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_boundingRange() {
+	// Test empty ranges should return null
+	var x = new RangeSet();
+	assertNull(x.boundingRange());
+
+	var testRows = [
+		[[new ClosedIntRange(0)],
+		 new ClosedIntRange(0)],
+
+		[[new ClosedIntRange(0), new ClosedIntRange(1)],
+		 new ClosedIntRange(0, 1)],
+
+		[[new ClosedIntRange(0, 2), new ClosedIntRange(1)],
+		 new ClosedIntRange(0, 2)],
+
+		[[new ClosedIntRange(0), new ClosedIntRange(-21, -17)],
+		 new ClosedIntRange(-21, 0)]
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var ranges = testRows[i][0];
+		var expect = testRows[i][1];
+
+		x = new RangeSet(ranges);
+		var actual = x.boundingRange();
+		assertTrue(actual.eq(expect));
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_clear() {
+	var x = new RangeSet(new ClosedIntRange(3, 10));
+	assertEquals(x.ranges().length, 1);
+	x.clear();
+	assertTrue(x.isEmpty());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+
+function test_clone() {
+	var ranges = [new ClosedIntRange(0)];
+	var x = new RangeSet(ranges);
+	var y = x.clone();
+	assertTrue(x !== y);
+	assertTrue(x.ranges() !== y.ranges());
+	assertEquals(y.ranges().length, x.ranges().length);
+	assertTrue(x.ranges()[0].eq(y.ranges()[0]));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_contains() {
+	var wind = new RangeSet([new ClosedIntRange(0), new ClosedIntRange(2)]);
+
+	for (var i=-1; i< 5; i++)
+		assertEquals(wind.contains(i), i === 0 || i === 2);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_containsRange() {
+	var wind = new RangeSet([new ClosedIntRange(0), new ClosedIntRange(2)]);
+
+	assertTrue(wind.containsRange(new ClosedIntRange(0, 0)));
+	assertTrue(wind.containsRange(new ClosedIntRange(2, 2)));
+	assertFalse(wind.containsRange(new ClosedIntRange(2, 1)));
+
+	assertFalse(wind.containsRange(new ClosedIntRange(0, 1)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_containsSet() {
+	var wind = new RangeSet([new ClosedIntRange(0), new ClosedIntRange(2)]);
+
+	for (var i=-1; i< 4; i++) {
+		var wind2 = wind.clone();
+		wind2.adjust(i);
+		assertEquals(wind.containsSet(wind2), i === 0);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_differenceSimpleAndSubtract() {
+	// Simple tests first
+	var testRows = [
+		// Non-intersecting
+		new ClosedIntRange(4),
+		new ClosedIntRange(8, 7),
+
+		// Edges
+		new ClosedIntRange(-1, 1),
+		new ClosedIntRange(1, 3),
+
+		// Non-normal corners
+		new ClosedIntRange(1, -1),
+		new ClosedIntRange(3, 1),
+
+		// fully inside
+		new ClosedIntRange(1),
+
+		// Fully encompassing
+		new ClosedIntRange(-1, 4)
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var input = testRows[i];
+		var x = new RangeSet();
+
+		// nothing - X should equal nothing
+		var result = x.difference(input);
+		assertTrue(result.isEmpty());
+
+		// ** Subtraction **
+		x.subtract(input);
+		assertTrue(x.isEmpty());
+
+		// Now attempt to difference something
+		var range = new ClosedIntRange(0, 2);
+		x = new RangeSet(range);
+		result = x.difference(input);
+		var actualCoverage = ClosedIntRange.coverage(result.ranges());
+		var expectedCoverage = ClosedIntRange.coverage(range.difference(input));
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		// ** Subtraction **
+		x.subtract(input);
+		actualCoverage = ClosedIntRange.coverage(x.ranges());
+		assertHashEquals(actualCoverage, expectedCoverage);
+	}
+};
+
+function test_differenceAdvancedAndSubtract() {
+	var starter = new ClosedIntRange(0, 2).difference(new ClosedIntRange(1));
+	var x = new RangeSet(starter);
+
+	var subtrahend = new ClosedIntRange(0, 2);
+	var testRows = [
+		// No overlap
+		{position: -5, expect: x.ranges()},
+
+		{position: -2, expect: [new ClosedIntRange(2)]},
+		{position: -1, expect: [new ClosedIntRange(2)]},
+		{position: 0, expect: []},
+		{position: 1, expect: [new ClosedIntRange(0)]},
+		{position: 2, expect: [new ClosedIntRange(0)]}
+	];
+
+	for (var i=0; i< testRows.length; i++) {
+		var testRow = testRows[i];
+		var range = subtrahend.clone();
+	    range.moveBegin(testRow.position);
+
+		var result = x.difference(range);
+		var expectedCoverage = ClosedIntRange.coverage(testRow.expect);
+		var actualCoverage = ClosedIntRange.coverage(result.ranges());
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		// ** Subtraction **
+		var y = x.clone();
+		y.subtract(range);
+		actualCoverage = ClosedIntRange.coverage(y.ranges());
+		assertHashEquals(actualCoverage, expectedCoverage);
+	}
+};
+
+// This method tests the subtraction of a RangeSet by another RangeSet
+function test_differenceWithSet() {
+	var wind = new RangeSet([new ClosedIntRange(0), new ClosedIntRange(2)]);
+
+	var testRows = [
+		{position: -2, oneMinusTwo: [new ClosedIntRange(2)],
+					   twoMinusOne: [new ClosedIntRange(-2)]},
+		{position: -1, oneMinusTwo: wind.ranges(),
+					   twoMinusOne: [new ClosedIntRange(-1), new ClosedIntRange(1)]},
+		{position: 0, oneMinusTwo: [],
+					  twoMinusOne: []},
+		{position: 1, oneMinusTwo: wind.ranges(),
+					  twoMinusOne: [new ClosedIntRange(1), new ClosedIntRange(3)]},
+		{position: 2, oneMinusTwo: [new ClosedIntRange(0)],
+					  twoMinusOne: [new ClosedIntRange(4)]}
+	];
+
+	for (var i=0; i< testRows.length; i++) {
+		var testRow = testRows[i];
+		var wind2 = wind.clone();
+
+		// ----------------------
+		// Prepare the window range set
+		wind2.adjust(testRow.position);
+		var result = wind.difference(wind2);
+		var expectedCoverage = ClosedIntRange.coverage(testRow.oneMinusTwo);
+		var actualCoverage = ClosedIntRange.coverage(result.ranges());
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		// ** Subtraction **
+		var y = wind.clone();
+		y.subtract(wind2);
+		actualCoverage = ClosedIntRange.coverage(y.ranges());
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		// ----------------------
+		// wind2 minus wind
+		var result = wind2.difference(wind);
+		var expectedCoverage = ClosedIntRange.coverage(testRow.twoMinusOne);
+		var actualCoverage = ClosedIntRange.coverage(result.ranges());
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		// ** Subtraction **
+		var y = wind2.clone();
+		y.subtract(wind);
+		actualCoverage = ClosedIntRange.coverage(y.ranges());
+		assertHashEquals(actualCoverage, expectedCoverage);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_intersectionSimpleAndIntersects() {
+	// Simple tests first
+	var testRows = [
+		// Non-intersecting
+		new ClosedIntRange(4),
+		new ClosedIntRange(8, 7),
+
+		// Various
+		new ClosedIntRange(1, 3),
+		new ClosedIntRange(-1, 1),
+		new ClosedIntRange(-1, 2),
+		new ClosedIntRange(1, 3),
+
+		// Non-normal
+		new ClosedIntRange(1, -1),
+
+		// fully inside
+		new ClosedIntRange(1),
+
+		// Fully encompassing
+		new ClosedIntRange(-1, 4)
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var input = testRows[i];
+		var x = new RangeSet();
+
+		// nothing - X should equal nothing
+		var result = x.intersection(input);
+		assertTrue(result.isEmpty());
+		assertFalse(x.intersects(input));
+
+		// Now attempt to difference something
+		var range = new ClosedIntRange(0, 2);
+		x = new RangeSet(range);
+		result = x.intersection(input);
+		var actualCoverage = ClosedIntRange.coverage(result.ranges());
+		var expectedIntersection = range.intersection(input);
+		var expectedCoverage = (expectedIntersection) ? ClosedIntRange.coverage([expectedIntersection]) : {};
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		if (object.isEmpty(expectedCoverage)) {
+			assertFalse(x.intersects(input));
+			assertTrue(result.isEmpty());
+		}
+		else {
+			assertTrue(x.intersects(input));
+			assertFalse(result.isEmpty());
+		}
+
+		// ------------------------------------
+		// Now attempt the reverse intersection
+		x = new RangeSet(input);
+		result = x.intersection(range);
+		var actualCoverage = ClosedIntRange.coverage(result.ranges());
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		if (object.isEmpty(expectedCoverage)) {
+			assertFalse(x.intersects(range));
+			assertTrue(result.isEmpty());
+		}
+		else {
+			assertTrue(x.intersects(range));
+			assertFalse(result.isEmpty());
+		}
+	}
+};
+
+function test_intersectionAdvancedAndIntersects() {
+	var starter = new ClosedIntRange(0, 2).difference(new ClosedIntRange(1));
+
+	var intersecter = new ClosedIntRange(0, 2);
+	var testRows = [
+		// No overlap
+		{position: -5, expect: []},
+
+		{position: -2, expect: [new ClosedIntRange(0)]},
+		{position: -1, expect: [new ClosedIntRange(0)]},
+		{position: 0, expect: [new ClosedIntRange(0), new ClosedIntRange(2)]},
+		{position: 1, expect: [new ClosedIntRange(2)]},
+		{position: 2, expect: [new ClosedIntRange(2)]}
+	];
+
+	for (var i=0; i< testRows.length; i++) {
+		var testRow = testRows[i];
+		var range = intersecter.clone();
+	    range.moveBegin(testRow.position);
+
+		var x = new RangeSet();
+
+		// nothing - X should equal nothing
+		var result = x.intersection(range);
+		assertTrue(result.isEmpty());
+		assertFalse(x.intersects(range));
+
+		// Starter
+		x = new RangeSet(starter);
+		var result = x.intersection(range);
+		var expectedCoverage = ClosedIntRange.coverage(testRow.expect);
+		var actualCoverage = ClosedIntRange.coverage(result.ranges());
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		if (object.isEmpty(expectedCoverage)) {
+			assertFalse(x.intersects(range));
+			assertTrue(result.isEmpty());
+		}
+		else {
+			assertTrue(x.intersects(range));
+			assertFalse(result.isEmpty());
+		}
+
+		// ------------------------------------
+		// Now attempt the reverse intersection
+		x = new RangeSet(range);
+		var result = x.intersection(starter);
+		var actualCoverage = ClosedIntRange.coverage(result.ranges());
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		if (object.isEmpty(expectedCoverage)) {
+			assertFalse(x.intersects(starter));
+			assertTrue(result.isEmpty());
+		}
+		else {
+			assertTrue(x.intersects(starter));
+			assertFalse(result.isEmpty());
+		}
+	}
+};
+
+function test_intersectionSlotInSlots() {
+	var wind = new RangeSet([new ClosedIntRange(0), new ClosedIntRange(2)]);
+
+	var testRows = [
+		{position: -2, expect: [new ClosedIntRange(0)]},
+		{position: -1, expect: []},
+		{position: 0, expect: [new ClosedIntRange(0), new ClosedIntRange(2)]},
+		{position: 1, expect: []},
+		{position: 2, expect: [new ClosedIntRange(2)]}
+	];
+
+	for (var i=0; i< testRows.length; i++) {
+		var testRow = testRows[i];
+
+		var wind2 = wind.clone();
+		wind2.adjust(testRow.position);
+		var result = wind.intersection(wind2);
+		var expectedCoverage = ClosedIntRange.coverage(testRow.expect);
+		var actualCoverage = ClosedIntRange.coverage(result.ranges());
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		if (object.isEmpty(expectedCoverage)) {
+			assertFalse(wind.intersects(wind2));
+			assertTrue(result.isEmpty());
+		}
+		else {
+			assertTrue(wind.intersects(wind2));
+			assertFalse(result.isEmpty());
+		}
+
+		// ------------------------------------
+		// Now attempt the reverse intersection
+		var result = wind2.intersection(wind);
+		var actualCoverage = ClosedIntRange.coverage(result.ranges());
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		if (object.isEmpty(expectedCoverage)) {
+			assertFalse(wind2.intersects(wind));
+			assertTrue(result.isEmpty());
+		}
+		else {
+			assertTrue(wind2.intersects(wind));
+			assertFalse(result.isEmpty());
+		}
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_inverseAndInvertSimple() {
+	// Test: inverse of nothing should be nothing
+	var x = new RangeSet();
+	assertTrue(x.inverse().isEmpty());
+	x.invert();
+	assertTrue(x.isEmpty());
+
+	var testRows = [
+		// --------------------------------
+		// Suite: base of nothing against X
+		// Single range
+		{base: null,
+		 input: new ClosedIntRange(0, 0),
+		 expect: [0]},
+
+		// ClosedIntRangeArray with partial overlap
+		{base: null,
+		 input: [new ClosedIntRange(0), new ClosedIntRange(0, 1)],
+		 expect: [0, 1]},
+
+		// RangeSet with partial overlap
+		{base: null,
+		 input: new RangeSet([new ClosedIntRange(0, 1), new ClosedIntRange(1, 2)]),
+		 expect: [0, 1, 2]},
+
+		// ---------------------------------
+		// Suite: single range base against X; no overlap
+		// Single range
+		{base: new ClosedIntRange(0, 1),
+		 input: new ClosedIntRange(4),
+		 expect: [0, 1, 4]},
+
+		// ClosedIntRangeArray with partial overlap
+		{base: new ClosedIntRange(0, 1),
+		 input: [new ClosedIntRange(4), new ClosedIntRange(4, 5)],
+		 expect: [0, 1, 4, 5]},
+
+		// RangeSet with partial overlap
+		{base: new ClosedIntRange(0, 1),
+		 input: new RangeSet([new ClosedIntRange(4, 5), new ClosedIntRange(5, 6)]),
+		 expect: [0, 1, 4, 5, 6]},
+
+		// ---------------------------------
+		// Suite: single range base against X; full overlap
+		// Single range
+		{base: new ClosedIntRange(0, 1),
+		 input: new ClosedIntRange(0, 1),
+		 expect: []},
+
+		// ClosedIntRangeArray with partial overlap
+		{base: new ClosedIntRange(0, 1),
+		 input: [new ClosedIntRange(0), new ClosedIntRange(1)],
+		 expect: []},
+
+		// RangeSet with partial overlap
+		{base: new ClosedIntRange(0, 1),
+		 input: new RangeSet(new ClosedIntRange(0, 1)),
+		 expect: []}
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		console.log(i);
+		var testRow = testRows[i];
+		var x = new RangeSet(testRow.base);
+
+		var expectHash = {};
+		for (var j=0; j<testRow.expect.length; j++)
+			expectHash[testRow.expect[j]] = 1;
+
+		var result = x.inverse(testRow.input);
+
+		var actualCoverage = ClosedIntRange.coverage(result.ranges());
+		assertHashEquals(actualCoverage, expectHash);
+
+		x.invert(testRow.input);
+		actualCoverage = ClosedIntRange.coverage(x.ranges());
+		assertHashEquals(actualCoverage, expectHash);
+	}
+};
+
+function test_inverseAndInvertSlotInSlots() {
+	var wind = new RangeSet([new ClosedIntRange(0), new ClosedIntRange(2)]);
+
+	// Inverting the plus sign itself
+	assertHashEquals(ClosedIntRange.coverage(wind.inverse().ranges()),
+					 {1: 1});
+
+	// Plus sign remains fixed with its top left at (0, 0)
+	// Position = wind position
+	var testRows = [
+		{position: -2, expect: [-2, 2]},
+		{position: -1, expect: [-1, 0, 1, 2]},
+		{position: 0, expect: []},
+		{position: 1, expect: [0, 1, 2, 3]},
+		{position: 2, expect: [0, 4]}
+	];
+
+	for (var i=0; i< testRows.length; i++) {
+		var testRow = testRows[i];
+		var wind2 = wind.clone();
+		wind2.adjust(testRow.position);
+
+		// Make the expect hash
+		var expectedCoverage = {};
+		for (var j=0; j<testRow.expect.length; j++)
+			expectedCoverage[testRow.expect[j]] = 1;
+		var result = wind.inverse(wind2);
+		var actualCoverage = ClosedIntRange.coverage(result.ranges());
+		assertHashEquals(actualCoverage, expectedCoverage);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_isEmpty() {
+	var x = new RangeSet();
+	assertTrue(x.isEmpty());
+	x = new RangeSet(new ClosedIntRange(3));
+	assertFalse(x.isEmpty());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_merge() {
+	// Test: individual ClosedIntRange
+	for (var i=0; i<testRangeArray.length; i++) {
+		var inputRange = testRangeArray[i];
+		var x = new RangeSet(baseRanges);
+
+		x.merge(inputRange);
+		var actualCoverage = ClosedIntRange.coverage(x.ranges());
+
+		var combinedRanges = baseRanges.clone();
+		combinedRanges.push(inputRange);
+		var reducedExpectRanges = rangeReducer().reduce(combinedRanges);
+		var expectedCoverage = ClosedIntRange.coverage(reducedExpectRanges);
+		assertHashEquals(actualCoverage, expectedCoverage);
+	}
+
+	// Test: ClosedIntRangeArrays and other RangeSets
+	for (var i=0; i<testRangeArray.length; i++) {
+		var inputRanges = testRangeArray[i];
+		var x = new RangeSet(baseRanges);
+
+		x.merge(inputRanges);
+		var actualCoverage = ClosedIntRange.coverage(x.ranges());
+
+		var combinedRanges = baseRanges.concat(inputRanges);
+		var reducedExpectRanges = rangeReducer().reduce(combinedRanges);
+		var expectedCoverage = ClosedIntRange.coverage(reducedExpectRanges);
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		// Also test another union with another RangeSet
+		x = new RangeSet(baseRanges);
+		x.merge(new RangeSet(inputRanges));
+		actualCoverage = ClosedIntRange.coverage(x.ranges());
+		assertHashEquals(actualCoverage, expectedCoverage);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_summedLength() {
+	// Test empty ranges should return null
+	var x = new RangeSet();
+	assertEquals(x.summedLength(), 0);
+
+	var testRows = [
+		[[new ClosedIntRange(0)],
+		 1],
+
+		[[new ClosedIntRange(0), new ClosedIntRange(1)],
+		 2],
+
+		[[new ClosedIntRange(0, 2), new ClosedIntRange(1)],
+		 3],
+
+		[[new ClosedIntRange(0), new ClosedIntRange(-21, -17)],
+		 6]
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var ranges = testRows[i][0];
+		var expect = testRows[i][1];
+
+		x = new RangeSet(ranges);
+		assertEquals(x.summedLength(), expect);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function adjustRanges(ranges, delta) {
+	for (var i=0; i<ranges.length; i++) {
+		var range = ranges[i];
+		range.adjust(delta);
+	}
+}
+
+function test_adjust() {
+	var windRanges = [new ClosedIntRange(0), new ClosedIntRange(2)];
+	var wind = new RangeSet(windRanges);
+
+	var testRows = [0, 2, -2];
+	for (var i=0; i<testRows.length; i++) {
+		var delta = testRows[i];
+		var wind2Ranges = windRanges.clone();
+		var wind2 = wind.clone();
+
+		wind2.adjust(delta);
+		adjustRanges(wind2Ranges, delta);
+		var actualCoverage = ClosedIntRange.coverage(wind2.ranges());
+		var expectedCoverage = ClosedIntRange.coverage(wind2Ranges);
+		assertHashEquals(actualCoverage, expectedCoverage);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_union_Range() {
+	for (var i=0; i<testRangeArray.length; i++) {
+		var inputRange = testRangeArray[i];
+		var x = new RangeSet(baseRanges);
+
+		var result = x.union(inputRange);
+		var actualCoverage = ClosedIntRange.coverage(result.ranges());
+
+		var combinedRanges = baseRanges.clone();
+		combinedRanges.push(inputRange);
+		var reducedExpectRanges = rangeReducer().reduce(combinedRanges);
+		var expectedCoverage = ClosedIntRange.coverage(reducedExpectRanges);
+		assertHashEquals(actualCoverage, expectedCoverage);
+	}
+};
+
+function test_union_RangeArrayAndRangeSet() {
+	for (var i=0; i<testRangeArrayArray.length; i++) {
+		var inputRanges = testRangeArrayArray[i];
+		var x = new RangeSet(baseRanges);
+
+		var result = x.union(inputRanges);
+		var actualCoverage = ClosedIntRange.coverage(result.ranges());
+
+		var combinedRanges = baseRanges.concat(inputRanges);
+		var reducedExpectRanges = rangeReducer().reduce(combinedRanges);
+		var expectedCoverage = ClosedIntRange.coverage(reducedExpectRanges);
+		assertHashEquals(actualCoverage, expectedCoverage);
+
+		// Also test another union with another RangeSet
+		result = x.union(new RangeSet(inputRanges));
+		actualCoverage = ClosedIntRange.coverage(result.ranges());
+		assertHashEquals(actualCoverage, expectedCoverage);
+	}
+};
+
+</script>
+</body>
+</html>

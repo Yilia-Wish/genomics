@@ -1,0 +1,811 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - ag.bio.Subseq</title>
+    <meta charset='utf-8'>
+</head>
+
+<script src='../goog/base.js'></script>
+<script src='../deps.js'></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.bio.BioString');
+goog.require('ag.bio.Subseq');
+goog.require('ag.bio.grammar');
+goog.require('ag.core.ClosedIntRange');
+</script>
+<body>
+<script>
+// Aliases
+var grammar = ag.bio.grammar;
+var BioString = ag.bio.BioString;
+var ClosedIntRange = ag.core.ClosedIntRange;
+var Subseq = ag.bio.Subseq;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_constructor() {
+    var fixtures = [
+        ['A', null, null, 1, 1],
+        ['A', 'A', null, 1, 1],
+        ['A', 'A', 1, 1, 1],
+
+        // Try some gaps
+        ['A-', null, null, 1, 1],
+        ['-A', null, null, 1, 1],
+        ['-A-', null, null, 1, 1],
+
+        ['A-', 'A', null, 1, 1],
+        ['-A', 'A', null, 1, 1],
+        ['-A-', 'A', null, 1, 1],
+
+        ['A-', '-A', null, 1, 1],
+        ['-A', 'A-', null, 1, 1],
+        ['-A-', '--A', null, 1, 1],
+
+        ['A--', 'A', 1, 1, 1],
+        ['--A', 'A', 1, 1, 1],
+        ['--A--', 'A', 1, 1, 1],
+        ['-A--', '-A-', 1, 1, 1],
+
+        ['A.-', '-.A', 1, 1, 1],
+        ['--A', 'A--..', 1, 1, 1],
+        ['--A--', '-.-.A-.-', 1, 1, 1],
+        ['-A--', '-A-', 1, 1, 1],
+
+        // Multiple characters
+        ['AB', null, null, 1, 2],
+        ['A-B', null, null, 1, 2],
+        ['-A-B', null, null, 1, 2],
+        ['A-B-', null, null, 1, 2],
+        ['--A-B--', null, null, 1, 2],
+
+        ['AB', 'AB', null, 1, 2],
+        ['A-B', 'AB', null, 1, 2],
+        ['-A-B', 'AB', null, 1, 2],
+        ['A-B-', 'AB', null, 1, 2],
+        ['--A-B--', 'AB', null, 1, 2],
+
+        ['AB', '-AB', null, 1, 2],
+        ['A-B', 'AB-', null, 1, 2],
+        ['-A-B', '-A-B-', null, 1, 2],
+        ['A-B-', '.A-B.', null, 1, 2],
+        ['--A-B--', '--AB--', null, 1, 2],
+
+        // Now provide starts
+        ['AB', 'AB', 1, 1, 2],
+        ['A-B', 'AB', 1, 1, 2],
+        ['-A-B', 'AB', 1, 1, 2],
+        ['A-B-', 'AB', 1, 1, 2],
+        ['--A-B--', 'AB', 1, 1, 2],
+
+        ['AB', '-AB', 1, 1, 2],
+        ['A-B', 'AB-', 1, 1, 2],
+        ['-A-B', '-A-B-', 1, 1, 2],
+        ['A-B-', '.A-B.', 1, 1, 2],
+        ['--A-B--', '--AB--', 1, 1, 2],
+
+        // Actual subsequences
+        ['ABC', 'ABCD', null, 1, 3],
+        ['--ABC', 'ABCD', null, 1, 3],
+        ['ABC--', 'ABCD', null, 1, 3],
+        ['--ABC--', 'ABCD', null, 1, 3],
+        ['A-B-C', 'ABCD', null, 1, 3],
+        ['-A.B.C--', 'ABCD', null, 1, 3],
+        ['.AB--C--..', 'ABCD', null, 1, 3],
+
+        ['ABC', 'ABCD', 1, 1, 3],
+        ['--ABC', 'ABCD', 1, 1, 3],
+        ['ABC--', 'ABCD', 1, 1, 3],
+        ['--ABC--', 'ABCD', 1, 1, 3],
+        ['A-B-C', 'ABCD', 1, 1, 3],
+        ['-A.B.C--', 'ABCD', 1, 1, 3],
+        ['.AB--C--..', 'ABCD', 1, 1, 3],
+
+        ['BCD', 'ABCD', null, 2, 4],
+        ['-BCD', 'ABCD', null, 2, 4],
+        ['BCD-', 'ABCD', null, 2, 4],
+        ['-B-C-D-', 'ABCD', null, 2, 4],
+        ['B..C--D..', 'ABCD', null, 2, 4],
+        ['--.B---CD', 'ABCD', null, 2, 4],
+
+        ['BCD', 'ABCD', 2, 2, 4],
+        ['-BCD', 'ABCD', 2, 2, 4],
+        ['BCD-', 'ABCD', 2, 2, 4],
+        ['-B-C-D-', 'ABCD', 2, 2, 4],
+        ['B..C--D..', 'ABCD', 2, 2, 4],
+        ['--.B---CD', 'ABCD', 2, 2, 4],
+
+        ['ABC', 'ABCABC', null, 1, 3],
+        ['-ABC', 'ABCABC', null, 1, 3],
+        ['ABC-', 'ABCABC', null, 1, 3],
+        ['-ABC-', 'ABCABC', null, 1, 3],
+        ['A--B--C', 'ABCABC', null, 1, 3],
+        ['.A-B.C-', 'ABCABC', null, 1, 3],
+        ['A---BC..', 'ABCABC', null, 1, 3],
+
+        ['ABC', 'ABCABC', 1, 1, 3],
+        ['-ABC', 'ABCABC', 1, 1, 3],
+        ['ABC-', 'ABCABC', 1, 1, 3],
+        ['-ABC-', 'ABCABC', 1, 1, 3],
+        ['A--B--C', 'ABCABC', 1, 1, 3],
+        ['.A-B.C-', 'ABCABC', 1, 1, 3],
+        ['A---BC..', 'ABCABC', 1, 1, 3],
+
+        ['ABC', 'ABCABC', 4, 4, 6],
+        ['-ABC', 'ABCABC', 4, 4, 6],
+        ['ABC-', 'ABCABC', 4, 4, 6],
+        ['-ABC-', 'ABCABC', 4, 4, 6],
+        ['A--B--C', 'ABCABC', 4, 4, 6],
+        ['.A-B.C-', 'ABCABC', 4, 4, 6],
+        ['A---BC..', 'ABCABC', 4, 4, 6],
+    ];
+
+    for (var i=0; i<fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var sequence = fixture[0];
+        var parentSeq = fixture[1];
+        var start = fixture[2];
+        var expectedStart = fixture[3];
+        var expectedStop = fixture[4];
+
+        // console.log(i);
+        // console.log(fixture);
+
+        // Four cases
+        // 1) string sequence and string parentSeq
+        {
+            var subseq;
+            if (start)
+                subseq = new Subseq(sequence, parentSeq, start);
+            else if (parentSeq)
+                subseq = new Subseq(sequence, parentSeq);
+            else
+                subseq = new Subseq(sequence);
+
+            assertEquals(expectedStart, subseq.start());
+            assertEquals(expectedStop, subseq.stop());
+        }
+
+        // 2) string sequence and BioString parentSeq
+        {
+            var subseq;
+            if (start)
+                subseq = new Subseq(sequence, new BioString(parentSeq), start);
+            else if (parentSeq)
+                subseq = new Subseq(sequence, new BioString(parentSeq));
+            else
+                subseq = new Subseq(sequence);
+
+            assertEquals(expectedStart, subseq.start());
+            assertEquals(expectedStop, subseq.stop());
+        }
+
+        // 3) BioString sequence and string parentSeq
+        {
+            var subseq;
+            if (start)
+                subseq = new Subseq(new BioString(sequence), parentSeq, start);
+            else if (parentSeq)
+                subseq = new Subseq(new BioString(sequence), parentSeq);
+            else
+                subseq = new Subseq(new BioString(sequence));
+
+            assertEquals(expectedStart, subseq.start());
+            assertEquals(expectedStop, subseq.stop());
+        }
+
+        // 4) BioString sequence and BioString parentSeq
+        {
+            var subseq;
+            if (start)
+                subseq = new Subseq(new BioString(sequence), new BioString(parentSeq), start);
+            else if (parentSeq)
+                subseq = new Subseq(new BioString(sequence), new BioString(parentSeq));
+            else
+                subseq = new Subseq(new BioString(sequence));
+
+            assertEquals(expectedStart, subseq.start());
+            assertEquals(expectedStop, subseq.stop());
+        }
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_eq() {
+    var subseq = new Subseq("ABC");
+    assertTrue(subseq.eq(subseq));
+    assertFalse(subseq.ne(subseq));
+
+    var subseqX = new Subseq("ABC");
+    assertTrue(subseq.eq(subseqX));
+
+    var subseq2 = new Subseq("ABCD");
+    assertFalse(subseq2.eq(subseq));
+    assertFalse(subseq.eq(subseq2));
+    assertTrue(subseq2.ne(subseq));
+    assertTrue(subseq.ne(subseq2));
+
+    var subseq3 = new Subseq(new BioString("ABC", grammar.DNA));
+    assertFalse(subseq3.eq(subseq));
+    assertTrue(subseq3.ne(subseq));
+
+    // Test: identical subseqs but with different parents
+    var subseq4 = new Subseq(new BioString("ABCDEF", grammar.AMINO));
+    var subseq5 = new Subseq(new BioString("ABCDEF", grammar.DNA));
+    assertFalse(subseq4.eq(subseq5));
+    assertTrue(subseq4.ne(subseq5));
+
+    // Test: same parent sequence, but different subseqs
+    var parent = "ABCDEF";
+    var subseq6 = new Subseq("ABC", parent);
+    var subseq7 = new Subseq("DEF", parent);
+    assertFalse(subseq6.eq(subseq7));
+    assertTrue(subseq6.ne(subseq7));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_extendLeft() {
+    var fixtures = [
+        ['-DEF', 'ABCDEF', 0, '-DEF'],
+        ['-DEF', 'ABCDEF', 1, 'CDEF'],
+        ['---DEF', 'ABCDEF', 1, '--CDEF'],
+        ['---DEF', 'ABCDEF', 2, '-BCDEF'],
+        ['---DEF', 'ABCDEF', 3, 'ABCDEF']
+    ];
+
+    for (var i=0; i< fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var sequence = fixture[0];
+        var parentSeq = fixture[1];
+        var nToExtend = fixture[2];
+        var expect = fixture[3];
+
+        var subseq = new Subseq(sequence, parentSeq);
+        var oldStart = subseq.start();
+        var expectColumn = subseq.headGaps() - nToExtend + 1;
+        var column = subseq.extendLeft(nToExtend);
+        assertEquals(expect, subseq.toString());
+        assertEquals(oldStart - nToExtend, subseq.start());
+        assertEquals(expectColumn, column);
+    }
+
+    try {
+        var subseq = new Subseq('---DEF', 'ABCDEF');
+        subseq.extendLeft(4);
+        fail('Should not have passed');
+    }
+    catch (e) {
+        console.log('failed');
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_extendLeftWith() {
+    var fixtures = [
+        ['-DEF', 'ABCDEF', 'C', 1, 'CDEF'],
+        //12345678
+        ['----D-EF', 'ABCDEF', 'C', 1, 'C---D-EF'],
+        ['----D-EF', 'ABCDEF', 'C', 2, '-C--D-EF'],
+        ['----D-EF', 'ABCDEF', 'C', 3, '--C-D-EF'],
+
+        ['----D-EF', 'ABCDEF', 'C-', 1, 'C---D-EF'],
+        ['----D-EF', 'ABCDEF', 'C-', 2, '-C--D-EF'],
+        ['----D-EF', 'ABCDEF', 'C-', 3, '--C-D-EF'],
+
+        ['----D-EF', 'ABCDEF', '-C', 1, '-C--D-EF'],
+        ['----D-EF', 'ABCDEF', '-C', 2, '--C-D-EF'],
+        ['----D-EF', 'ABCDEF', '-C', 3, '---CD-EF'],
+
+        ['----D-EF', 'ABCDEF', '-C-', 1, '-C--D-EF'],
+        ['----D-EF', 'ABCDEF', '-C-', 2, '--C-D-EF'],
+
+        ['----D-EF', 'ABCDEF', 'BC', 1, 'BC--D-EF'],
+        ['----D-EF', 'ABCDEF', 'BC', 2, '-BC-D-EF'],
+        ['----D-EF', 'ABCDEF', 'BC', 3, '--BCD-EF'],
+
+        ['----D-EF', 'ABCDEF', 'B-C', 1, 'B-C-D-EF'],
+        ['----D-EF', 'ABCDEF', 'B-C', 2, '-B-CD-EF'],
+
+        ['----D-EF', 'ABCDEF', '-ABC', 1, '-ABCD-EF'],
+        ['----D-EF', 'ABCDEF', 'A-BC', 1, 'A-BCD-EF']
+    ];
+
+    for (var i=0; i< fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var sequence = fixture[0];
+        var parentSeq = fixture[1];
+        var extension = new BioString(fixture[2]);
+        var position = fixture[3];
+        var expect = fixture[4];
+
+        // console.log(i);
+        // console.log(fixture);
+
+        var subseq = new Subseq(sequence, parentSeq);
+        var oldStart = subseq.start();
+        subseq.extendLeftWith(extension, position);
+        assertEquals(expect, subseq.toString());
+        var startShift = BioString.removeGapsFromString(fixture[2]).length;
+        assertEquals(oldStart - startShift, subseq.start());
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_extendRight() {
+    var fixtures = [
+        ['ABC-', 'ABCDEF', 0, 'ABC-'],
+        ['ABC-', 'ABCDEF', 1, 'ABCD'],
+        ['ABC---', 'ABCDEF', 1, 'ABCD--'],
+        ['ABC---', 'ABCDEF', 2, 'ABCDE-'],
+        ['ABC---', 'ABCDEF', 3, 'ABCDEF']
+    ];
+
+    for (var i=0; i< fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var sequence = fixture[0];
+        var parentSeq = fixture[1];
+        var nToExtend = fixture[2];
+        var expect = fixture[3];
+
+        var subseq = new Subseq(sequence, parentSeq);
+        var oldStop = subseq.stop();
+        var expectColumn = subseq.length() - subseq.tailGaps() + 1
+        var column = subseq.extendRight(nToExtend);
+        assertEquals(expect, subseq.toString());
+        assertEquals(oldStop + nToExtend, subseq.stop());
+        assertEquals(expectColumn, column);
+    }
+
+    try {
+        var subseq = new Subseq('ABC---', 'ABCDEF');
+        subseq.extendRight(4);
+        fail('Should not have passed');
+    }
+    catch (e) {
+        console.log('failed');
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_extendRightWith() {
+    var fixtures = [
+        ['ABC-', 'ABCDEF', 'D', 4, 'ABCD'],
+        //12345678
+        ['AB-C----', 'ABCDEF', 'D', 5, 'AB-CD---'],
+        ['AB-C----', 'ABCDEF', 'D', 6, 'AB-C-D--'],
+        ['AB-C----', 'ABCDEF', 'D', 7, 'AB-C--D-'],
+
+        ['AB-C----', 'ABCDEF', 'D-', 5, 'AB-CD---'],
+        ['AB-C----', 'ABCDEF', 'D-', 6, 'AB-C-D--'],
+        ['AB-C----', 'ABCDEF', 'D-', 7, 'AB-C--D-'],
+
+        ['AB-C----', 'ABCDEF', '-D', 5, 'AB-C-D--'],
+        ['AB-C----', 'ABCDEF', '-D', 6, 'AB-C--D-'],
+        ['AB-C----', 'ABCDEF', '-D', 7, 'AB-C---D'],
+
+        ['AB-C----', 'ABCDEF', '-D-', 5, 'AB-C-D--'],
+        ['AB-C----', 'ABCDEF', '-D-', 6, 'AB-C--D-'],
+
+        ['AB-C----', 'ABCDEF', 'DE', 5, 'AB-CDE--'],
+        ['AB-C----', 'ABCDEF', 'DE', 6, 'AB-C-DE-'],
+        ['AB-C----', 'ABCDEF', 'DE', 7, 'AB-C--DE'],
+
+        ['AB-C----', 'ABCDEF', 'D-E', 5, 'AB-CD-E-'],
+        ['AB-C----', 'ABCDEF', 'D-E', 6, 'AB-C-D-E'],
+
+        ['AB-C----', 'ABCDEF', '-DEF', 5, 'AB-C-DEF'],
+        ['AB-C----', 'ABCDEF', 'D-EF', 5, 'AB-CD-EF']
+    ];
+
+    for (var i=0; i< fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var sequence = fixture[0];
+        var parentSeq = fixture[1];
+        var extension = new BioString(fixture[2]);
+        var position = fixture[3];
+        var expect = fixture[4];
+
+        // console.log(i);
+        // console.log(fixture);
+
+        var subseq = new Subseq(sequence, parentSeq);
+        var oldStop = subseq.stop();
+        subseq.extendRightWith(extension, position);
+        assertEquals(expect, subseq.toString());
+        var stopShift = BioString.removeGapsFromString(fixture[2]).length;
+        assertEquals(oldStop + stopShift, subseq.stop());
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_inverseStart() {
+    var subseq = new Subseq('ABCDEFG');
+    for (var i=1; i<=subseq.length(); ++i) {
+        subseq.setStart(i);
+        assertEquals(-subseq.length() + i - 1, subseq.inverseStart());
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_inverseStop() {
+    var subseq = new Subseq('ABCDEFG');
+    for (var i=1; i<=subseq.length(); ++i) {
+        subseq.setStop(i);
+        assertEquals(-subseq.length() + i - 1, subseq.inverseStop());
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_leftExtendableLength() {
+    var seq = "ABCDEF";
+    var subseq = new Subseq('BC--DE', seq);
+    for (var i=1; i<= subseq.length(); ++i)
+        assertEquals(0, subseq.leftExtendableLength(i, 1));
+
+    subseq = new Subseq('--EF', seq);
+    assertEquals(2, subseq.leftExtendableLength(1, 1));
+    assertEquals(1, subseq.leftExtendableLength(2, 1));
+    assertEquals(0, subseq.leftExtendableLength(3, 1));
+
+    subseq = new Subseq('--AB', seq);
+    assertEquals(0, subseq.leftExtendableLength(1, 1));
+    assertEquals(0, subseq.leftExtendableLength(2, 1));
+    assertEquals(0, subseq.leftExtendableLength(3, 1));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_leftRightUnusedSpace() {
+    var subseq = new Subseq('--C-D--EF-----', 'ABCDEFG');
+    assertEquals(2, subseq.leftUnusedSpace());
+    assertEquals(1, subseq.rightUnusedSpace());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_leftTrimmableLength() {
+    var subseq = new Subseq('ABCDEF');
+
+    assertEquals(1, subseq.leftTrimmableLength(1));
+    assertEquals(2, subseq.leftTrimmableLength(2));
+    assertEquals(3, subseq.leftTrimmableLength(3));
+    assertEquals(4, subseq.leftTrimmableLength(4));
+    assertEquals(5, subseq.leftTrimmableLength(5));
+    assertEquals(5, subseq.leftTrimmableLength(6));
+
+    subseq = new Subseq('--C--', 'ABCDEF');
+    for (var i=1; i<= 5; ++i)
+        assertEquals(0, subseq.leftTrimmableLength(i));
+
+    subseq = new Subseq('A-B--C-D', 'ABCDEF');
+    assertEquals(1, subseq.leftTrimmableLength(1));
+    assertEquals(1, subseq.leftTrimmableLength(2));
+    assertEquals(2, subseq.leftTrimmableLength(3));
+    assertEquals(2, subseq.leftTrimmableLength(4));
+    assertEquals(2, subseq.leftTrimmableLength(5));
+    assertEquals(3, subseq.leftTrimmableLength(6));
+    assertEquals(3, subseq.leftTrimmableLength(7));
+    assertEquals(3, subseq.leftTrimmableLength(8));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_leftTrimRange() {
+    //                       123456789
+    var subseq = new Subseq('-AB-C-DE-', 'ABCDE');
+
+    assertTrue(subseq.leftTrimRange(1).eq(new ClosedIntRange()));
+    assertTrue(subseq.leftTrimRange(2).eq(new ClosedIntRange(2, 2)));
+    assertTrue(subseq.leftTrimRange(3).eq(new ClosedIntRange(2, 3)));
+    assertTrue(subseq.leftTrimRange(4).eq(new ClosedIntRange(2, 3)));
+    assertTrue(subseq.leftTrimRange(5).eq(new ClosedIntRange(2, 5)));
+    assertTrue(subseq.leftTrimRange(6).eq(new ClosedIntRange(2, 5)));
+    assertTrue(subseq.leftTrimRange(7).eq(new ClosedIntRange(2, 7)));
+    assertTrue(subseq.leftTrimRange(8).eq(new ClosedIntRange(2, 7)));
+    assertTrue(subseq.leftTrimRange(9).eq(new ClosedIntRange(2, 7)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_mapToSeq() {
+    //                       12345678901    1234567
+    var subseq = new Subseq("--CD-EF-G--", "ABCDEFG");
+
+    assertEquals(-1, subseq.mapToSeq(1));
+    assertEquals(-1, subseq.mapToSeq(2));
+    assertEquals(3, subseq.mapToSeq(3));
+    assertEquals(4, subseq.mapToSeq(4));
+    assertEquals(-1, subseq.mapToSeq(5));
+    assertEquals(5, subseq.mapToSeq(6));
+    assertEquals(6, subseq.mapToSeq(7));
+    assertEquals(-1, subseq.mapToSeq(8));
+    assertEquals(7, subseq.mapToSeq(9));
+    assertEquals(-1, subseq.mapToSeq(10));
+    assertEquals(-1, subseq.mapToSeq(11));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_rearrange() {
+    //                       123456789012345
+    var subseq = new Subseq("--AB--C-D--EF--", "ABCDEF");
+    subseq.rearrange(new ClosedIntRange(1, 4), new BioString("A-B-"));
+    assertEquals("A-B---C-D--EF--", subseq.toString());
+    subseq.rearrange(new ClosedIntRange(1, 15), new BioString("ABCD--E------F-"));
+    assertEquals("ABCD--E------F-", subseq.toString());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_rightExtendableLength() {
+    var seq = "ABCDEF";
+    var subseq = new Subseq('BC--DE', seq);
+    for (var i=1; i<= subseq.length(); ++i)
+        assertEquals(0, subseq.rightExtendableLength(i, 1));
+
+    subseq = new Subseq('AB--', seq);
+    assertEquals(0, subseq.rightExtendableLength(2, 1));
+    assertEquals(1, subseq.rightExtendableLength(3, 1));
+    assertEquals(2, subseq.rightExtendableLength(4, 1));
+
+    subseq = new Subseq('--AB', seq);
+    assertEquals(0, subseq.rightExtendableLength(2, 1));
+    assertEquals(0, subseq.rightExtendableLength(3, 1));
+    assertEquals(0, subseq.rightExtendableLength(4, 1));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_rightTrimmableLength() {
+    var subseq = new Subseq('ABCDEF');
+
+    assertEquals(5, subseq.rightTrimmableLength(1));
+    assertEquals(5, subseq.rightTrimmableLength(2));
+    assertEquals(4, subseq.rightTrimmableLength(3));
+    assertEquals(3, subseq.rightTrimmableLength(4));
+    assertEquals(2, subseq.rightTrimmableLength(5));
+    assertEquals(1, subseq.rightTrimmableLength(6));
+
+    subseq = new Subseq('--C--', 'ABCDEF');
+    for (var i=1; i<= 5; ++i)
+        assertEquals(0, subseq.rightTrimmableLength(i));
+
+    subseq = new Subseq('A-B--C-D', 'ABCDEF');
+    assertEquals(3, subseq.rightTrimmableLength(1));
+    assertEquals(3, subseq.rightTrimmableLength(2));
+    assertEquals(3, subseq.rightTrimmableLength(3));
+    assertEquals(2, subseq.rightTrimmableLength(4));
+    assertEquals(2, subseq.rightTrimmableLength(5));
+    assertEquals(2, subseq.rightTrimmableLength(6));
+    assertEquals(1, subseq.rightTrimmableLength(7));
+    assertEquals(1, subseq.rightTrimmableLength(8));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_rightTrimRange() {
+    //                       123456789
+    var subseq = new Subseq('-AB-C-DE-', 'ABCDE');
+
+    assertTrue(subseq.rightTrimRange(1).eq(new ClosedIntRange(3, 8)));
+    assertTrue(subseq.rightTrimRange(2).eq(new ClosedIntRange(3, 8)));
+    assertTrue(subseq.rightTrimRange(3).eq(new ClosedIntRange(3, 8)));
+    assertTrue(subseq.rightTrimRange(4).eq(new ClosedIntRange(5, 8)));
+    assertTrue(subseq.rightTrimRange(5).eq(new ClosedIntRange(5, 8)));
+    assertTrue(subseq.rightTrimRange(6).eq(new ClosedIntRange(7, 8)));
+    assertTrue(subseq.rightTrimRange(7).eq(new ClosedIntRange(7, 8)));
+    assertTrue(subseq.rightTrimRange(8).eq(new ClosedIntRange(8, 8)));
+    assertTrue(subseq.rightTrimRange(9).eq(new ClosedIntRange()));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setStart() {
+    var test_string = "-C---D-";
+    var parent_seq = 'ABCDEF';
+
+    var subseq = new Subseq(test_string, parent_seq);
+
+    // Setup and check
+    assertTrue(subseq.start() === 3 && subseq.stop() === 4);
+
+    // Test: setting start to existing start should also be valid
+    subseq.setStart(3);
+    assertEquals("-C---D-", subseq.toString());
+
+    // Test: tweaking start by one
+    subseq.setStart(2);
+    assertEquals("BC---D-", subseq.toString());
+    subseq.setStart(3);
+    assertEquals("-C---D-", subseq.toString());
+
+    // Test: move start beyond current sequence space
+    subseq.setStart(1);
+    assertEquals("ABC---D-", subseq.toString());
+
+    // Move it back and verify that we have an extra gap character now
+    subseq.setStart(3);
+    assertEquals("--C---D-", subseq.toString());
+
+    // Test: set start up to D and then back to A
+    subseq = new Subseq(test_string, parent_seq);
+    subseq.setStart(4);
+    assertEquals("-----D-", subseq.toString());
+    assertTrue(subseq.start() === 4 && subseq.stop() === 4);
+    subseq.setStart(1);
+    assertEquals("--ABCD-", subseq.toString());
+
+    // Test: Move start beyond stop
+    subseq = new Subseq(test_string, parent_seq);
+    subseq.setStart(5);
+
+    assertEquals("------E", subseq.toString());
+    assertTrue(subseq.start() === 5 && subseq.stop() === 5);
+    subseq.setStart(6);
+    assertEquals("-------F", subseq.toString());
+
+    subseq = new Subseq(test_string, parent_seq);
+    subseq.setStart(6);
+    assertEquals("-------F", subseq.toString());
+    assertTrue(subseq.start() === 6 && subseq.stop() === 6);
+
+    subseq.setStart(1);
+    assertEquals("--ABCDEF", subseq.toString());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setStop() {
+    var test_string = "-C---D-";
+    var parent_seq = 'ABCDEF';
+
+    var subseq = new Subseq(test_string, parent_seq);
+
+    // Test: setting stop to existing stop should also be valid
+    subseq.setStop(4);
+    assertEquals(test_string, subseq.toString());
+
+    // Test: tweaking stop by one
+    subseq.setStop(5);
+    assertEquals("-C---DE", subseq.toString());
+    subseq.setStop(4);
+    assertEquals("-C---D-", subseq.toString());
+
+    // Test: move start beyond current sequence space
+    subseq.setStop(6);
+    assertEquals("-C---DEF", subseq.toString());
+
+    // Move it back and verify that we have an extra gap character now
+    subseq.setStop(4);
+    assertEquals("-C---D--", subseq.toString());
+
+    // Test: set stop down to C and then back to F
+    subseq = new Subseq(test_string, parent_seq);
+    subseq.setStop(3);
+    assertEquals("-C-----", subseq.toString());
+    assertTrue(subseq.start() === 3 && subseq.stop() === 3);
+    subseq.setStop(6);
+    assertEquals("-CDEF--", subseq.toString());
+
+    // Test: Move stop before start
+    subseq = new Subseq(test_string, parent_seq);
+    //                 -C---D-
+    subseq.setStop(2);
+    assertEquals("B------", subseq.toString());
+    assertTrue(subseq.start() === 2 && subseq.stop() === 2);
+    subseq.setStop(1);
+    assertEquals("A-------", subseq.toString());
+
+    subseq = new Subseq(test_string, parent_seq);
+    subseq.setStop(1);
+    assertEquals("A-------", subseq.toString());
+    assertTrue(subseq.start() === 1 && subseq.stop() === 1);
+
+    subseq.setStop(6);
+    assertEquals("ABCDEF--", subseq.toString());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_trimLeft() {
+    var subseq = new Subseq('ABCDEF');
+    var range = new ClosedIntRange();
+    for (var i=1; i< 6; ++i) {
+        range.begin = i;
+        range.end = i;
+
+        subseq.trimLeft(range);
+        assertEquals('-'.repeated(i) + subseq.mid(new ClosedIntRange(i+1, 6)).toString(), subseq.toString());
+        assertEquals(i+1, subseq.start());
+    }
+
+    // Test: without nongaps
+    subseq = new Subseq('ABCDEF');
+    range.begin = 1;
+    range.end = 4;
+    subseq.trimLeft(range);
+    assertEquals("----EF", subseq.toString());
+    assertEquals(5, subseq.start());
+    assertEquals(6, subseq.stop());
+
+    // Test: gapped regions
+    subseq = new Subseq("--AB-C-DE--", 'ABCDEF');
+    range.begin = 1;
+    range.end = 3;
+    subseq.trimLeft(range);
+    assertEquals("---B-C-DE--", subseq.toString());
+    assertEquals(2, subseq.start());
+    assertEquals(5, subseq.stop());
+
+    range.begin = 3;
+    range.end = 5;
+    subseq.trimLeft(range);
+    assertEquals("-----C-DE--", subseq.toString());
+    assertEquals(3, subseq.start());
+    assertEquals(5, subseq.stop());
+
+    range.begin = 6;
+    range.end = 7;
+    subseq.trimLeft(range);
+    assertEquals("-------DE--", subseq.toString());
+    assertEquals(4, subseq.start());
+    assertEquals(5, subseq.stop());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_trimRight() {
+    var subseq = new Subseq('ABCDEF');
+    var range = new ClosedIntRange();
+    for (var i=6; i>1; --i) {
+        range.begin = i;
+        range.end = i;
+
+        subseq.trimRight(range);
+        assertEquals(subseq.mid(new ClosedIntRange(1, i-1)).toString() + '-'.repeated(6 - i + 1), subseq.toString());
+        assertEquals(i-1, subseq.stop());
+    }
+
+    // Test: without nongaps
+    subseq = new Subseq('ABCDEF');
+    range.begin = 3;
+    range.end = 6;
+    subseq.trimRight(range);
+    assertEquals("AB----", subseq.toString());
+    assertEquals(1, subseq.start());
+    assertEquals(2, subseq.stop());
+
+    // Test: gapped regions
+    //                                   ***
+    subseq = new Subseq("--AB-C-DE--", 'ABCDEF');
+    range.begin = 9;
+    range.end = 11;
+    subseq.trimRight(range);
+    assertEquals("--AB-C-D---", subseq.toString());
+    assertEquals(1, subseq.start());
+    assertEquals(4, subseq.stop());
+
+    //       ***
+    // --AB-C-D---
+    range.begin = 7;
+    range.end = 9;
+    subseq.trimRight(range);
+    assertEquals("--AB-C-----", subseq.toString());
+    assertEquals(1, subseq.start());
+    assertEquals(3, subseq.stop());
+
+    //      **
+    // --AB-C-----
+    range.begin = 6;
+    range.end = 7;
+    subseq.trimRight(range);
+    assertEquals("--AB-------", subseq.toString());
+    assertEquals(1, subseq.start());
+    assertEquals(2, subseq.stop());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_ungappedLength() {
+    var subseq = new Subseq('ABCD');
+    assertEquals(4, subseq.ungappedLength());
+
+    subseq = new Subseq('--ABCD--');
+    assertEquals(4, subseq.ungappedLength());
+    assertEquals(8, subseq.length());
+
+    subseq = new Subseq('-D-E-F-', 'ABCDEFGHI');
+    assertEquals(3, subseq.ungappedLength());
+    assertEquals(7, subseq.length());
+};
+
+</script>
+</body>
+</html>

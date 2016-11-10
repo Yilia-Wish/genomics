@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.painting.TextRenderer</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.dom');
+goog.require('ag.painting.Color');
+goog.require('ag.painting.TextColorStyle');
+goog.require('ag.painting.TextRenderer');
+</script>
+<body>
+<canvas id="canvas" width="500" height="500" style="border: 1px solid green;"></canvas>
+
+<script>
+// Aliases
+var Color = ag.painting.Color;
+var TextColorStyle = ag.painting.TextColorStyle;
+var TextRenderer = ag.painting.TextRenderer;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	var x = new TextRenderer('24px monospace');
+
+	var lightGray = new Color(196, 196, 196);
+	var gray = new Color(231, 8, 32);
+	var blue = new Color(64, 242, 255);
+
+	var canvas = goog.dom.getElement('canvas');
+	var context = canvas.getContext('2d');
+	var ch = '(';
+	var asciiCh = ch.charCodeAt(0);
+	x.drawChar(context, 0, 0, asciiCh, new TextColorStyle(blue, lightGray));
+
+	var str = 'HjMg/_';
+	// var str = 'TGCA';
+	// x.setFont('144px Segoe script');
+	x.drawText(context, 20, 200, str, new TextColorStyle(blue, gray));
+
+	// Test for spaces!
+};
+
+</script>
+</body>
+</html>

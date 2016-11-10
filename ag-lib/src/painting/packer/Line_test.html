@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.painting.packer.Line</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../../goog/base.js"></script>
+<script src="../../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+
+goog.require('goog.math.Coordinate');
+goog.require('goog.math.Size');
+goog.require('ag.painting.packer.Block');
+goog.require('ag.painting.packer.Line');
+</script>
+<body>
+<script>
+// Aliases
+var Coordinate = goog.math.Coordinate;
+var Size = goog.math.Size;
+
+var Block = ag.painting.packer.Block;
+var Line = ag.painting.packer.Line;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	var x = new Line(12, new Size(100, 10), 3);
+	assertEquals(x.remainingWidth(), 100);
+	assertEquals(x.height(), 10);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: createBlock
+function test_createBlock() {
+	var x = new Line(5, new Size(100, 10), 2);
+	var targetSize = new Size(25, 8);
+	var b = x.createBlock(targetSize);
+
+	assertEquals(x.remainingWidth(), 75);
+	assertEquals(x.height(), 10);
+
+	assertTrue(Size.equals(b.size, targetSize));
+	assertTrue(Coordinate.equals(b.origin, new Coordinate(0, 5)));
+	assertEquals(b.page, 2);
+
+	// Attempt to create another page that completely fills up remainder
+	targetSize = new Size(75, 9);
+	var b2 = x.createBlock(targetSize);
+	assertEquals(x.remainingWidth(), 0);
+
+	assertTrue(Size.equals(b2.size, targetSize));
+	assertTrue(Coordinate.equals(b2.origin, new Coordinate(25, 5)));
+	assertEquals(b2.page, 2);
+};
+
+</script>
+</body>
+</html>

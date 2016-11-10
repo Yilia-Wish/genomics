@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.units</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.units');
+</script>
+<body>
+<script>
+// Aliases
+var units = ag.units;
+
+var tolerance = .00001;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: fromMultiple
+function test_fromMultiple() {
+	var x = 1;
+	assertEquals(units.fromMultiple(x, units.MetricPrefix.KILO), 1e3);
+	assertEquals(units.fromMultiple(x, units.MetricPrefix.MEGA), 1e6);
+	assertEquals(units.fromMultiple(x, units.MetricPrefix.GIGA), 1e9);
+	assertEquals(units.fromMultiple(x, units.MetricPrefix.MILLI), 1e-3);
+	assertEquals(units.fromMultiple(x, units.MetricPrefix.MICRO), 1e-6);
+	assertEquals(units.fromMultiple(x, units.MetricPrefix.NANO), 1e-9);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: toMultiple
+function test_toMultiple() {
+	var x = 1;
+	assertEquals(units.toMultiple(x, units.MetricPrefix.KILO), 1e-3);
+	assertEquals(units.toMultiple(x, units.MetricPrefix.MEGA), 1e-6);
+	assertEquals(units.toMultiple(x, units.MetricPrefix.GIGA), 1e-9);
+	assertEquals(units.toMultiple(x, units.MetricPrefix.MILLI), 1e3);
+	assertEquals(units.toMultiple(x, units.MetricPrefix.MICRO), 1e6);
+	assertRoughlyEquals(units.toMultiple(x, units.MetricPrefix.NANO), 1e9, tolerance);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: fromToMultiple
+function test_fromToMultiple() {
+	var x = 1;
+	assertEquals(units.fromToMultiple(x, units.MetricPrefix.KILO, units.MetricPrefix.MEGA), 1e-3);
+	assertRoughlyEquals(units.fromToMultiple(x, units.MetricPrefix.DECI, units.MetricPrefix.MICRO), 1e5, tolerance);
+};
+
+</script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.painting.packer.Page</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../../goog/base.js"></script>
+<script src="../../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.math.Coordinate');
+goog.require('goog.math.Size');
+goog.require('ag.painting.packer.Page');
+goog.require('ag.painting.packer.Block');
+goog.require('ag.painting.packer.Line');
+</script>
+<body>
+<script>
+// Aliases
+var Coordinate = goog.math.Coordinate;
+var Size = goog.math.Size;
+
+var Page = ag.painting.packer.Page;
+var Block = ag.painting.packer.Block;
+var Line = ag.painting.packer.Line;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	var targetSize = new Size(24, 24);
+	var x = new Page(targetSize, 10);
+	assertTrue(Size.equals(targetSize, x.size));
+	assertEquals(x.remainingHeight(), 24);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: createLine
+function test_createLine() {
+	var targetSize = new Size(50, 100);
+	var pageNo = 3;
+	var x = new Page(targetSize, pageNo);
+
+	var line1 = x.createLine(33);
+	assertEquals(x.lines[0], line1);
+	assertEquals(x.remainingHeight(), 67);
+
+	assertEquals(line1.height(), 33);
+	assertEquals(line1.remainingWidth(), 50);
+
+	var line2 = x.createLine(67);
+	assertEquals(x.remainingHeight(), 0);
+	assertEquals(x.lines[1], line2);
+
+	assertEquals(line2.height(), 67);
+	assertEquals(line2.remainingWidth(), 50);
+
+	// Make sure page is getting transmitted across to the blocks
+	var b = line2.createBlock(new Size(42, 10));
+	assertEquals(b.page, pageNo);
+};
+
+</script>
+</body>
+</html>

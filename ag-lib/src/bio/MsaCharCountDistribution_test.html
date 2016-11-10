@@ -1,0 +1,707 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - ag.bio.MsaCharCountDistribution</title>
+    <meta charset='utf-8'>
+</head>
+
+<script src='../goog/base.js'></script>
+<script src='../deps.js'></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.math');
+goog.require('goog.math.Coordinate');
+goog.require('ag.bio');
+goog.require('ag.bio.BioString');
+goog.require('ag.bio.Subseq');
+goog.require('ag.bio.Msa');
+goog.require('ag.bio.MsaCharCountDistribution');
+goog.require('ag.bio.MsaSubseqChange');
+goog.require('ag.bio.ObservableMsa');
+goog.require('ag.core.CharCountDistribution');
+goog.require('ag.core.ClosedIntRange');
+goog.require('ag.core.UnitRect');
+goog.require('ag.meta.SignalSpy');
+</script>
+<body>
+<script>
+// Aliases
+var math = goog.math;
+
+var BioString = ag.bio.BioString;
+var CharCountDistribution = ag.core.CharCountDistribution;
+var ClosedIntRange = ag.core.ClosedIntRange;
+var Msa = ag.bio.Msa;
+var MsaCharCountDistribution = ag.bio.MsaCharCountDistribution;
+var ObservableMsa = ag.bio.ObservableMsa;
+var Subseq = ag.bio.Subseq;
+var UnitRect = ag.core.UnitRect;
+var MsaSubseqChange = ag.bio.MsaSubseqChange;
+var SignalSpy = ag.meta.SignalSpy;
+var TrimExtOp = MsaSubseqChange.TrimExtOp;
+
+var Coordinate = goog.math.Coordinate;
+var DistSignals = CharCountDistribution.SignalType;
+var MsaSignals = ObservableMsa.SignalType;
+
+var aminoCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ---------------';
+var isGapCharacter = ag.bio.isGapCharacter;
+
+function createMsa(subseqs) {
+    var msa = new ObservableMsa();
+    for (var i=0; i<subseqs.length; i++)
+        assertTrue(msa.append(new Subseq(subseqs[i])));
+    return msa;
+};
+
+function toCharCodes(arr) {
+    var result = [];
+    for (var i=0; i<arr.length; i++) {
+        var tmp = arr[i];
+        var newTmp = {};
+        for (var ch in tmp)
+            newTmp[ch.charCodeAt(0)] = tmp[ch];
+        result.push(newTmp);
+    }
+    return result;
+};
+
+function test_fromMsa() {
+    var fixtures = [
+        [new Msa(), null, []],
+        [createMsa(['ABCD']), null, toCharCodes([{A: 1}, {B: 1}, {C: 1}, {D: 1}])]
+    ];
+
+    // ------------------------------------------------------------------------
+    // Test: Numerous randomly created multiple sequence alignments of random dimensions
+    // l = msa length
+    for (var l=1; l <= 15; ++l) {
+        var dist = Array(l);
+
+        // Generate j random subseqs all of length l
+        var strings = [];
+
+        // j = number of sequences
+        var nSeqs = 1 + math.randomInt(20);;
+        for (var j=0; j<nSeqs; ++j) {
+            var string = '';
+            for (var i=0; i<l; ++i) {
+                var randomCharacter = aminoCharacters[math.randomInt(aminoCharacters.length)];
+                // The msa will not be created if it consists of all gaps! Therefore, always make the first character
+                // of every sequence an X
+                if (i === 0)
+                    randomCharacter = 'X';
+
+                if (!dist[i])
+                    dist[i] = {};
+
+                string += randomCharacter;
+                if (!isGapCharacter(randomCharacter)) {
+                    if (randomCharacter in dist[i])
+                        dist[i][randomCharacter]++;
+                    else
+                        dist[i][randomCharacter] = 1;
+                }
+            }
+            strings.push(string);
+        }
+
+        fixtures.push([createMsa(strings), null, toCharCodes(dist), strings]);
+    }
+
+    // ------------------------------------------------------------------------
+    // Test: regional computation
+    for (var l=1; l <= 15; ++l) {
+        // Generate j random subseqs all of length l
+        var strings = [];
+
+        // j = number of sequences
+        var nSeqs = 1 + math.randomInt(20);
+
+        // Dimensions: nSeqs x l length
+        // Construct random rectangle within these bounds
+        var targetRect = new UnitRect();
+        targetRect.setLeft(1 + math.randomInt(l));
+        targetRect.setWidth(1 + math.randomInt(l - targetRect.left() + 1));
+        targetRect.setTop(1 + math.randomInt(nSeqs));
+        targetRect.setHeight(1 + math.randomInt(nSeqs - targetRect.top() + 1));
+
+        var dist = Array(targetRect.width());
+        var i=dist.length;
+        while (i--)
+            dist[i] = {};
+
+        for (var j=0; j<nSeqs; ++j) {
+            var string = '';
+            for (var i=0; i<l; ++i) {
+                var randomCharacter = aminoCharacters[Math.floor(aminoCharacters.length * Math.random())];
+                // The msa will not be created if it consists of all gaps! Therefore, always make the first character
+                // of every sequence an X
+                if (i === 0)
+                    randomCharacter = 'X';
+
+                string += randomCharacter;
+                if (!isGapCharacter(randomCharacter) &&
+                    targetRect.contains(i+1, j+1)) {
+                    var tmp = dist[i+1-targetRect.left()];
+                    if (randomCharacter in tmp)
+                        tmp[randomCharacter]++;
+                    else
+                        tmp[randomCharacter] = 1;
+                }
+            }
+            strings.push(string);
+        }
+
+        fixtures.push([createMsa(strings), targetRect, toCharCodes(dist), strings]);
+    }
+
+    // ------------------------------------------------------------------------
+    // Fixture runs
+    for (var i=0; i<fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var msa = fixture[0];
+        var rect = fixture[1];
+        var expect = fixture[2];
+
+        // console.log(i);
+        // console.log(fixture);
+        // console.log(fixture[3]);
+
+        var result = MsaCharCountDistribution.fromMsa(msa, rect).charCounts();
+        // console.log(result);
+        assertTrue(CharCountDistribution.rawCountsEqual(expect, result));
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_constructor() {
+    var msa = createMsa([]);
+    var x = new MsaCharCountDistribution(msa);
+    assertEquals(msa, x.msa());
+    assertEquals(0, x.charCounts().length);
+
+    msa = createMsa(['ABC']);
+    x = new MsaCharCountDistribution(msa);
+    assertTrue(CharCountDistribution.rawCountsEqual(toCharCodes([{A: 1}, {B: 1}, {C: 1}]), x.charCounts()));
+
+    var strings = [
+        '--AB--C-DEF',
+        '---B-XC-DE-'
+    ];
+    msa = createMsa(strings);
+    x = new MsaCharCountDistribution(msa);
+    var expect = MsaCharCountDistribution.fromMsa(msa).charCounts();
+    assertTrue(CharCountDistribution.rawCountsEqual(expect, x.charCounts()));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_divisor() {
+    var x = new MsaCharCountDistribution();
+    assertEquals(1, x.divisor());
+
+    var strings = [
+        'ABC',
+        'DEF'
+    ];
+    var msa = createMsa(strings);
+
+    x = new MsaCharCountDistribution(msa);
+    assertEquals(2, x.divisor());
+    assertTrue(msa.append(new Subseq('GHI')));
+
+    assertEquals(3, x.divisor());
+
+    msa.removeAt(3);
+    assertEquals(2, x.divisor());
+
+    msa.removeAt(2);
+    assertEquals(1, x.divisor());
+
+    msa.removeAt(1);
+    assertEquals(0, x.divisor());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_msaGapsInserted() {
+    var strings = ['ABC', 'A-C', '-BC'];
+    var fixtures = [
+        [strings, 4, 1, new ClosedIntRange(4, 4), ['ABC-', 'A-C-', '-BC-']],
+        [strings, 2, 2, new ClosedIntRange(2, 3), ['A--BC', 'A---C', '---BC']],
+        [strings, 1, 3, new ClosedIntRange(1, 3), ['---ABC', '---A-C', '----BC']]
+    ];
+
+    for (var i=0; i<fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var sourceMsaSeqs = fixture[0];
+        var insertGapPosition = fixture[1];
+        var nGaps = fixture[2];
+        var signalColumns = fixture[3];
+        var expectedMsaSubseqs = fixture[4];
+
+        var msa = createMsa(sourceMsaSeqs);
+
+        var x = new MsaCharCountDistribution(msa);
+        var spyGapsInserted = new SignalSpy(x, DistSignals.COLUMNS_INSERTED);
+        var spyArguments;
+
+        msa.insertGapColumns(insertGapPosition, nGaps);
+        assertEquals(1, spyGapsInserted.size());
+        spyArguments = spyGapsInserted.signals()[0];
+        assertTrue(signalColumns.eq(spyArguments[0]));
+
+        var expectedMsa = createMsa(expectedMsaSubseqs);
+        assertTrue(CharCountDistribution.rawCountsEqual(MsaCharCountDistribution.fromMsa(expectedMsa).charCounts(), x.charCounts()));
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_msaGapsRemoved() {
+    var sourceMsaSubseqs = ["ABC", "A-B"];
+    var expectedMsa = createMsa(sourceMsaSubseqs);
+    var expect = MsaCharCountDistribution.fromMsa(expectedMsa).charCounts();
+
+    var msa = createMsa(sourceMsaSubseqs);
+
+    var x = new MsaCharCountDistribution(msa);
+    var spyColumnsRemoved = new SignalSpy(x, DistSignals.COLUMNS_REMOVED);
+    var spyArguments;
+
+    msa.removeGapColumns();
+    assertTrue(spyColumnsRemoved.isEmpty());
+
+    // ------------------------------------------------------------------------
+    // Test: Removing 2 gap columns from beginning
+    msa.insertGapColumns(1, 2);
+    msa.removeGapColumns();
+    assertEquals(1, spyColumnsRemoved.size());
+    spyArguments = spyColumnsRemoved.signals()[0];
+    assertTrue(new ClosedIntRange(1, 2).eq(spyArguments[0]));
+    assertTrue(CharCountDistribution.rawCountsEqual(expect, x.charCounts()));
+    spyColumnsRemoved.clear();
+
+    // ------------------------------------------------------------------------
+    // Test: Removing 1 gap columns from middle
+    msa.insertGapColumns(2, 1);
+    msa.removeGapColumns();
+    assertEquals(1, spyColumnsRemoved.size());
+    spyArguments = spyColumnsRemoved.signals()[0];
+    assertTrue(new ClosedIntRange(2, 2).eq(spyArguments[0]));
+    assertTrue(CharCountDistribution.rawCountsEqual(expect, x.charCounts()));
+    spyColumnsRemoved.clear();
+
+    // ------------------------------------------------------------------------
+    // Test: Removing 3 gaps columns from end
+    msa.insertGapColumns(4, 3);
+    msa.removeGapColumns();
+    assertEquals(1, spyColumnsRemoved.size());
+    spyArguments = spyColumnsRemoved.signals()[0];
+    assertTrue(new ClosedIntRange(4, 6).eq(spyArguments[0]));
+    assertTrue(CharCountDistribution.rawCountsEqual(expect, x.charCounts()));
+    spyColumnsRemoved.clear();
+
+    // ------------------------------------------------------------------------
+    // Test: Removing 1 gap columns from beginning, 2 from middle, 3 from end
+    msa.insertGapColumns(4, 3);
+    msa.insertGapColumns(2, 2);
+    msa.insertGapColumns(1, 1);
+    msa.removeGapColumns();
+    assertEquals(3, spyColumnsRemoved.size());
+    spyArguments = spyColumnsRemoved.signals()[0];
+    assertTrue(new ClosedIntRange(7, 9).eq(spyArguments[0]));
+    spyArguments = spyColumnsRemoved.signals()[1];
+    assertTrue(new ClosedIntRange(3, 4).eq(spyArguments[0]));
+    spyArguments = spyColumnsRemoved.signals()[2];
+    assertTrue(new ClosedIntRange(1, 1).eq(spyArguments[0]));
+    assertTrue(CharCountDistribution.rawCountsEqual(expect, x.charCounts()));
+    spyColumnsRemoved.clear();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_msaSubseqInsertedRemoved() {
+    var subseq1 = new Subseq('ABC');
+    var subseq2 = new Subseq('A-C');
+
+    var msa = new ObservableMsa();
+    var x = new MsaCharCountDistribution(msa);
+
+    var spyColumnsInserted = new SignalSpy(x, DistSignals.COLUMNS_INSERTED);
+    var spyColumnsRemoved = new SignalSpy(x, DistSignals.COLUMNS_REMOVED);
+    var spyDataChanged = new SignalSpy(x, DistSignals.DATA_CHANGED);
+    var spyArguments;
+
+    // ------------------------------------------------------------------------
+    // Test: appending subseq to empty msa
+    msa.append(subseq1);
+    assertTrue(spyDataChanged.isEmpty());
+    assertTrue(spyColumnsRemoved.isEmpty());
+    assertEquals(1, spyColumnsInserted.size());
+    spyArguments = spyColumnsInserted.signals()[0];
+    assertTrue(new ClosedIntRange(1, 3).eq(spyArguments[0]));
+    assertTrue(CharCountDistribution.rawCountsEqual(MsaCharCountDistribution.fromMsa(msa).charCounts(), x.charCounts()));
+    spyColumnsInserted.clear();
+
+    // ------------------------------------------------------------------------
+    // Test: appending subseq to non-empty msa
+    assertTrue(msa.append(subseq2));
+    assertTrue(spyColumnsInserted.isEmpty());
+    assertTrue(spyColumnsRemoved.isEmpty());
+    assertEquals(1, spyDataChanged.size());
+    spyArguments = spyDataChanged.signals()[0];
+    assertTrue(new ClosedIntRange(1, 3).eq(spyArguments[0]));
+    assertTrue(CharCountDistribution.rawCountsEqual(MsaCharCountDistribution.fromMsa(msa).charCounts(), x.charCounts()));
+    spyDataChanged.clear();
+
+    // ------------------------------------------------------------------------
+    // Test: removing subseq from non-empty msa
+    assertTrue(spyDataChanged.isEmpty());
+    msa.removeAt(2);
+    assertTrue(spyColumnsInserted.isEmpty());
+    assertTrue(spyColumnsRemoved.isEmpty());
+    assertEquals(1, spyDataChanged.size());
+    spyArguments = spyDataChanged.signals()[0];
+    assertTrue(new ClosedIntRange(1, 3).eq(spyArguments[0]));
+    assertTrue(CharCountDistribution.rawCountsEqual(MsaCharCountDistribution.fromMsa(msa).charCounts(), x.charCounts()));
+    spyDataChanged.clear();
+
+    // ------------------------------------------------------------------------
+    // Test: removing subseq from non-empty msa -> empty msa
+    msa.removeAt(1);
+    assertTrue(spyColumnsInserted.isEmpty());
+    assertTrue(spyDataChanged.isEmpty());
+    assertEquals(1, spyColumnsRemoved.size());
+    spyArguments = spyColumnsRemoved.signals()[0];
+    assertTrue(new ClosedIntRange(1, 3).eq(spyArguments[0]));
+    assertTrue(CharCountDistribution.rawCountsEqual(MsaCharCountDistribution.fromMsa(msa).charCounts(), x.charCounts()));
+    spyColumnsRemoved.clear();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function unitRect(left, top, right, bottom) {
+    return UnitRect.createFromCoordinates(new Coordinate(left, top), new Coordinate(right, bottom));
+};
+
+function test_msaRectangleSlid() {
+    var subseqs = [
+        '-A-B-C--',
+        '-D-E-F--',
+        '-G-H-I--'
+    ];
+
+    var fixtures = [
+        [['--AB-C-D'], unitRect(3, 1, 4, 1), 1, 3, 5, ['---ABC-D']],
+        [['--AB-C-D'], unitRect(3, 1, 4, 1), -2, 1, 4, ['AB---C-D']],
+        [subseqs, unitRect(4, 2, 6, 3), 2, 4, 8, [
+            '-A-B-C--',
+            '-D---E-F',
+            '-G---H-I']],
+        [subseqs, unitRect(6, 1, 6, 3), 2, 6, 8, [
+            '-A-B---C',
+            '-D-E---F',
+            '-G-H---I']],
+        [subseqs, unitRect(2, 1, 5, 3), -1, 1, 5, [
+            'A-B--C--',
+            'D-E--F--',
+            'G-H--I--']],
+        [subseqs, unitRect(5, 3, 2, 1), -1, 1, 5, [
+            'A-B--C--',
+            'D-E--F--',
+            'G-H--I--']],
+        // ------------------------------------------------------------------------
+        // Moving only gaps
+        [subseqs, unitRect(1, 1, 1, 1), 1, 1, 2, [
+            'A--B-C--',
+            '-D-E-F--',
+            '-G-H-I--']],
+        [subseqs, unitRect(7, 2, 8, 3), -1, 6, 8, [
+            '-A-B-C--',
+            '-D-E---F',
+            '-G-H---I']],
+        [subseqs, unitRect(3, 1, 3, 3), 2, 3, 5, [
+            '-AB--C--',
+            '-DE--F--',
+            '-GH--I--']],
+
+        // ------------------------------------------------------------------------
+        // Swapping a block of gaps with another block of gaps
+        [subseqs, unitRect(7, 1, 7, 3), 1, null, null, subseqs],
+
+        // ------------------------------------------------------------------------
+        // Moving non-normal new UnitRect gap block
+        [subseqs, unitRect(8, 3, 7, 2), -1, 6, 8, [
+            '-A-B-C--',
+            '-D-E---F',
+            '-G-H---I']]
+    ];
+
+    // ------------------------------------------------------------------------
+    // Moving normal new UnitRect with some rows containing entirely gaps
+    subseqs = [
+        '-A-B-C--',
+        '-D-E---F',
+        '-G-H---I'
+    ];
+    fixtures.push([subseqs, unitRect(7, 1, 8, 2), -1, 6, 8, [
+        '-A-B---C',
+        '-D-E--F-',
+        '-G-H---I']]);
+
+    for (var i=8; i<fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var subseqs = fixture[0];
+        var msaRect = fixture[1];
+        var delta = fixture[2];
+        var dataChanged = (fixture[3]) ? new ClosedIntRange(fixture[3], fixture[4]) : null;
+        var finalSubseqs = fixture[5];
+
+        // console.log(i);
+        // console.log(fixture);
+
+        var msa = createMsa(subseqs);
+        var x = new MsaCharCountDistribution(msa);
+        var spyDataChanged = new SignalSpy(x, DistSignals.DATA_CHANGED);
+        var spyArguments;
+
+        var finalMsa = createMsa(finalSubseqs);
+        assertEquals(delta, msa.slideRect(msaRect, delta));
+        assertTrue(CharCountDistribution.rawCountsEqual(MsaCharCountDistribution.fromMsa(finalMsa).charCounts(), x.charCounts()));
+
+        if (dataChanged) {
+            assertEquals(1, spyDataChanged.size());
+            spyArguments = spyDataChanged.signals()[0];
+            assertTrue(dataChanged.eq(spyArguments[0]));
+        }
+        else {
+            assertTrue(spyDataChanged.isEmpty());
+        }
+    }
+
+    // Special case where 2 data changed signals are emitted
+    subseqs = [
+    //   123456789
+        '-A-BC----',
+        '-D-E-----',
+        '-F-GH----'
+    ];
+    var expect = [
+    //   123456789
+        '-A-B---C-',
+        '-D-E-----',
+        '-F-G---H-'
+    ];
+    var msa = createMsa(subseqs);
+    var x = new MsaCharCountDistribution(msa);
+    var spyDataChanged = new SignalSpy(x, DistSignals.DATA_CHANGED);
+    var spyArguments;
+    var finalMsa = createMsa(expect);
+    var rect = unitRect(5, 1, 5, 3);
+
+    assertEquals(3, msa.slideRect(rect, 3));
+    assertTrue(CharCountDistribution.rawCountsEqual(MsaCharCountDistribution.fromMsa(finalMsa).charCounts(), x.charCounts()));
+
+    assertEquals(2, spyDataChanged.size());
+    spyArguments = spyDataChanged.signals()[0];
+    assertTrue(new ClosedIntRange(5, 5).eq(spyArguments[0]));
+    spyArguments = spyDataChanged.signals()[1];
+    assertTrue(new ClosedIntRange(8, 8).eq(spyArguments[0]));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_msaExtendTrim_data() {
+    // NOTE!! It is vital that only the characters ABCD are used because of a hack used in the actual test
+    // method below
+    var subseqs = [
+        '--ABCD--',
+        '-A-B-C-D'
+    ];
+    var finalSubseqs = [
+        '---BCD--',
+        '-A-B-C-D',
+    ];
+
+    var fixtures = [];
+    fixtures.push([subseqs, 1, 2, 0, 3, 3, finalSubseqs]);
+
+    subseqs = finalSubseqs.slice(0);
+    finalSubseqs = [
+        '--ABCD--',
+        '-A-B-C-D',
+    ];
+    fixtures.push([subseqs, 1, 1, 0, 3, 3, finalSubseqs]);
+
+    subseqs = finalSubseqs.slice(0);
+    finalSubseqs = [
+        '--ABC---',
+        '-A-B-C-D',
+    ];
+    fixtures.push([subseqs, 1, 0, 3, 6, 6, finalSubseqs]);
+
+    subseqs = finalSubseqs.slice(0);
+    finalSubseqs = [
+        '--ABCD--',
+        '-A-B-C-D',
+    ];
+    fixtures.push([subseqs, 1, 0, 4, 6, 6, finalSubseqs]);
+
+    subseqs = finalSubseqs.slice(0);
+    finalSubseqs = [
+        '--ABCD--',
+        '-----C-D',
+    ];
+    fixtures.push([subseqs, 2, 3, 0, 2, 4, finalSubseqs]);
+
+    subseqs = finalSubseqs.slice(0);
+    finalSubseqs = [
+        '--ABCD--',
+        '---ABC-D',
+    ];
+    fixtures.push([subseqs, 2, 1, 0, 4, 5, finalSubseqs]);
+
+    subseqs = finalSubseqs.slice(0);
+    finalSubseqs = [
+        '--ABCD--',
+        '---ABC--',
+    ];
+    fixtures.push([subseqs, 2, 0, 3, 8, 8, finalSubseqs]);
+
+    subseqs = finalSubseqs.slice(0);
+    finalSubseqs = [
+        '--ABCD--',
+        '---ABCD-',
+    ];
+    fixtures.push([subseqs, 2, 0, 4, 7, 7, finalSubseqs]);
+
+    for (var i=1; i<fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var subseqs = fixture[0];
+        var index = fixture[1];
+        var start = fixture[2];
+        var stop = fixture[3];
+        var dataChanged = new ClosedIntRange(fixture[4], fixture[5]);
+        var finalSubseqs = fixture[6];
+
+        // console.log(i);
+        // console.log(subseqs);
+
+        var msa = new ObservableMsa();
+        for (var j=0; j<subseqs.length; j++)
+            assertTrue(msa.append(new Subseq(subseqs[j], "ABCD")));
+        var x = new MsaCharCountDistribution(msa);
+
+        var spyDataChanged = new SignalSpy(x, DistSignals.DATA_CHANGED);
+        var spyArguments;
+
+        var finalMsa = createMsa(finalSubseqs);
+        if (start !== 0)
+            msa.setSubseqStart(index, start);
+        else
+            msa.setSubseqStop(index, stop);
+
+        assertTrue(CharCountDistribution.rawCountsEqual(MsaCharCountDistribution.fromMsa(finalMsa).charCounts(), x.charCounts()));
+        assertEquals(1, spyDataChanged.size());
+        spyArguments = spyDataChanged.signals()[0];
+        assertTrue(dataChanged.eq(spyArguments[0]));
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_msaCollapse() {
+    var seq = "ABCDEF";
+
+    var strings = [
+        'A-BC-D-E',
+        '-A-BCD--',
+        '--A---BC'
+    ];
+
+    var msaRect = new UnitRect;
+    var msaLength = strings[0].length;
+    var nSeqs = strings.length;
+    for (var top=1; top<= nSeqs; ++top) {
+        for (var left=1; left<= msaLength; ++left) {
+            for (var bottom=top; bottom<= nSeqs; ++bottom) {
+                for (var right=left; right<= msaLength; ++right) {
+                    msaRect.setTop(top);
+                    msaRect.setLeft(left);
+                    msaRect.setRight(right);
+                    msaRect.setBottom(bottom);
+
+                    // -----------------------------------------
+                    // Test 1: collapseLeft
+                    // Reset the alignment to its initial state
+                    var msa = new ObservableMsa();
+                    msa.append(new Subseq(strings[0], seq));
+                    msa.append(new Subseq(strings[1], seq));
+                    msa.append(new Subseq(strings[2], seq));
+
+                    var x = new MsaCharCountDistribution(msa);
+                    var spyDataChanged = new SignalSpy(x, DistSignals.DATA_CHANGED);
+                    var spyCollapsedLeft = new SignalSpy(msa, MsaSignals.COLLAPSED_LEFT);
+
+                    // Assuming that the collapseLeft function works properly and has been tested
+                    msa.collapseLeft(msaRect);
+
+                    // Check that the char count distribution is as expected
+                    assertTrue(CharCountDistribution.rawCountsEqual(MsaCharCountDistribution.fromMsa(msa).charCounts(), x.charCounts()));
+
+                    // Check the signals
+                    if (spyCollapsedLeft.isEmpty()) {
+                        assertTrue(spyDataChanged.isEmpty());
+                        continue;
+                    }
+
+                    // Else at least one sequence was modified, check that we get a change event for these columns
+                    if (spyDataChanged.size() === 1) {
+                        var range = spyDataChanged.signals()[0][0];
+                        var rect = spyCollapsedLeft.signals()[0][0];
+
+                        // Depending on the implementation the range may or may not exactly parallel the rect
+                        // horizontal range. For example, if the observable msa distribution simply updates relative
+                        // to the aboutToCollapse, collapse signals, then the range should equal the rect;
+                        // however, if it simply updates relative to the subseqsChanged signal, then it will be
+                        // contained by rect.
+                        assertTrue(range.begin >= rect.left());
+                        assertTrue(range.end <= rect.right());
+                    }
+
+                    // -----------------------------------------
+                    // Test 2: collapseRight
+                    // Reset the alignment to its initial state
+                    msa.clear();
+                    msa.append(new Subseq(strings[0], seq));
+                    msa.append(new Subseq(strings[1], seq));
+                    msa.append(new Subseq(strings[2], seq));
+
+                    // LiveMsaCharCountDistribution x(&msa);
+                    spyDataChanged.clear();
+                    var spyCollapsedRight = new SignalSpy(msa, MsaSignals.COLLAPSED_RIGHT);
+
+                    // Assuming that the collapseLeft function works properly and has been tested
+                    msa.collapseRight(msaRect);
+
+                    // Check that the char count distribution is as expected
+                    assertTrue(CharCountDistribution.rawCountsEqual(MsaCharCountDistribution.fromMsa(msa).charCounts(), x.charCounts()));
+
+                    // Check the signals
+                    if (spyCollapsedRight.isEmpty()) {
+                        assertTrue(spyDataChanged.isEmpty());
+                        continue;
+                    }
+
+                    if (spyDataChanged.size() === 1) {
+                        var range = spyDataChanged.signals()[0][0];
+                        var rect = spyCollapsedRight.signals()[0][0];
+
+                        // See above notes for collapseLeft test
+                        assertTrue(range.begin >= rect.left());
+                        assertTrue(range.end <= rect.right());
+                    }
+                }
+            }
+        }
+    }
+};
+
+</script>
+</body>
+</html>

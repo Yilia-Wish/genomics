@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.ui.SpinBox</title>
+	<meta charset="utf-8">
+	<link rel="stylesheet" href="/css/reset/meyer-min.css">
+	<link rel="stylesheet" href="/js/ag/css/ui.css">
+<style type="text/css">
+</style>
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.dom');
+goog.require('ag.meta.SignalSpy');
+goog.require('ag.ui.SpinBox');
+goog.require('ag.ui.DoubleSpinBox');
+</script>
+<body>
+
+<div>
+	<input id="spinbox" value="34.123456">
+</div>
+
+<script>
+var dom = goog.dom;
+
+var SignalSpy = ag.meta.SignalSpy;
+var SpinBox = ag.ui.SpinBox;
+var DoubleSpinBox = ag.ui.DoubleSpinBox;
+
+var x;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_it() {
+	var input = dom.getElement('spinbox');
+
+	x = new DoubleSpinBox();
+	x.decorate(input);
+
+	// var spy = new SignalSpy(x, SpinBox.SignalType.TEXT_CHANGED);
+	// x.setValue('bob');
+	// assertEquals(spy.size(), 1);
+	// assertEquals(spy.signals()[0][0], 'bob');
+};
+</script>
+
+</body>
+</html>

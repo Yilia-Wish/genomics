@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.bio.primer.PrimerPair</title>
+	<meta charset='utf-8'>
+</head>
+
+<script src='../../goog/base.js'></script>
+<script src='../../deps.js'></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.bio.grammar');
+goog.require('ag.bio.BioString');
+goog.require('ag.bio.RestrictionEnzyme');
+goog.require('ag.bio.primer.Primer');
+goog.require('ag.bio.primer.PrimerPair');
+goog.require('ag.bio.primer.PrimerFactory');
+</script>
+<body>
+<script>
+// Aliases
+var grammar = ag.bio.grammar;
+
+var BioString = ag.bio.BioString;
+var Primer = ag.bio.primer.Primer;
+var PrimerPair = ag.bio.primer.PrimerPair;
+var PrimerFactory = ag.bio.primer.PrimerFactory;
+var RestrictionEnzyme = ag.bio.RestrictionEnzyme;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	var x = new PrimerPair();
+
+    assertEquals(x.deltaTm(), 0.);
+    assertTrue(x.forwardPrimer.isNull());
+    assertTrue(x.reversePrimer.isNull());
+    assertEquals(x.score, 0.);
+
+    var primerFactory = new PrimerFactory();
+    var forward = primerFactory.makePrimer(new BioString('ATGCGTAGGA', grammar.DNA), new RestrictionEnzyme(), 65.0);
+    var reverse = primerFactory.makePrimer(new BioString('CCGTGAATAA', grammar.DNA), new RestrictionEnzyme(), 68.3);
+
+    x = new PrimerPair(forward, reverse, 55.0);
+    assertTrue(x.forwardPrimer.eq(forward));
+    assertTrue(x.reversePrimer.eq(reverse));
+    assertEquals(x.deltaTm(), Math.abs(65.0 - 68.3));
+    assertEquals(PrimerPair.deltaTm(forward, reverse), x.deltaTm());
+    assertEquals(x.score, 55.0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: longestAmpliconLength
+function test_longestAmpliconLength() {
+	var x = new PrimerPair();
+
+    // Test: empty everything
+    assertEquals(x.longestAmpliconLength(new BioString(null, grammar.DNA)), 0);
+
+    // Test: empty primer pair, non-empty BioString
+    assertEquals(x.longestAmpliconLength(new BioString('ATGCGAGTTATA', grammar.DNA)), 0);
+
+    // Test: valid forward primer, empty reverse, empty BioString
+    var primerFactory = new PrimerFactory();
+    //                                                    1234567890
+    var forward = primerFactory.makePrimer(new BioString('ATGCGTAGGA', grammar.DNA), new RestrictionEnzyme(), 65.0);
+    var primerPair2 = new PrimerPair(forward, new Primer(), 8.3);
+    assertEquals(primerPair2.longestAmpliconLength(new BioString(null, grammar.DNA)), 0);
+
+    // Test: valid forward primer, empty reverse, non-matching BioString to forward
+    assertEquals(primerPair2.longestAmpliconLength(new BioString('ATG', grammar.DNA)), 0);
+
+    // Test: valid forward primer, empty reverse, perfect match BioString to forward
+    assertEquals(primerPair2.longestAmpliconLength(new BioString('ATGCGTAGGA', grammar.DNA)), 0);
+
+    // Test: empty forward primer, valid reverse, empty BioString
+    var sensePrimerSequence = new BioString('CCGTGAATAA', grammar.DNA);
+    var antiSensePrimerSequence = sensePrimerSequence.reverseComplement();
+    var reverse = primerFactory.makePrimer(sensePrimerSequence, new RestrictionEnzyme(), 68.3);
+    var primerPair3 = new PrimerPair(new Primer(), reverse, 6.7);
+    assertEquals(primerPair3.longestAmpliconLength(new BioString(null, grammar.DNA)), 0);
+
+    // Test: empty forward primer, valid reverse, non-empty BioString
+    assertEquals(primerPair3.longestAmpliconLength(new BioString('ATG', grammar.DNA)), 0);
+
+    // Test: valid forward primer, empty reverse, perfect match BioString to reverse
+    assertEquals(primerPair3.longestAmpliconLength(antiSensePrimerSequence), 0);
+
+    // Test: valid forward and reverse primers, empty BioString
+    var primerPair4 = new PrimerPair(forward, reverse, 4.5);
+    assertEquals(primerPair4.longestAmpliconLength(new BioString(null, grammar.DNA)), 0);
+
+    // Test: valid forward and reverse primers, non-matching BioString
+    assertEquals(primerPair4.longestAmpliconLength(new BioString('ATGCGT', grammar.DNA)), 0);
+
+    // Test: valid forward and reverse primers, perfect match to forward
+    assertEquals(primerPair4.longestAmpliconLength(new BioString('ATGCGTAGGA', grammar.DNA)), 0);
+
+    // Test: valid forward and reverse primers, perfect match to reverse
+    assertEquals(primerPair4.longestAmpliconLength(antiSensePrimerSequence), 0);
+
+    // Test: valid forward and reverse primers, perfect match to forward + reverse
+    var forwardReverseTestSeq = new BioString('ATGCGTAGGATTATTCACGG', grammar.DNA);
+    assertEquals(primerPair4.longestAmpliconLength(forwardReverseTestSeq), 20);
+
+    // Test: extra characters at ends and separating primer sequences
+    forwardReverseTestSeq.insert(11, 'GTG').prepend('CGTGA').append('TGGTG');
+    assertEquals(primerPair4.longestAmpliconLength(forwardReverseTestSeq), 23);
+};
+
+</script>
+</body>
+</html>

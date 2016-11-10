@@ -1,0 +1,2344 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - ag.bio.Msa</title>
+    <meta charset='utf-8'>
+</head>
+
+<script src='../goog/base.js'></script>
+<script src='../deps.js'></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.math.Coordinate');
+goog.require('ag.bio.BioString');
+goog.require('ag.bio.Subseq');
+goog.require('ag.bio.grammar');
+goog.require('ag.bio.Msa');
+goog.require('ag.bio.MsaSubseqChange');
+goog.require('ag.core.ClosedIntRange');
+goog.require('ag.core.UnitRect');
+</script>
+<body>
+<script>
+// Aliases
+var grammar = ag.bio.grammar;
+var BioString = ag.bio.BioString;
+var ClosedIntRange = ag.core.ClosedIntRange;
+var Msa = ag.bio.Msa;
+var Subseq = ag.bio.Subseq;
+var UnitRect = ag.core.UnitRect;
+var MsaSubseqChange = ag.bio.MsaSubseqChange;
+var TrimExtOp = MsaSubseqChange.TrimExtOp;
+
+var Coordinate = goog.math.Coordinate;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_constructor() {
+    var msa = new Msa();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_append() {
+    var subseq1 = new Subseq('BC--DE', 'ABCDEF');
+    var subseq2 = new Subseq('GH--IJ', 'GHIJKL');
+    var subseq3 = new Subseq('--CD', 'CDEF');
+
+    var msa = new Msa();
+    assertTrue(msa.append(subseq1));
+    assertEquals(1, msa.rowCount());
+
+    assertTrue(msa.append(subseq2));
+    assertEquals(2, msa.rowCount());
+
+    assertFalse(msa.append(subseq3));
+    assertEquals(2, msa.rowCount());
+
+    subseq3.insertGaps(5, 2);
+    assertTrue(msa.append(subseq3));
+    assertEquals(3, msa.rowCount());
+
+    assertTrue(msa.at(1) === subseq1);
+    assertTrue(msa.at(2) === subseq2);
+    assertTrue(msa.at(3) === subseq3);
+
+    msa.clear();
+    assertTrue(msa.append([subseq1, subseq3]));
+    assertTrue(msa.append(subseq2));
+    assertTrue(msa.at(1) === subseq1);
+    assertTrue(msa.at(2) === subseq3);
+    assertTrue(msa.at(3) === subseq2);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_appendGrammar() {
+    var msa = new Msa(grammar.DNA);
+
+    var subseq1 = new Subseq(new BioString('ACTG', grammar.DNA));
+    var subseq2 = new Subseq('ACTG');
+
+    assertTrue(msa.append(subseq1));
+    msa.clear();
+    assertFalse(msa.append(subseq2));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_canCollapseLeft() {
+    var msa = new Msa();
+    msa.append(new Subseq('ACGT'));
+    msa.append(new Subseq('ACGT'));
+
+    assertFalse(msa.canCollapseLeft());
+    assertFalse(msa.canCollapseLeft(new UnitRect(1, 1, 4, 2)));
+
+    msa.clear();
+    msa.append(new Subseq('A-C-T-G'));
+    msa.append(new Subseq('AC---TG'));
+
+    assertFalse(msa.canCollapseLeft(new UnitRect(1, 1)));
+    assertFalse(msa.canCollapseLeft(new UnitRect(1, 1, 2, 1)));
+    assertTrue(msa.canCollapseLeft(new UnitRect(1, 1, 3, 1)));
+    assertTrue(msa.canCollapseLeft(new UnitRect(1, 1, 4, 1)));
+    assertTrue(msa.canCollapseLeft(new UnitRect(2, 1, 2, 1)));
+    assertTrue(msa.canCollapseLeft(new UnitRect(2, 1, 3, 1)));
+    assertFalse(msa.canCollapseLeft(new UnitRect(1, 2, 5, 1)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_canCollapseRight() {
+    var msa = new Msa();
+    msa.append(new Subseq('ACGT'));
+    msa.append(new Subseq('ACGT'));
+
+    assertFalse(msa.canCollapseRight());
+    assertFalse(msa.canCollapseRight(new UnitRect(1, 1, 4, 2)));
+
+    msa.clear();
+    msa.append(new Subseq('A-C-T-G', 'ACTG'));
+    msa.append(new Subseq('AC---TG', 'ACTG'));
+
+    assertFalse(msa.canCollapseRight(new UnitRect(1, 1)));
+    assertTrue(msa.canCollapseRight(new UnitRect(1, 1, 2, 1)));
+    assertTrue(msa.canCollapseRight(new UnitRect(1, 1, 3, 1)));
+    assertTrue(msa.canCollapseRight(new UnitRect(1, 1, 4, 1)));
+    assertFalse(msa.canCollapseRight(new UnitRect(2, 1, 2, 1)));
+    assertTrue(msa.canCollapseRight(new UnitRect(2, 1, 3, 1)));
+    assertTrue(msa.canCollapseRight(new UnitRect(1, 2, 5, 1)));
+    assertFalse(msa.canCollapseRight(new UnitRect(6, 1, 2, 2)));
+
+    // Just gaps
+    assertFalse(msa.canCollapseRight(new UnitRect(4, 1, 1, 2)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_canExtendLeft() {
+    var msa = new Msa();
+    msa.append(new Subseq('ACGT'));
+    msa.append(new Subseq('ACGT'));
+
+    for (var i=1; i<=4; i++) {
+        assertFalse(msa.canExtendLeft(i, new ClosedIntRange(1, 1)));
+        assertFalse(msa.canExtendLeft(i, new ClosedIntRange(1, 2)));
+        assertFalse(msa.canExtendLeft(i, new ClosedIntRange(2, 2)));
+    }
+
+    msa.clear();
+    msa.append(new Subseq('-ACT', 'ACTG'));
+    msa.append(new Subseq('-CTG', 'ACTG'));
+
+    assertFalse(msa.canExtendLeft(1, new ClosedIntRange(1, 1)));
+    assertTrue(msa.canExtendLeft(1, new ClosedIntRange(1, 2)));
+    assertTrue(msa.canExtendLeft(1, new ClosedIntRange(2, 2)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_canExtendRight() {
+    var msa = new Msa();
+    msa.append(new Subseq('ACGT'));
+    msa.append(new Subseq('ACGT'));
+
+    for (var i=1; i<=4; i++) {
+        assertFalse(msa.canExtendRight(i, new ClosedIntRange(1, 1)));
+        assertFalse(msa.canExtendRight(i, new ClosedIntRange(1, 2)));
+        assertFalse(msa.canExtendRight(i, new ClosedIntRange(2, 2)));
+    }
+
+    msa.clear();
+    msa.append(new Subseq('CTG-', 'ACTG'));
+    msa.append(new Subseq('ACT-', 'ACTG'));
+
+    assertFalse(msa.canExtendRight(4, new ClosedIntRange(1, 1)));
+    assertTrue(msa.canExtendRight(4, new ClosedIntRange(1, 2)));
+    assertTrue(msa.canExtendRight(4, new ClosedIntRange(2, 2)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_canLevelLeft() {
+    var msa = new Msa();
+    msa.append(new Subseq('ACGT'));
+    msa.append(new Subseq('ACGT'));
+
+    assertFalse(msa.canLevelLeft(1, new ClosedIntRange(1, 1)));
+    assertFalse(msa.canLevelLeft(1, new ClosedIntRange(1, 2)));
+    assertFalse(msa.canLevelLeft(1, new ClosedIntRange(2, 2)));
+
+    for (var i=2; i<=4; i++) {
+        assertTrue(msa.canLevelLeft(i, new ClosedIntRange(1, 1)));
+        assertTrue(msa.canLevelLeft(i, new ClosedIntRange(1, 2)));
+        assertTrue(msa.canLevelLeft(i, new ClosedIntRange(2, 2)));
+    }
+
+    msa.clear();
+    msa.append(new Subseq('--ACTG', 'ACTG'));
+    msa.append(new Subseq('---ACT', 'ACTG'));
+
+    assertFalse(msa.canLevelLeft(1, new ClosedIntRange(1, 2)));
+    assertFalse(msa.canLevelLeft(2, new ClosedIntRange(1, 2)));
+    assertFalse(msa.canLevelLeft(3, new ClosedIntRange(1, 2)));
+    assertTrue(msa.canLevelLeft(4, new ClosedIntRange(1, 2)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_canLevelRight() {
+    var msa = new Msa();
+    msa.append(new Subseq('ACGT'));
+    msa.append(new Subseq('ACGT'));
+
+    assertFalse(msa.canLevelRight(4, new ClosedIntRange(1, 1)));
+    assertFalse(msa.canLevelRight(4, new ClosedIntRange(1, 2)));
+    assertFalse(msa.canLevelRight(4, new ClosedIntRange(2, 2)));
+
+    for (var i=1; i<=3; i++) {
+        assertTrue(msa.canLevelRight(i, new ClosedIntRange(1, 1)));
+        assertTrue(msa.canLevelRight(i, new ClosedIntRange(1, 2)));
+        assertTrue(msa.canLevelRight(i, new ClosedIntRange(2, 2)));
+    }
+
+    msa.clear();
+    msa.append(new Subseq('ACTG--', 'ACTG'));
+    msa.append(new Subseq('CTG---', 'ACTG'));
+
+    assertFalse(msa.canLevelRight(6, new ClosedIntRange(1, 2)));
+    assertFalse(msa.canLevelRight(5, new ClosedIntRange(1, 2)));
+    assertFalse(msa.canLevelRight(4, new ClosedIntRange(1, 2)));
+    assertTrue(msa.canLevelRight(3, new ClosedIntRange(1, 2)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_canTrimLeft() {
+    var msa = new Msa();
+    msa.append(new Subseq('ACGT'));
+    msa.append(new Subseq('ACGT'));
+
+    for (var i=1; i<=4; i++) {
+        assertTrue(msa.canTrimLeft(i, new ClosedIntRange(1, 1)));
+        assertTrue(msa.canTrimLeft(i, new ClosedIntRange(1, 2)));
+        assertTrue(msa.canTrimLeft(i, new ClosedIntRange(2, 2)));
+    }
+
+    msa.clear();
+    msa.append(new Subseq('-AC', 'ACTG'));
+    msa.append(new Subseq('-G-', 'ACTG'));
+
+    assertFalse(msa.canTrimLeft(1, new ClosedIntRange(1, 1)));
+    assertFalse(msa.canTrimLeft(1, new ClosedIntRange(1, 2)));
+    assertFalse(msa.canTrimLeft(1, new ClosedIntRange(2, 2)));
+
+    assertTrue(msa.canTrimLeft(2, new ClosedIntRange(1, 1)));
+    assertTrue(msa.canTrimLeft(2, new ClosedIntRange(1, 2)));
+    assertFalse(msa.canTrimLeft(2, new ClosedIntRange(2, 2)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_canTrimRight() {
+    var msa = new Msa();
+    msa.append(new Subseq('ACGT'));
+    msa.append(new Subseq('ACGT'));
+
+    for (var i=1; i<=4; i++) {
+        assertTrue(msa.canTrimRight(i, new ClosedIntRange(1, 1)));
+        assertTrue(msa.canTrimRight(i, new ClosedIntRange(1, 2)));
+        assertTrue(msa.canTrimRight(i, new ClosedIntRange(2, 2)));
+    }
+
+    msa.clear();
+    msa.append(new Subseq('-AC', 'ACTG'));
+    msa.append(new Subseq('-G-', 'ACTG'));
+
+    assertTrue(msa.canTrimRight(3, new ClosedIntRange(1, 1)));
+    assertTrue(msa.canTrimRight(3, new ClosedIntRange(1, 2)));
+    assertFalse(msa.canTrimRight(3, new ClosedIntRange(2, 2)));
+
+    assertTrue(msa.canTrimRight(2, new ClosedIntRange(1, 1)));
+    assertTrue(msa.canTrimRight(2, new ClosedIntRange(1, 2)));
+    assertFalse(msa.canTrimRight(2, new ClosedIntRange(2, 2)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_collapseLeft() {
+    var seq = 'ABCDEF';
+
+    var strings = [
+    //   12345678
+        'A-BC-D-E',
+        '-A-BCD--',
+        '--A---BC'
+    ];
+
+    // Also tests that un-normalized rects produce expected result
+    var rect = new UnitRect();
+    var msaLength = strings[0].length;
+    var nSeqs = strings.length;
+    for (var top=1; top<= nSeqs; ++top) {
+        for (var left=1; left<= msaLength; ++left) {
+            for (var bottom=top; bottom<= nSeqs; ++bottom) {
+                for (var right=left; right<= msaLength; ++right) {
+                    var subseq1 = new Subseq(strings[0], seq);
+                    var subseq2 = new Subseq(strings[1], seq);
+                    var subseq3 = new Subseq(strings[2], seq);
+
+                    var msa = new Msa();
+                    assertTrue(msa.append(subseq1));
+                    assertTrue(msa.append(subseq2));
+                    assertTrue(msa.append(subseq3));
+
+                    if (left % 2 === 0) {
+                        rect.setTop(top);
+                        rect.setLeft(left);
+                        rect.setRight(right);
+                        rect.setBottom(bottom);
+                    }
+                    else {
+                        rect.setTop(bottom);
+                        rect.setLeft(right);
+                        rect.setRight(left);
+                        rect.setBottom(top);
+                    }
+
+                    msa.collapseLeft(rect);
+
+                    // Check the result
+                    for (var i=1; i<=nSeqs; ++i) {
+                        if (i >= top && i <= bottom) {
+                            var subseq4 = new Subseq(strings[i-1], seq);
+                            subseq4.collapseLeft(new ClosedIntRange(left, right));
+                            assertEquals(subseq4.toString(), msa.at(i).toString());
+                        }
+                        else {
+                            assertEquals(strings[i-1], msa.at(i).toString());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ----------------------------------------
+    // Reset to original alignment
+    var subseq1 = new Subseq(strings[0], seq);
+    var subseq2 = new Subseq(strings[1], seq);
+    var subseq3 = new Subseq(strings[2], seq);
+
+    // Test: check for appropriate subseq change change vectors
+    var changes = msa.collapseLeft(UnitRect.createFromCoordinates(new Coordinate(4, 1), new Coordinate(5, 2)));
+    assertEquals(0, changes.length);
+
+    // A-BC-D-E        A-BC-D-E
+    // -A-BCD--   ==>  -AB-CD--
+    // --A---BC        --A---BC
+    changes = msa.collapseLeft(UnitRect.createFromCoordinates(new Coordinate(3, 1), new Coordinate(4, 3)));
+    assertEquals(1, changes.length);
+    assertEquals(TrimExtOp.eInternal, changes[0].operation);
+    assertEquals(2, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(3, 4)));
+    assertEquals('-B', changes[0].difference.toString());
+
+    assertTrue(msa.collapseLeft(UnitRect.createFromCoordinates(new Coordinate(3, 1), new Coordinate(4, 3))).length === 0);
+
+    // 12345678
+    // A-BC-D-E        A-BCD--E
+    // -AB-CD--   ==>  -ABCD---
+    // --A---BC        --AB---C
+    //   |<==+
+    changes = msa.collapseLeft(UnitRect.createFromCoordinates(new Coordinate(3, 1), new Coordinate(7, 3)));
+    assertEquals(3, changes.length);
+    assertEquals(TrimExtOp.eInternal, changes[0].operation);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(5, 6)));
+    assertEquals('-D', changes[0].difference.toString());
+
+    assertEquals(TrimExtOp.eInternal, changes[1].operation);
+    assertEquals(2, changes[1].row);
+    assertTrue(changes[1].columns.eq(new ClosedIntRange(4, 6)));
+    assertEquals('-CD', changes[1].difference.toString());
+
+    assertEquals(TrimExtOp.eInternal, changes[2].operation);
+    assertEquals(3, changes[2].row);
+    assertTrue(changes[2].columns.eq(new ClosedIntRange(4, 7)));
+    assertEquals('---B', changes[2].difference.toString());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_collapseRight() {
+    var seq = 'ABCDEF';
+
+    var strings = [
+    //   12345678
+        'A-BC-D-E',
+        '-A-BCD--',
+        '--A---BC'
+    ];
+
+    // Also tests that un-normalized rects produce expected result
+    var rect = new UnitRect();
+    var msaLength = strings[0].length;
+    var nSeqs = strings.length;
+    for (var top=1; top<= nSeqs; ++top) {
+        for (var left=1; left<= msaLength; ++left) {
+            for (var bottom=top; bottom<= nSeqs; ++bottom) {
+                for (var right=left; right<= msaLength; ++right) {
+                    var subseq1 = new Subseq(strings[0], seq);
+                    var subseq2 = new Subseq(strings[1], seq);
+                    var subseq3 = new Subseq(strings[2], seq);
+
+                    var msa = new Msa();
+                    assertTrue(msa.append(subseq1));
+                    assertTrue(msa.append(subseq2));
+                    assertTrue(msa.append(subseq3));
+
+                    if (left % 2 === 0) {
+                        rect.setTop(top);
+                        rect.setLeft(left);
+                        rect.setRight(right);
+                        rect.setBottom(bottom);
+                    }
+                    else {
+                        rect.setTop(bottom);
+                        rect.setLeft(right);
+                        rect.setRight(left);
+                        rect.setBottom(top);
+                    }
+
+                    msa.collapseRight(rect);
+
+                    // Check the result
+                    for (var i=1; i<=nSeqs; ++i) {
+                        if (i >= top && i <= bottom) {
+                            var subseq4 = new Subseq(strings[i-1], seq);
+                            subseq4.collapseRight(new ClosedIntRange(left, right));
+                            assertEquals(subseq4.toString(), msa.at(i).toString());
+                        }
+                        else {
+                            assertEquals(strings[i-1], msa.at(i).toString());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ----------------------------------------
+    // Reset to original alignment
+    var subseq1 = new Subseq(strings[0], seq);
+    var subseq2 = new Subseq(strings[1], seq);
+    var subseq3 = new Subseq(strings[2], seq);
+
+    // Test: check for appropriate subseq change change vectors
+    var changes = msa.collapseRight(UnitRect.createFromCoordinates(new Coordinate(7, 1), new Coordinate(8, 2)));
+    assertEquals(0, changes.length);
+
+    // A-BC-D-E        -ABC-D-E
+    // -A-BCD--   ==>  --ABCD--
+    // --A---BC        --A---BC
+    changes = msa.collapseRight(UnitRect.createFromCoordinates(new Coordinate(1, 1), new Coordinate(3, 3)));
+    assertEquals(2, changes.length);
+
+    assertEquals(TrimExtOp.eInternal, changes[0].operation);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(1, 2)));
+    assertEquals('A-', changes[0].difference.toString());
+
+    assertEquals(TrimExtOp.eInternal, changes[1].operation);
+    assertEquals(2, changes[1].row);
+    assertTrue(changes[1].columns.eq(new ClosedIntRange(2, 3)));
+    assertEquals('A-', changes[1].difference.toString());
+
+    assertTrue(msa.collapseRight(UnitRect.createFromCoordinates(new Coordinate(1, 1), new Coordinate(3, 3))).length === 0);
+
+    // 12345678
+    // -ABC-D-E        -A-BCD-E
+    // --ABCD--   ==>  --ABCD--
+    // --A---BC        -----ABC
+    //   +=>|
+    changes = msa.collapseRight(UnitRect.createFromCoordinates(new Coordinate(3, 1), new Coordinate(6, 3)));
+    assertEquals(2, changes.length);
+    assertEquals(TrimExtOp.eInternal, changes[0].operation);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(3, 5)));
+    assertEquals('BC-', changes[0].difference.toString());
+
+    assertEquals(TrimExtOp.eInternal, changes[1].operation);
+    assertEquals(3, changes[1].row);
+    assertTrue(changes[1].columns.eq(new ClosedIntRange(3, 6)));
+    assertEquals('A---', changes[1].difference.toString());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_extendLeft() {
+    var seq1 = 'ABCDEF';
+    var seq2 = 'TUVWXYZ';
+    var subseq1 = new Subseq('---C-DE--', seq1);
+    var subseq2 = new Subseq('-----W-X-', seq2);
+    var msa = new Msa();
+    msa.append(subseq1);
+    msa.append(subseq2);
+
+    // ------------------------------------------------------------------------
+    // Tests: extend subseqs that do nothing
+    for (var i=6; i<= 9; ++i) {
+        assertTrue(msa.extendLeft(i, new ClosedIntRange(1, 1)).isEmpty());
+        assertTrue(msa.extendLeft(i, new ClosedIntRange(2, 2)).isEmpty());
+        assertTrue(msa.extendLeft(i, new ClosedIntRange(1, 2)).isEmpty());
+
+        assertEquals("---C-DE--", subseq1.toString());
+        assertEquals("-----W-X-", subseq2.toString());
+        assertEquals(3, subseq1.start());
+        assertEquals(4, subseq2.start());
+    }
+
+    // ------------------------------------------------------------------------
+    // Test: extend second sequence one space
+    // -----W-X- >>> ----VW-X-
+    var changes = msa.extendLeft(5, new ClosedIntRange(2, 2));
+    assertEquals(1, changes.length);
+    assertEquals(2, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(5, 5)));
+    assertEquals(TrimExtOp.eExtendLeft, changes[0].operation);
+    assertEquals('V', changes[0].difference.toString());
+    assertEquals('----VW-X-', subseq2.toString());
+    assertEquals(3, subseq2.start());
+
+    // ------------------------------------------------------------------------
+    // Test: extend both sequences, but only one can extend
+    // ---C-DE-- >>> ---C-DE--
+    // ----VW-X- >>> ---UVW-X-
+    changes = msa.extendLeft(4, new ClosedIntRange(1, 2));
+    assertEquals(1, changes.length);
+    assertEquals(2, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(4, 4)));
+    assertEquals(TrimExtOp.eExtendLeft, changes[0].operation);
+    assertEquals("U", changes[0].difference.toString());
+    assertEquals("---C-DE--", subseq1.toString());
+    assertEquals("---UVW-X-", subseq2.toString());
+    assertEquals(3, subseq1.start());
+    assertEquals(2, subseq2.start());
+
+    // ------------------------------------------------------------------------
+    // Test: extend both sequence as far as possible
+    // ---C-DE-- >>> -ABC-DE--
+    // ---UVW-X- >>> --TUVW-X-
+    changes = msa.extendLeft(1, new ClosedIntRange(1, 2));
+    assertEquals(2, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(2, 3)));
+    assertEquals(TrimExtOp.eExtendLeft, changes[0].operation);
+    assertEquals("AB", changes[0].difference.toString());
+    assertEquals(2, changes[1].row);
+    assertTrue(changes[1].columns.eq(new ClosedIntRange(3, 3)));
+    assertEquals(TrimExtOp.eExtendLeft, changes[0].operation);
+    assertEquals("T", changes[1].difference.toString());
+    assertEquals("-ABC-DE--", subseq1.toString());
+    assertEquals("--TUVW-X-", subseq2.toString());
+    assertEquals(1, subseq1.start());
+    assertEquals(1, subseq2.start());
+
+    // ------------------------------------------------------------------------
+    // Test: extend multiple spots at once
+    msa.clear();
+    subseq1 = new Subseq("---C-DE--", seq1);
+    subseq2 = new Subseq("-----W-X-", seq2);
+    msa.append(subseq1);
+    msa.append(subseq2);
+
+    changes = msa.extendLeft(1, new ClosedIntRange(1, 2));
+    assertEquals(2, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(2, 3)));
+    assertEquals(TrimExtOp.eExtendLeft, changes[0].operation);
+    assertEquals("AB", changes[0].difference.toString());
+    assertEquals(2, changes[1].row);
+    assertTrue(changes[1].columns.eq(new ClosedIntRange(3, 5)));
+    assertEquals(TrimExtOp.eExtendLeft, changes[0].operation);
+    assertEquals("TUV", changes[1].difference.toString());
+
+    assertEquals("-ABC-DE--", subseq1.toString());
+    assertEquals("--TUVW-X-", subseq2.toString());
+    assertEquals(1, subseq1.start());
+    assertEquals(1, subseq2.start());
+
+    // ------------------------------------------------------------------------
+    // Test: extension only occurs within available gap spaces
+    msa.clear();
+    subseq1 = new Subseq("-C-DE--", seq1);
+    subseq2 = new Subseq("--W-X--", seq2);
+    msa.append(subseq1);
+    msa.append(subseq2);
+
+    changes = msa.extendLeft(1, new ClosedIntRange(1, 2));
+    assertEquals(2, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(1, 1)));
+    assertEquals(TrimExtOp.eExtendLeft, changes[0].operation);
+    assertEquals("B", changes[0].difference.toString());
+    assertEquals(2, changes[1].row);
+    assertTrue(changes[1].columns.eq(new ClosedIntRange(1, 2)));
+    assertEquals(TrimExtOp.eExtendLeft, changes[0].operation);
+    assertEquals("UV", changes[1].difference.toString());
+    assertEquals("BC-DE--", subseq1.toString());
+    assertEquals("UVW-X--", subseq2.toString());
+    assertEquals(2, subseq1.start());
+    assertEquals(2, subseq2.start());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_extendRight() {
+    var seq1 = 'ABCDEF';
+    var seq2 = 'TUVWXYZ';
+    var subseq1 = new Subseq("--BC-D---", seq1);
+    var subseq2 = new Subseq("-V-W-----", seq2);
+    var msa = new Msa();
+    msa.append(subseq1);
+    msa.append(subseq2);
+
+    // ------------------------------------------------------------------------
+    // Tests: extend subseqs that do nothing
+    for (var i=1; i<= 4; ++i) {
+        assertTrue(msa.extendRight(i, new ClosedIntRange(1, 1)).isEmpty());
+        assertTrue(msa.extendRight(i, new ClosedIntRange(2, 2)).isEmpty());
+        assertTrue(msa.extendRight(i, new ClosedIntRange(1, 2)).isEmpty());
+
+        assertEquals("--BC-D---", subseq1.toString());
+        assertEquals("-V-W-----", subseq2.toString());
+        assertEquals(4, subseq1.stop());
+        assertEquals(4, subseq2.stop());
+    }
+
+    // ------------------------------------------------------------------------
+    // Test: extend second sequence one space
+    // -V-W----- >>> -V-WX----
+    var changes = msa.extendRight(5, new ClosedIntRange(2, 2));
+    assertEquals(1, changes.length);
+    assertEquals(2, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(5, 5)));
+    assertEquals(TrimExtOp.eExtendRight, changes[0].operation);
+    assertEquals("X", changes[0].difference.toString());
+
+    assertEquals("-V-WX----", subseq2.toString());
+    assertEquals(5, subseq2.stop());
+
+    // ------------------------------------------------------------------------
+    // Test: extend both sequences, but only one can extend
+    // --BC-D--- >>> --BC-D---
+    // -V-WX---- >>> -V-WXY---
+    changes = msa.extendRight(6, new ClosedIntRange(1, 2));
+    assertEquals(1, changes.length);
+    assertEquals(2, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(6, 6)));
+    assertEquals(TrimExtOp.eExtendRight, changes[0].operation);
+    assertEquals("Y", changes[0].difference.toString());
+    assertEquals("--BC-D---", subseq1.toString());
+    assertEquals("-V-WXY---", subseq2.toString());
+    assertEquals(4, subseq1.stop());
+    assertEquals(6, subseq2.stop());
+
+    // ------------------------------------------------------------------------
+    // Test: extend both sequence as far as possible
+    // --BC-D--- >>> --BC-DEF-
+    // -V-WXY--- >>> -V-WXYZ--
+    changes = msa.extendRight(9, new ClosedIntRange(1, 2));
+
+    assertEquals(2, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(7, 8)));
+    assertEquals(TrimExtOp.eExtendRight, changes[0].operation);
+    assertEquals("EF", changes[0].difference.toString());
+    assertEquals(2, changes[1].row);
+    assertTrue(changes[1].columns.eq(new ClosedIntRange(7, 7)));
+    assertEquals(TrimExtOp.eExtendRight, changes[1].operation);
+    assertEquals("Z", changes[1].difference.toString());
+    assertEquals("--BC-DEF-", subseq1.toString());
+    assertEquals("-V-WXYZ--", subseq2.toString());
+    assertEquals(6, subseq1.stop());
+    assertEquals(7, subseq2.stop());
+
+    // ------------------------------------------------------------------------
+    // Test: extend multiple spots at once
+    msa.clear();
+    subseq1 = new Subseq("--BC-D---", seq1);
+    subseq2 = new Subseq("-V-W-----", seq2);
+    msa.append(subseq1);
+    msa.append(subseq2);
+
+    changes = msa.extendRight(9, new ClosedIntRange(1, 2));
+    assertEquals(2, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(7, 8)));
+    assertEquals(TrimExtOp.eExtendRight, changes[0].operation);
+    assertEquals("EF", changes[0].difference.toString());
+    assertEquals(2, changes[1].row);
+    assertTrue(changes[1].columns.eq(new ClosedIntRange(5, 7)));
+    assertEquals(TrimExtOp.eExtendRight, changes[1].operation);
+    assertEquals("XYZ", changes[1].difference.toString());
+    assertEquals("--BC-DEF-", subseq1.toString());
+    assertEquals("-V-WXYZ--", subseq2.toString());
+    assertEquals(6, subseq1.stop());
+    assertEquals(7, subseq2.stop());
+
+    // ------------------------------------------------------------------------
+    // Test: extension only occurs within available gap spaces
+    msa.clear();
+    subseq1 = new Subseq("--BC-D-", seq1);
+    subseq2 = new Subseq("-V--W--", seq2);
+    msa.append(subseq1);
+    msa.append(subseq2);
+
+    changes = msa.extendRight(7, new ClosedIntRange(1, 2));
+    assertEquals(2, changes.length);
+    assertEquals(changes[0].row, 1);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(7, 7)));
+    assertEquals(TrimExtOp.eExtendRight, changes[0].operation);
+    assertEquals("E", changes[0].difference.toString());
+    assertEquals(changes[1].row, 2);
+    assertTrue(changes[1].columns.eq(new ClosedIntRange(6, 7)));
+    assertEquals(TrimExtOp.eExtendRight, changes[1].operation);
+    assertEquals("XY", changes[1].difference.toString());
+    assertEquals("--BC-DE", subseq1.toString());
+    assertEquals("-V--WXY", subseq2.toString());
+    assertEquals(5, subseq1.stop());
+    assertEquals(6, subseq2.stop());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_insert() {
+    var seq1 = 'ABCDEF';
+    var seq2 = 'GHIJKL';
+    var seq3 = 'CDEF';
+
+    var subseq1 = new Subseq('BC--DE', seq1);
+    var subseq2 = new Subseq('GH--IJ', seq2);
+    var subseq3 = new Subseq('--CDEF', seq3);
+
+    var msa = new Msa();
+    assertTrue(msa.insert(subseq1));
+    assertTrue(msa.insert(subseq2));
+    assertTrue(msa.insert(subseq3));
+    assertEquals(3, msa.rowCount());
+    assertTrue(msa.at(1) === subseq3);
+    assertTrue(msa.at(2) === subseq2);
+    assertTrue(msa.at(3) === subseq1);
+
+    msa.clear();
+    assertTrue(msa.insert(subseq1, 1));
+    assertTrue(msa.insert(subseq2, 1));
+    assertTrue(msa.insert(subseq3, 1));
+    assertTrue(msa.at(1) === subseq3);
+    assertTrue(msa.at(2) === subseq2);
+    assertTrue(msa.at(3) === subseq1);
+
+    // Test; insert in the middle
+    msa.clear();
+    assertTrue(msa.append(subseq1));
+    assertTrue(msa.append(subseq3));
+    assertTrue(msa.insert(subseq2, 2));
+    assertTrue(msa.at(1) === subseq1);
+    assertTrue(msa.at(2) === subseq2);
+    assertTrue(msa.at(3) === subseq3);
+
+    // Test: insert at the end
+    msa.clear();
+    assertTrue(msa.insert(subseq1, msa.rowCount() + 1));
+    assertTrue(msa.insert(subseq2, msa.rowCount() + 1));
+    assertTrue(msa.insert(subseq3, msa.rowCount() + 1));
+    assertTrue(msa.at(1) === subseq1);
+    assertTrue(msa.at(2) === subseq2);
+    assertTrue(msa.at(3) === subseq3);
+
+    // Test: insert array of subseqs
+    msa.clear();
+    assertTrue(msa.insert([subseq1, subseq2]));
+    assertEquals(2, msa.rowCount());
+    assertTrue(msa.at(1) === subseq1);
+    assertTrue(msa.at(2) === subseq2);
+
+    // Test: inserting sequence with differing length
+    msa.clear();
+    subseq3 = new Subseq('CDEF', seq3);
+    assertTrue(msa.append(subseq1));
+    assertFalse(msa.insert(subseq3));
+    assertTrue(msa.at(1) === subseq1);
+    assertEquals(1, msa.rowCount());
+
+    // Test: inserting array with one incompatible sequence does not work
+    msa.clear();
+    assertFalse(msa.insert([subseq1, subseq2, subseq3]));
+    assertEquals(0, msa.rowCount())
+    assertFalse(msa.insert([subseq3, subseq1]));
+    assertEquals(0, msa.rowCount())
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_insertGapColumns() {
+    var msa = new Msa();
+    msa.append(new Subseq('ABC'));
+    msa.append(new Subseq('DEF'));
+    msa.append(new Subseq('GHI'));
+    msa.append(new Subseq('JKL'));
+    msa.append(new Subseq('MNO'));
+
+    // Test: inserting gap columns at any position with n = 0, does nothing
+    for (var i=1; i<= msa.columnCount()+1; ++i) {
+        msa.insertGapColumns(i, 0);
+        assertEquals("ABC", msa.at(1).toString());
+        assertEquals("DEF", msa.at(2).toString());
+        assertEquals("GHI", msa.at(3).toString());
+        assertEquals("JKL", msa.at(4).toString());
+        assertEquals("MNO", msa.at(5).toString());
+    }
+
+    // Test: insert gap of 1 length at beginning
+    msa.insertGapColumns(1, 1);
+    assertEquals("-ABC", msa.at(1).toString());
+    assertEquals("-DEF", msa.at(2).toString());
+    assertEquals("-GHI", msa.at(3).toString());
+    assertEquals("-JKL", msa.at(4).toString());
+    assertEquals("-MNO", msa.at(5).toString());
+
+    // Test: insert another gap at the beginning
+    msa.insertGapColumns(1, 1);
+    assertEquals("--ABC", msa.at(1).toString());
+    assertEquals("--DEF", msa.at(2).toString());
+    assertEquals("--GHI", msa.at(3).toString());
+    assertEquals("--JKL", msa.at(4).toString());
+    assertEquals("--MNO", msa.at(5).toString());
+
+    // Test: insert gap in the middle
+    msa.insertGapColumns(4, 1, '.');
+    assertEquals("--A.BC", msa.at(1).toString());
+    assertEquals("--D.EF", msa.at(2).toString());
+    assertEquals("--G.HI", msa.at(3).toString());
+    assertEquals("--J.KL", msa.at(4).toString());
+    assertEquals("--M.NO", msa.at(5).toString());
+
+    // Test: insert another gap in the middle
+    msa.insertGapColumns(5, 1);
+    assertEquals("--A.-BC", msa.at(1).toString());
+    assertEquals("--D.-EF", msa.at(2).toString());
+    assertEquals("--G.-HI", msa.at(3).toString());
+    assertEquals("--J.-KL", msa.at(4).toString());
+    assertEquals("--M.-NO", msa.at(5).toString());
+
+    // Test: insert gap at end
+    msa.insertGapColumns(8, 1);
+    assertEquals("--A.-BC-", msa.at(1).toString());
+    assertEquals("--D.-EF-", msa.at(2).toString());
+    assertEquals("--G.-HI-", msa.at(3).toString());
+    assertEquals("--J.-KL-", msa.at(4).toString());
+    assertEquals("--M.-NO-", msa.at(5).toString());
+
+    // Test: insert another gap at end
+    msa.insertGapColumns(8, 1);
+    assertEquals("--A.-BC--", msa.at(1).toString());
+    assertEquals("--D.-EF--", msa.at(2).toString());
+    assertEquals("--G.-HI--", msa.at(3).toString());
+    assertEquals("--J.-KL--", msa.at(4).toString());
+    assertEquals("--M.-NO--", msa.at(5).toString());
+
+    // Test: insertion of several gaps
+    msa.insertGapColumns(7, 4);
+    assertEquals("--A.-B----C--", msa.at(1).toString());
+    assertEquals("--D.-E----F--", msa.at(2).toString());
+    assertEquals("--G.-H----I--", msa.at(3).toString());
+    assertEquals("--J.-K----L--", msa.at(4).toString());
+    assertEquals("--M.-N----O--", msa.at(5).toString());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_isCompatible() {
+    var msa = new Msa();
+    var seq1 = 'ABCDEF';
+    var subseq1 = new Subseq('BC--DE', seq1);
+    assertTrue(msa.isCompatible(subseq1));
+
+    // Test: grammar check
+    {
+        var seq = new BioString('ABC', grammar.AMINO);
+        var subseq = new Subseq('ABC', seq);
+        assertFalse(msa.isCompatible(subseq));
+
+        var msa2 = new Msa(grammar.AMINO);
+        assertTrue(msa2.isCompatible(subseq));
+    }
+
+    // Test: length check
+    assertTrue(msa.append(subseq1));
+    var subseq2 = new Subseq('A', seq1);
+    assertFalse(msa.isCompatible(subseq2));
+    subseq2 = new Subseq('ABCDEF', seq1);
+    assertTrue(msa.isCompatible(subseq2));
+
+    // Test: isCompatibleVector
+    assertTrue(msa.isCompatible([]));
+    var subseq3 = new Subseq('ABCDEF', seq1);
+    assertTrue(msa.isCompatible([subseq2, subseq3]));
+
+    // Test: vector with one having bad grammar
+    msa.clear();
+    subseq3.setGrammar(grammar.AMINO);
+    assertFalse(msa.isCompatible([subseq1, subseq3]));
+
+    // Test: vector with differing length subseqs
+    subseq3 = new Subseq('ABC', seq1);
+    assertFalse(msa.isCompatible([subseq1, subseq3]));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_isEmpty() {
+    var msa = new Msa();
+    assertTrue(msa.isEmpty());
+    msa.append(new Subseq('ABC'));
+    assertFalse(msa.isEmpty());
+    msa.clear();
+    assertTrue(msa.isEmpty());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_levelLeft() {
+    var seq = "ABCDEF";
+    var seq2 = "TUVWXYZ";
+    //                            23 4
+    var subseq1 = new Subseq("----BC-D-", seq);
+    //                           3 45
+    var subseq2 = new Subseq("---V-WX--", seq2);
+
+    var msa = new Msa();
+    msa.append([subseq1, subseq2]);
+
+    // ------------------------------------------------------------------------
+    // Test: level operations that do nothing
+    assertTrue(msa.levelLeft(5, new ClosedIntRange(1, 1)).isEmpty());
+    assertTrue(msa.levelLeft(4, new ClosedIntRange(2, 2)).isEmpty());
+    assertEquals("----BC-D-", subseq1.toString());
+    assertEquals("---V-WX--", subseq2.toString());
+    assertEquals(2, subseq1.start());
+    assertEquals(3, subseq2.start());
+
+    // ------------------------------------------------------------------------
+    // Test: extend and trim a subseq
+    // ----BC-D- >>> ---ABC-D-
+    var changes = msa.levelLeft(4, new ClosedIntRange(1, 1));
+    assertEquals(1, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(4, 4)));
+    assertEquals(TrimExtOp.eExtendLeft, changes[0].operation);
+    assertEquals("A", changes[0].difference.toString());
+    assertEquals("---ABC-D-", subseq1.toString());
+    assertEquals(1, subseq1.start());
+
+    changes = msa.levelLeft(5, new ClosedIntRange(1, 1));
+    assertEquals(1, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(4, 4)));
+    assertEquals(TrimExtOp.eTrimLeft, changes[0].operation);
+    assertEquals("A", changes[0].difference.toString());
+    assertEquals("----BC-D-", subseq1.toString());
+    assertEquals(2, subseq1.start());
+
+    changes = msa.levelLeft(1, new ClosedIntRange(1, 1));
+    assertEquals(1, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(4, 4)));
+    assertEquals(TrimExtOp.eExtendLeft, changes[0].operation);
+    assertEquals("A", changes[0].difference.toString());
+    assertEquals("---ABC-D-", subseq1.toString());
+    assertEquals(1, subseq1.start());
+
+    changes = msa.levelLeft(6, new ClosedIntRange(1, 1));
+    assertEquals(1, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(4, 5)));
+    assertEquals(TrimExtOp.eTrimLeft, changes[0].operation);
+    assertEquals("AB", changes[0].difference.toString());
+    assertEquals("-----C-D-", subseq1.toString());
+    assertEquals(3, subseq1.start());
+
+    changes = msa.levelLeft(2, new ClosedIntRange(1, 1));
+    assertEquals(1, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(4, 5)));
+    assertEquals(TrimExtOp.eExtendLeft, changes[0].operation);
+    assertEquals("AB", changes[0].difference.toString());
+    assertEquals("---ABC-D-", subseq1.toString());
+    assertEquals(1, subseq1.start());
+
+    // ------------------------------------------------------------------------
+    // Test: shifting by one character
+    // ---V-WX-- >>> ----VWX--
+    changes = msa.levelLeft(5, new ClosedIntRange(2, 2));
+    assertEquals(2, changes.length);
+    assertEquals(2, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(4, 4)));
+    assertEquals(TrimExtOp.eTrimLeft, changes[0].operation);
+    assertEquals("V", changes[0].difference.toString());
+    assertEquals(changes[1].row, 2);
+    assertTrue(changes[1].columns.eq(new ClosedIntRange(5, 5)));
+    assertEquals(TrimExtOp.eExtendLeft, changes[1].operation);
+    assertEquals("V", changes[1].difference.toString());
+    assertEquals("----VWX--", subseq2.toString());
+    assertEquals(3, subseq2.start());
+
+    // ------------------------------------------------------------------------
+    // Test: multiple sequence level
+    // ---ABC-D- >>> ---ABC-D-
+    // ----VWX-- >>> --TUVWX--
+    changes = msa.levelLeft(1, new ClosedIntRange(1, 2));
+    assertEquals(1, changes.length);
+    assertEquals(2, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(3, 4)));
+    assertEquals(TrimExtOp.eExtendLeft, changes[0].operation);
+    assertEquals("TU", changes[0].difference.toString());
+    assertEquals("---ABC-D-", subseq1.toString());
+    assertEquals("--TUVWX--", subseq2.toString());
+    assertEquals(1, subseq1.start());
+    assertEquals(1, subseq2.start());
+
+    // ---ABC-D- >>> ----BC-D-
+    // --TUVWX-- >>> ----VWX--
+    changes = msa.levelLeft(5, new ClosedIntRange(1, 2));
+    assertEquals(2, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(4, 4)));
+    assertEquals(TrimExtOp.eTrimLeft, changes[0].operation);
+    assertEquals("A", changes[0].difference.toString());
+    assertEquals(changes[1].row, 2);
+    assertTrue(changes[1].columns.eq(new ClosedIntRange(3, 4)));
+    assertEquals(TrimExtOp.eTrimLeft, changes[1].operation);
+    assertEquals("TU", changes[1].difference.toString());
+    assertEquals("----BC-D-", subseq1.toString());
+    assertEquals("----VWX--", subseq2.toString());
+    assertEquals(2, subseq1.start());
+    assertEquals(3, subseq2.start());
+
+    // ------------------------------------------------------------------------
+    // Test: multiple sequence, level to end
+    // ----BC-D- >>> -------D-
+    // ----VWX-- >>> ------X--
+    changes = msa.levelLeft(9, new ClosedIntRange(1, 2));
+    assertEquals(2, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(5, 6)));
+    assertEquals(TrimExtOp.eTrimLeft, changes[0].operation);
+    assertEquals("BC", changes[0].difference.toString());
+    assertEquals(changes[1].row, 2);
+    assertTrue(changes[1].columns.eq(new ClosedIntRange(5, 6)));
+    assertEquals(TrimExtOp.eTrimLeft, changes[1].operation);
+    assertEquals("VW", changes[1].difference.toString());
+    assertEquals("-------D-", subseq1.toString());
+    assertEquals("------X--", subseq2.toString());
+    assertEquals(4, subseq1.start());
+    assertEquals(5, subseq2.start());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_levelRight() {
+    var seq = "ABCDEF";
+    var seq2 = "TUVWXYZ";
+    //                            23 4
+    var subseq1 = new Subseq("----BC-D-", seq);
+    //                           3 45
+    var subseq2 = new Subseq("---V-WX--", seq2);
+
+    var msa = new Msa();
+    msa.append([subseq1, subseq2]);
+
+    // ------------------------------------------------------------------------
+    // Test: level operations that do nothing
+    assertTrue(msa.levelRight(8, new ClosedIntRange(1, 1)).isEmpty());
+    assertTrue(msa.levelRight(7, new ClosedIntRange(2, 2)).isEmpty());
+    assertEquals("----BC-D-", subseq1.toString());
+    assertEquals("---V-WX--", subseq2.toString());
+    assertEquals(4, subseq1.stop());
+    assertEquals(5, subseq2.stop());
+
+    // ------------------------------------------------------------------------
+    // Test: extend and trim a subseq
+    // ---V-WX-- >>> ---V-WXY-
+    var changes = msa.levelRight(8, new ClosedIntRange(2, 2));
+    assertEquals(1, changes.length);
+    assertEquals(2, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(8, 8)));
+    assertEquals(TrimExtOp.eExtendRight, changes[0].operation);
+    assertEquals("Y", changes[0].difference.toString());
+    assertEquals("---V-WXY-", subseq2.toString());
+    assertEquals(6, subseq2.stop());
+
+    changes = msa.levelRight(9, new ClosedIntRange(2, 2));
+    assertEquals(1, changes.length);
+    assertEquals(2, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(9, 9)));
+    assertEquals(TrimExtOp.eExtendRight, changes[0].operation);
+    assertEquals("Z", changes[0].difference.toString());
+    assertEquals("---V-WXYZ", subseq2.toString());
+    assertEquals(7, subseq2.stop());
+
+    changes = msa.levelRight(7, new ClosedIntRange(2, 2));
+    assertEquals(1, changes.length);
+    assertEquals(2, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(8, 9)));
+    assertEquals(TrimExtOp.eTrimRight, changes[0].operation);
+    assertEquals("YZ", changes[0].difference.toString());
+    assertEquals("---V-WX--", subseq2.toString());
+    assertEquals(5, subseq2.stop());
+
+    changes = msa.levelRight(9, new ClosedIntRange(2, 2));
+    assertEquals(1, changes.length);
+    assertEquals(2, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(8, 9)));
+    assertEquals(TrimExtOp.eExtendRight, changes[0].operation);
+    assertEquals("YZ", changes[0].difference.toString());
+    assertEquals("---V-WXYZ", subseq2.toString());
+    assertEquals(7, subseq2.stop());
+
+    changes = msa.levelRight(7, new ClosedIntRange(2, 2));
+    assertEquals(1, changes.length);
+    assertEquals(2, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(8, 9)));
+    assertEquals(TrimExtOp.eTrimRight, changes[0].operation);
+    assertEquals("YZ", changes[0].difference.toString());
+    assertEquals("---V-WX--", subseq2.toString());
+    assertEquals(5, subseq2.stop());
+
+    // ------------------------------------------------------------------------
+    // Test: shifting by one character
+    // ----BC-D- >>> ----BCD--
+    changes = msa.levelRight(7, new ClosedIntRange(1, 1));
+    assertEquals(2, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(8, 8)));
+    assertEquals(TrimExtOp.eTrimRight, changes[0].operation);
+    assertEquals("D", changes[0].difference.toString());
+    assertEquals(changes[1].row, 1);
+    assertTrue(changes[1].columns.eq(new ClosedIntRange(7, 7)));
+    assertEquals(TrimExtOp.eExtendRight, changes[1].operation);
+    assertEquals("D", changes[1].difference.toString());
+    assertEquals("----BCD--", subseq1.toString());
+    assertEquals(4, subseq1.stop());
+
+    // ------------------------------------------------------------------------
+    // Test: multiple sequence level
+    // ----BCD-- >>> ----BCDE-
+    // ---V-WX-- >>> ---V-WXY-
+    changes = msa.levelRight(8, new ClosedIntRange(1, 2));
+    assertEquals(2, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(8, 8)));
+    assertEquals(TrimExtOp.eExtendRight, changes[0].operation);
+    assertEquals("E", changes[0].difference.toString());
+    assertEquals(changes[1].row, 2);
+    assertTrue(changes[1].columns.eq(new ClosedIntRange(8, 8)));
+    assertEquals(TrimExtOp.eExtendRight, changes[1].operation);
+    assertEquals("Y", changes[1].difference.toString());
+    assertEquals("----BCDE-", subseq1.toString());
+    assertEquals("---V-WXY-", subseq2.toString());
+    assertEquals(5, subseq1.stop());
+    assertEquals(6, subseq2.stop());
+
+    // ----BCDE- >>> ----B----
+    // ---V-WXY- >>> ---VW----
+    // Note: does all trims and then extensions as necessary
+    changes = msa.levelRight(5, new ClosedIntRange(1, 2));
+    assertEquals(3, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(6, 8)));
+    assertEquals(TrimExtOp.eTrimRight, changes[0].operation);
+    assertEquals("CDE", changes[0].difference.toString());
+    assertEquals(changes[1].row, 2);
+    assertTrue(changes[1].columns.eq(new ClosedIntRange(6, 8)));
+    assertEquals(TrimExtOp.eTrimRight, changes[1].operation);
+    assertEquals("WXY", changes[1].difference.toString());
+    assertEquals(changes[2].row, 2);
+    assertTrue(changes[2].columns.eq(new ClosedIntRange(5, 5)));
+    assertEquals(TrimExtOp.eExtendRight, changes[2].operation);
+    assertEquals("W", changes[2].difference.toString());
+    assertEquals("----B----", subseq1.toString());
+    assertEquals("---VW----", subseq2.toString());
+    assertEquals(2, subseq1.stop());
+    assertEquals(4, subseq2.stop());
+
+    // ------------------------------------------------------------------------
+    // Test: multiple sequence, level to end
+    changes = msa.levelRight(1, new ClosedIntRange(1, 2));
+    assertEquals(1, changes.length);
+    assertEquals(2, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(5, 5)));
+    assertEquals(TrimExtOp.eTrimRight, changes[0].operation);
+    assertEquals("W", changes[0].difference.toString());
+    assertEquals("----B----", subseq1.toString());
+    assertEquals("---V-----", subseq2.toString());
+    assertEquals(2, subseq1.stop());
+    assertEquals(3, subseq2.stop());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_moveRow() {
+    var subseq = new Subseq('BC--DE', 'ABCDEF');
+    var subseq2 = new Subseq('GH--IJ', 'GHIJKL');
+    var subseq3 = new Subseq('ABCDEF');
+
+    var msa = new Msa();
+    assertTrue(msa.append([subseq, subseq2, subseq3]));
+
+    var n = msa.rowCount();
+
+    // Test: move with itself does nothing
+    for (var i=1; i <= n; ++i) {
+        msa.moveRow(i, i);
+
+        // Nothing should have changed
+        assertTrue(subseq === msa.at(1));
+        assertTrue(subseq2 === msa.at(2));
+        assertTrue(subseq3 === msa.at(3));
+    }
+
+    // Test: move positive indices
+    msa.moveRow(1, 3);
+    assertTrue(subseq2 === msa.at(1));
+    assertTrue(subseq3 === msa.at(2));
+    assertTrue(subseq === msa.at(3));
+
+    msa.moveRow(3, 1);
+    assertTrue(subseq === msa.at(1));
+    assertTrue(subseq2 === msa.at(2));
+    assertTrue(subseq3 === msa.at(3));
+
+    msa.moveRow(1, 2);
+    assertTrue(subseq2 === msa.at(1));
+    assertTrue(subseq === msa.at(2));
+    assertTrue(subseq3 === msa.at(3));
+
+    msa.moveRow(2, 1);
+    assertTrue(subseq === msa.at(1));
+    assertTrue(subseq2 === msa.at(2));
+    assertTrue(subseq3 === msa.at(3));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_moveRowRange() {
+    var subseq = new Subseq('BC--DE', 'ABCDEF');
+    var subseq2 = new Subseq('GH--IJ', 'GHIJKL');
+    var subseq3 = new Subseq('ABCDEF');
+    var subseq4 = new Subseq('XYZTUV');
+    var subseq5 = new Subseq('WRSTID');
+
+    var msa = new Msa();
+    assertTrue(msa.append([subseq, subseq2, subseq3, subseq4, subseq5]));
+
+    var n = msa.rowCount();
+
+    // Test: swap with itself does nothing
+    for (var i=1; i <= n; ++i) {
+        msa.moveRowRange(new ClosedIntRange(i, i), i);
+
+        // Nothing should have changed
+        assertTrue(subseq === msa.at(1));
+        assertTrue(subseq2 === msa.at(2));
+        assertTrue(subseq3 === msa.at(3));
+        assertTrue(subseq4 === msa.at(4));
+        assertTrue(subseq5 === msa.at(5));
+    }
+
+    // Test: two at a time
+    for (var i=1; i<= n-1; ++i) {
+        msa.moveRowRange(new ClosedIntRange(i, i+1), i);
+        assertTrue(subseq === msa.at(1));
+        assertTrue(subseq2 === msa.at(2));
+        assertTrue(subseq3 === msa.at(3));
+        assertTrue(subseq4 === msa.at(4));
+        assertTrue(subseq5 === msa.at(5));
+    }
+
+    // Test: move positive indices
+    msa.moveRowRange(new ClosedIntRange(1, 2), 4);
+    assertTrue(subseq3 === msa.at(1));
+    assertTrue(subseq4 === msa.at(2));
+    assertTrue(subseq5 === msa.at(3));
+    assertTrue(subseq === msa.at(4));
+    assertTrue(subseq2 === msa.at(5));
+
+    msa.moveRowRange(new ClosedIntRange(4, 5), 1);
+    assertTrue(subseq === msa.at(1));
+    assertTrue(subseq2 === msa.at(2));
+    assertTrue(subseq3 === msa.at(3));
+    assertTrue(subseq4 === msa.at(4));
+    assertTrue(subseq5 === msa.at(5));
+
+    msa.moveRowRange(new ClosedIntRange(2, 5), 1);
+    assertTrue(subseq2 === msa.at(1));
+    assertTrue(subseq3 === msa.at(2));
+    assertTrue(subseq4 === msa.at(3));
+    assertTrue(subseq5 === msa.at(4));
+    assertTrue(subseq === msa.at(5));
+
+    msa.moveRowRange(new ClosedIntRange(1, 4), 2);
+    assertTrue(subseq === msa.at(1));
+    assertTrue(subseq2 === msa.at(2));
+    assertTrue(subseq3 === msa.at(3));
+    assertTrue(subseq4 === msa.at(4));
+    assertTrue(subseq5 === msa.at(5));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_moveRowRangeRelative() {
+    var subseq = new Subseq('BC--DE', 'ABCDEF');
+    var subseq2 = new Subseq('GH--IJ', 'GHIJKL');
+    var subseq3 = new Subseq('ABCDEF');
+    var subseq4 = new Subseq('XYZTUV');
+    var subseq5 = new Subseq('WRSTID');
+
+    var msa = new Msa();
+    assertTrue(msa.append([subseq, subseq2, subseq3, subseq4, subseq5]));
+
+    // Test: moving beyond borders should not change anything
+    msa.moveRowRangeRelative(new ClosedIntRange(1, 3), 0);
+    assertTrue(subseq === msa.at(1));
+    assertTrue(subseq2 === msa.at(2));
+    assertTrue(subseq3 === msa.at(3));
+    assertTrue(subseq4 === msa.at(4));
+    assertTrue(subseq5 === msa.at(5));
+
+    // Test: Move one spot at a time
+    msa.moveRowRangeRelative(new ClosedIntRange(1, 3), 1);
+    assertTrue(subseq4 === msa.at(1));
+    assertTrue(subseq === msa.at(2));
+    assertTrue(subseq2 === msa.at(3));
+    assertTrue(subseq3 === msa.at(4));
+    assertTrue(subseq5 === msa.at(5));
+
+    msa.moveRowRangeRelative(new ClosedIntRange(2, 4), 1);
+    assertTrue(subseq4 === msa.at(1));
+    assertTrue(subseq5 === msa.at(2));
+    assertTrue(subseq === msa.at(3));
+    assertTrue(subseq2 === msa.at(4));
+    assertTrue(subseq3 === msa.at(5));
+
+    msa.moveRowRangeRelative(new ClosedIntRange(4, 5), -1);
+    assertTrue(subseq4 === msa.at(1));
+    assertTrue(subseq5 === msa.at(2));
+    assertTrue(subseq2 === msa.at(3));
+    assertTrue(subseq3 === msa.at(4));
+    assertTrue(subseq === msa.at(5));
+
+    msa.moveRowRangeRelative(new ClosedIntRange(3, 4), -1);
+    assertTrue(subseq4 === msa.at(1));
+    assertTrue(subseq2 === msa.at(2));
+    assertTrue(subseq3 === msa.at(3));
+    assertTrue(subseq5 === msa.at(4));
+    assertTrue(subseq === msa.at(5));
+
+    // Test: move 2 spots at a time
+    msa.moveRowRangeRelative(new ClosedIntRange(1, 2), 2);
+    assertTrue(subseq3 === msa.at(1));
+    assertTrue(subseq5 === msa.at(2));
+    assertTrue(subseq4 === msa.at(3));
+    assertTrue(subseq2 === msa.at(4));
+    assertTrue(subseq === msa.at(5));
+
+    msa.moveRowRangeRelative(new ClosedIntRange(3, 4), -2);
+    assertTrue(subseq4 === msa.at(1));
+    assertTrue(subseq2 === msa.at(2));
+    assertTrue(subseq3 === msa.at(3));
+    assertTrue(subseq5 === msa.at(4));
+    assertTrue(subseq === msa.at(5));
+
+    // Test: move beyond spots should only move allowable spots
+    msa.moveRowRangeRelative(new ClosedIntRange(1, 3), 2);
+    assertTrue(subseq5 === msa.at(1));
+    assertTrue(subseq === msa.at(2));
+    assertTrue(subseq4 === msa.at(3));
+    assertTrue(subseq2 === msa.at(4));
+    assertTrue(subseq3 === msa.at(5));
+
+    msa.moveRowRangeRelative(new ClosedIntRange(3, 5), -2);
+    assertTrue(subseq4 === msa.at(1));
+    assertTrue(subseq2 === msa.at(2));
+    assertTrue(subseq3 === msa.at(3));
+    assertTrue(subseq5 === msa.at(4));
+    assertTrue(subseq === msa.at(5));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_moveRowRelative() {
+    var subseq = new Subseq('BC--DE', 'ABCDEF');
+    var subseq2 = new Subseq('GH--IJ', 'GHIJKL');
+    var subseq3 = new Subseq('ABCDEF');
+
+    var msa = new Msa();
+    assertTrue(msa.append([subseq, subseq2, subseq3]));
+
+    // Test: moving row 0 elements, should do nothing
+    msa.moveRowRelative(1, 0);
+    msa.moveRowRelative(2, 0);
+    msa.moveRowRelative(3, 0);
+    assertTrue(subseq === msa.at(1));
+    assertTrue(subseq2 === msa.at(2));
+    assertTrue(subseq3 === msa.at(3));
+
+    // Test: Move one spot at a time
+    msa.moveRowRelative(1, 1);
+    assertTrue(subseq2 === msa.at(1));
+    assertTrue(subseq === msa.at(2));
+    assertTrue(subseq3 === msa.at(3));
+
+    msa.moveRowRelative(2, 1);
+    assertTrue(subseq2 === msa.at(1));
+    assertTrue(subseq3 === msa.at(2));
+    assertTrue(subseq === msa.at(3));
+
+    msa.moveRowRelative(3, -1);
+    assertTrue(subseq2 === msa.at(1));
+    assertTrue(subseq === msa.at(2));
+    assertTrue(subseq3 === msa.at(3));
+
+    msa.moveRowRelative(2, -1);
+    assertTrue(subseq === msa.at(1));
+    assertTrue(subseq2 === msa.at(2));
+    assertTrue(subseq3 === msa.at(3));
+
+    // Test: move 2 spots at a time
+    msa.moveRowRelative(1, 2);
+    assertTrue(subseq2 === msa.at(1));
+    assertTrue(subseq3 === msa.at(2));
+    assertTrue(subseq === msa.at(3));
+
+    msa.moveRowRelative(3, -2);
+    assertTrue(subseq === msa.at(1));
+    assertTrue(subseq2 === msa.at(2));
+    assertTrue(subseq3 === msa.at(3));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_rectAllGaps() {
+    var subseqs = [
+        //          12345678
+        new Subseq('-A-B-C--'),
+        new Subseq('--AB-C--'),
+        new Subseq('A--BC---')
+    ];
+    var msa = new Msa();
+    assertTrue(msa.append(subseqs));
+
+    var fixtures = [
+        [1, 1, 1, 1, true],
+        [1, 1, 2, 1, false],
+        [1, 1, 1, 2, true],
+        [1, 1, 2, 2, false],
+        [1, 2, 2, 2, true],
+        [2, 3, 3, 3, true],
+        [3, 1, 3, 1, true],
+        [5, 1, 6, 3, false],
+        [7, 1, 8, 3, true]
+    ];
+
+    for (var i=0; i<fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var rect = UnitRect.createFromCoordinates(new Coordinate(fixture[0], fixture[1]), new Coordinate(fixture[2], fixture[3]));
+        var expect = fixture[4];
+
+        assertEquals(expect, msa.rectAllGaps(rect));
+
+        // Swap the left and right
+        rect = UnitRect.createFromCoordinates(new Coordinate(fixture[2], fixture[1]), new Coordinate(fixture[0], fixture[3]));
+        assertEquals(expect, msa.rectAllGaps(rect));
+
+        // Swap the top and bottom
+        rect = UnitRect.createFromCoordinates(new Coordinate(fixture[0], fixture[3]), new Coordinate(fixture[2], fixture[1]));
+        assertEquals(expect, msa.rectAllGaps(rect));
+
+        // Swap the left and right, top and bottom
+        rect = UnitRect.createFromCoordinates(new Coordinate(fixture[2], fixture[3]), new Coordinate(fixture[0], fixture[1]));
+        assertEquals(expect, msa.rectAllGaps(rect));
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_removeAt() {
+    var subseq = new Subseq('BC--DE', 'ABCDEF');
+    var subseq2 = new Subseq('GH--IJ', 'GHIJKL');
+    var subseq3 = new Subseq('ABCDEF');
+
+    var msa = new Msa();
+    assertTrue(msa.append([subseq, subseq2, subseq3]));
+
+    // Test: remove the middle sequence
+    msa.removeAt(2);
+    assertEquals(2, msa.rowCount());
+    assertTrue(subseq === msa.at(1));
+    assertTrue(subseq3 === msa.at(2));
+
+    msa.removeAt(1);
+    assertEquals(1, msa.rowCount());
+    assertTrue(subseq3 === msa.at(1));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_removeGapColumns() {
+    var msa = new Msa();
+    //                        123456789
+    var subseq  = new Subseq("-A.B-C---", 'ABC');
+    var subseq2 = new Subseq("-D.E-F..-", 'DEF');
+    var subseq3 = new Subseq("-G.H.I.-X", 'GHIX');
+
+    // Test: empty msa
+    var removedGapRanges = msa.removeGapColumns();
+    assertEquals(0, removedGapRanges.length);
+    assertTrue(msa.append([subseq, subseq2, subseq3]));
+
+    removedGapRanges = msa.removeGapColumns();
+    assertEquals(4, removedGapRanges.length);
+    assertTrue(removedGapRanges[0].eq(new ClosedIntRange(1, 1)));
+    assertTrue(removedGapRanges[1].eq(new ClosedIntRange(3, 3)));
+    assertTrue(removedGapRanges[2].eq(new ClosedIntRange(5, 5)));
+    assertTrue(removedGapRanges[3].eq(new ClosedIntRange(7, 8)));
+    assertEquals("ABC-", msa.at(1).toString());
+    assertEquals("DEF-", msa.at(2).toString());
+    assertEquals("GHIX", msa.at(3).toString());
+
+    removedGapRanges = msa.removeGapColumns();
+    assertEquals(0, removedGapRanges.length);
+    assertEquals("ABC-", msa.at(1).toString());
+    assertEquals("DEF-", msa.at(2).toString());
+    assertEquals("GHIX", msa.at(3).toString());
+
+    // Now test with ranges
+    msa.clear();
+    //                    123456789
+    subseq  = new Subseq("-A.B-C---", 'ABC');
+    subseq2 = new Subseq("-D.E-F..-", 'DEF');
+    subseq3 = new Subseq("-G.H.I.-X", 'GHIX');
+    assertTrue(msa.append([subseq, subseq2, subseq3]));
+
+    // Test: removing gap columns from those areas without gaps
+    assertTrue(msa.removeGapColumns(new ClosedIntRange(2, 2)).isEmpty());
+    assertTrue(msa.removeGapColumns(new ClosedIntRange(6, 6)).isEmpty());
+
+    removedGapRanges = msa.removeGapColumns(new ClosedIntRange(8, 9));
+    assertEquals(1, removedGapRanges.length);
+    assertTrue(removedGapRanges[0].eq(new ClosedIntRange(8, 8)));
+    assertEquals("-A.B-C--", msa.at(1).toString());
+    assertEquals("-D.E-F.-", msa.at(2).toString());
+    assertEquals("-G.H.I.X", msa.at(3).toString());
+
+    removedGapRanges = msa.removeGapColumns(new ClosedIntRange(2, 6));
+    assertEquals(2, removedGapRanges.length);
+    assertTrue(removedGapRanges[0].eq(new ClosedIntRange(3, 3)));
+    assertTrue(removedGapRanges[1].eq(new ClosedIntRange(5, 5)));
+    assertEquals("-ABC--", msa.at(1).toString());
+    assertEquals("-DEF.-", msa.at(2).toString());
+    assertEquals("-GHI.X", msa.at(3).toString());
+
+    removedGapRanges = msa.removeGapColumns(new ClosedIntRange(1, 6));
+    assertEquals(2, removedGapRanges.length);
+    assertTrue(removedGapRanges[0].eq(new ClosedIntRange(1, 1)));
+    assertTrue(removedGapRanges[1].eq(new ClosedIntRange(5, 5)));
+    assertEquals("ABC-", msa.at(1).toString());
+    assertEquals("DEF-", msa.at(2).toString());
+    assertEquals("GHIX", msa.at(3).toString());
+
+    assertTrue(msa.removeGapColumns(new ClosedIntRange(1, 4)).isEmpty());
+    assertEquals("ABC-", msa.at(1).toString());
+    assertEquals("DEF-", msa.at(2).toString());
+    assertEquals("GHIX", msa.at(3).toString());
+
+    // Test: Gap at beginning of range
+    msa.clear();
+    //                    123456789
+    subseq  = new Subseq("A-.B-C--D", 'ABCD');
+    assertTrue(msa.append(subseq));
+    removedGapRanges = msa.removeGapColumns();
+    assertEquals(3, removedGapRanges.length);
+    assertTrue(removedGapRanges[0].eq(new ClosedIntRange(2, 3)));
+    assertTrue(removedGapRanges[1].eq(new ClosedIntRange(5, 5)));
+    assertTrue(removedGapRanges[2].eq(new ClosedIntRange(7, 8)));
+    assertEquals("ABCD", msa.at(1).toString());
+
+    // Test: No gaps remaining
+    msa.clear();
+    //                    123456789
+    subseq  = new Subseq("A.B-C--", 'ABC');
+    subseq2 = new Subseq("-D.E-F.", 'DEF');
+    subseq3 = new Subseq("--G.H.I", 'GHIX');
+    assertTrue(msa.append([subseq, subseq2, subseq3]));
+    removedGapRanges = msa.removeGapColumns();
+    assertEquals(0, removedGapRanges.length);
+    assertEquals("A.B-C--", msa.at(1).toString());
+    assertEquals("-D.E-F.", msa.at(2).toString());
+    assertEquals("--G.H.I", msa.at(3).toString());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_removeRows() {
+    var seq = "ABCDEF";
+
+    var msa = new Msa();
+    var subseqs = [];
+    for (var i=0; i<6; ++i) {
+        var subseq = new Subseq(seq);
+        subseqs.push(subseq);
+        assertTrue(msa.append(subseq));
+    }
+
+    msa.removeRows(new ClosedIntRange(2, 4));
+
+    assertEquals(3, msa.rowCount());
+    assertTrue(subseqs[0] === msa.at(1));
+    assertTrue(subseqs[4] === msa.at(2));
+    assertTrue(subseqs[5] === msa.at(3));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setSubseqStart() {
+    var subseq1 = new Subseq('ABC-', 'ABCDEF');
+    var subseq2 = new Subseq('--WX', 'TUVWXYZ');
+    var msa = new Msa();
+    assertTrue(msa.append([subseq1, subseq2]));
+
+    // ------------------------------------------------------------------------
+    // Test: set start to identical start - no change
+    var change = msa.setSubseqStart(1, 1);
+    assertEquals(0, change.row);
+
+    // ------------------------------------------------------------------------
+    // Test: move start forward 2 spots
+    // ABC- >>> --C-
+    change = msa.setSubseqStart(1, 3);
+    assertEquals(1, change.row);
+    assertTrue(change.columns.eq(new ClosedIntRange(1, 2)));
+    assertEquals(TrimExtOp.eTrimLeft, change.operation);
+    assertEquals("AB", change.difference.toString());
+    assertEquals("--C-", subseq1.toString());
+
+    // ------------------------------------------------------------------------
+    // Test: move start backward (to the left)
+    // --WX-- >>> UVWX--
+    msa.clear();
+    subseq1 = new Subseq('-----F', 'ABCDEF');
+    subseq2 = new Subseq('--WX--', 'TUVWXYZ');
+    assertTrue(msa.append([subseq1, subseq2]));
+    change = msa.setSubseqStart(2, 2);
+    assertEquals(2, change.row);
+    assertTrue(change.columns.eq(new ClosedIntRange(1, 2)));
+    assertEquals(TrimExtOp.eExtendLeft, change.operation);
+    assertEquals("UV", change.difference.toString());
+    assertEquals("UVWX--", subseq2.toString());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setSubseqStop() {
+    var subseq1 = new Subseq('-CDE--', 'ABCDEF');
+    var subseq2 = new Subseq('---WX-', 'TUVWXYZ');
+    var msa = new Msa();
+    assertTrue(msa.append([subseq1, subseq2]));
+
+    // ------------------------------------------------------------------------
+    // Test: set stop to identical stop - no change
+    var change = msa.setSubseqStop(1, 5);
+    assertEquals(0, change.row);
+
+    // ------------------------------------------------------------------------
+    // Test: move stop backward 2 spots
+    // -CDE-- >>> -C----
+    change = msa.setSubseqStop(1, 3);
+    assertEquals(1, change.row);
+    assertTrue(change.columns.eq(new ClosedIntRange(3, 4)));
+    assertEquals(TrimExtOp.eTrimRight, change.operation);
+    assertEquals("DE", change.difference.toString());
+    assertEquals("-C----", subseq1.toString());
+
+    // ------------------------------------------------------------------------
+    // Test: move stop forward (to the right)
+    // ----WX- >> ----WXY
+    msa.clear();
+    subseq1 = new Subseq('A------', 'ABCDEF');
+    subseq2 = new Subseq('----WX-', 'TUVWXYZ');
+    assertTrue(msa.append([subseq1, subseq2]));
+    change = msa.setSubseqStop(2, 6);
+    assertEquals(2, change.row);
+    assertTrue(change.columns.eq(new ClosedIntRange(7, 7)));
+    assertEquals(TrimExtOp.eExtendRight, change.operation);
+    assertEquals("Y", change.difference.toString());
+    assertEquals("----WXY", subseq2.toString());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function slideRectFixtures(direction, lefts, tops, rights, bottoms) {
+    var fixtures = [];
+
+    fixtures.push([lefts[0], tops[0], rights[0], bottoms[0], -1, 0,
+           "-A-B-C--", "-A-B-C--",
+           "-D-E-F--", "-D-E-F--",
+           "-G-H-I--", "-G-H-I--", direction + " sliding unmovable region :: negative direction"]);
+
+    fixtures.push([lefts[1], tops[1], rights[1], bottoms[1], 1, 0,
+           "-A-B-C--", "-A-B-C--",
+           "-D-E-F--", "-D-E-F--",
+           "-G-H-I--", "-G-H-I--", direction + " sliding unmovable region :: positive direction"]);
+
+    fixtures.push([lefts[2], tops[2], rights[2], bottoms[2], 1, 1,
+           "-A-B-C--", "-A--BC--",
+           "-D-E-F--", "-D--EF--",
+           "-G-H-I--", "-G-H-I--", direction + " sliding internal non-gap region :: positive direction"]);
+
+    fixtures.push([lefts[3], tops[3], rights[3], bottoms[3], -1, -1,
+           "-A--BC--", "-A--BC--",
+           "-D--EF--", "-D-E-F--",
+           "-G-H-I--", "-GH--I--", direction + " sliding internal non-gap region :: negative direction"]);
+
+    fixtures.push([lefts[4], tops[4], rights[4], bottoms[4], 4, 1,
+           "-A--BC--", "-A--BC--",
+           "-D-E-F--", "-D--EF--",
+           "-GH--I--", "-G-H-I--", direction + " attempt to move more than allowable amount :: positive direction"]);
+
+    fixtures.push([lefts[5], tops[5], rights[5], bottoms[5], -5, -2,
+           "-A--BC--", "-AB--C--",
+           "-D--EF--", "-DE--F--",
+           "-G-H-I--", "-G-H-I--", direction + " attempt to move more than allowable amount :: negative direction"]);
+
+    fixtures.push([lefts[6], tops[6], rights[6], bottoms[6], -1, -1,
+           "-AB--C--", "-AB--C--",
+           "-DE--F--", "-DE--F--",
+           "-G-H-I--", "-GH--I--", direction + " slide single character :: negative direction"]);
+
+    fixtures.push([lefts[7], tops[7], rights[7], bottoms[7], 2, 2,
+           "-AB--C--", "-AB----C",
+           "-DE--F--", "-DE----F",
+           "-GH--I--", "-GH--I--", direction + " slide characters to rightmost position"]);
+
+    fixtures.push([lefts[8], tops[8], rights[8], bottoms[8], 1, 0,
+           "-AB----C", "-AB----C",
+           "-DE----F", "-DE----F",
+           "-GH--I--", "-GH--I--", direction + " attempt slide beyond right edge"]);
+
+    fixtures.push([lefts[9], tops[9], rights[9], bottoms[9], 4, 2,
+           "-AB----C", "-AB----C",
+           "-DE----F", "-DE----F",
+           "-GH--I--", "-GH----I", direction + " attempt slide beyond right edge when not adjacent to right edge"]);
+
+    fixtures.push([lefts[10], tops[10], rights[10], bottoms[10], -1, -1,
+           "-AB----C", "-AB----C",
+           "-DE----F", "D-E----F",
+           "-GH----I", "G-H----I", direction + " slide characters to leftmost position"]);
+
+    fixtures.push([lefts[11], tops[11], rights[11], bottoms[11], -1, 0,
+           "-AB----C", "-AB----C",
+           "D-E----F", "D-E----F",
+           "G-H----I", "G-H----I", direction + " attempt to move beyond left edge"]);
+
+    fixtures.push([lefts[12], tops[12], rights[12], bottoms[12], -4, -1,
+           "-AB----C", "A-B----C",
+           "D-E----F", "D-E----F",
+           "G-H----I", "G-H----I", direction + " attempt slide beyond left edge when not adjacent to left edge"]);
+
+    fixtures.push([lefts[13], tops[13], rights[13], bottoms[13], 5, 2,
+           "A-B----C", "A---B--C",
+           "D-E----F", "D---E--F",
+           "G-H----I", "G-H----I", direction + " slide region with non-gap characters, but rightmost column in rectangular region is purely gap characters :: positive direction"]);
+
+    fixtures.push([lefts[14], tops[14], rights[14], bottoms[14], 5, 0,
+           "A---B--C", "A---B--C",
+           "D---E--F", "D---E--F",
+           "G-H----I", "G-H----I", direction + " attempt unallowable slide with rectangular region :: positive direction"]);
+
+    fixtures.push([lefts[15], tops[15], rights[15], bottoms[15], -5, -1,
+           "A---B--C", "A--B---C",
+           "D---E--F", "D--E---F",
+           "G-H----I", "G-H----I", direction + " slide region with non-gap characters, but leftmost column in rectangular region is purely gap characters :: negative direction"]);
+
+    fixtures.push([lefts[16], tops[16], rights[16], bottoms[16], -5, 0,
+           "A--B---C", "A--B---C",
+           "D--E---F", "D--E---F",
+           "G-H----I", "G-H----I", direction + " attempt unallowable slide with rectangular region :: negative direction"]);
+
+    fixtures.push([lefts[17], tops[17], rights[17], bottoms[17], -1, -1,
+           "A--B---C", "-A-B---C",
+           "D--E---F", "-D-E---F",
+           "G-H----I", "G-H----I", direction + " sliding internal gap region :: negative direction"]);
+
+    fixtures.push([lefts[18], tops[18], rights[18], bottoms[18], -1, 0,
+           "-A-B---C", "-A-B---C",
+           "-D-E---F", "-D-E---F",
+           "G-H----I", "G-H----I", direction + " sliding internal gap region beyond edge should fail :: negative direction"]);
+
+    fixtures.push([lefts[19], tops[19], rights[19], bottoms[19], -6, -2,
+           "-A-B---C", "--AB---C",
+           "-D-E---F", "--DE---F",
+           "G-H----I", "G-H----I", direction + " sliding internal gap region beyond edge (partially allowable) :: negative direction"]);
+
+    fixtures.push([lefts[20], tops[20], rights[20], bottoms[20], 1, 1,
+           "--AB---C", "--AB---C",
+           "--DE---F", "--DE-F--",
+           "G-H----I", "G-H--I--", direction + " sliding internal gap region :: positive direction"]);
+
+    fixtures.push([lefts[21], tops[21], rights[21], bottoms[21], 1, 0,
+           "--AB---C", "--AB---C",
+           "--DE-F--", "--DE-F--",
+           "G-H--I--", "G-H--I--", direction + " sliding internal gap region beyond edge :: positive direction"]);
+
+    fixtures.push([lefts[22], tops[22], rights[22], bottoms[22], 8, 3,
+           "--AB---C", "--AB--C-",
+           "--DE-F--", "--DEF---",
+           "G-H--I--", "G-H--I--", direction + " sliding internal gap region beyond edge (partially allowable) :: positive direction"]);
+
+    return fixtures;
+};
+
+function slideRect_data() {
+    var lefts =   [3, 3, 3, 4, 3, 5, 4, 6, 8, 6, 2, 1, 2, 3, 5, 3, 2, 2, 1, 3, 6, 7, 5];
+    var tops =    [1, 1, 1, 2, 2, 1, 3, 1, 1, 3, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 1];
+    var rights =  [5, 5, 4, 5, 4, 5, 4, 6, 8, 6, 2, 1, 2, 5, 7, 5, 4, 2, 1, 3, 7, 8, 5];
+    var bottoms = [3, 3, 2, 3, 3, 2, 3, 2, 2, 3, 3, 3, 1, 2, 2, 2, 2, 2, 2, 2, 3, 3, 2];
+
+    return slideRectFixtures("(left, top) -> (right, bottom)", lefts, tops, rights, bottoms)
+        .concat(slideRectFixtures("(right, bottom) -> (top, left)", rights, bottoms, lefts, tops))
+        .concat(slideRectFixtures("(left, bottom) -> (right, top)", lefts, bottoms, rights, tops))
+        .concat(slideRectFixtures("(right, top) -> (left, bottom)", rights, tops, lefts, bottoms));
+};
+
+function test_slideRect() {
+    var fixtures = slideRect_data();
+    for (var i=0; i<fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var left = fixture[0];
+        var top = fixture[1];
+        var right = fixture[2];
+        var bottom = fixture[3];
+        var delta = fixture[4];
+        var expectedDelta = fixture[5];
+        var seq1 = fixture[6];
+        var expectedSeq1 = fixture[7];
+        var seq2 = fixture[8];
+        var expectedSeq2 = fixture[9];
+        var seq3 = fixture[10];
+        var expectedSeq3 = fixture[11];
+        var info = fixture[12];
+
+        var subseq1 = new Subseq(seq1);
+        var subseq2 = new Subseq(seq2);
+        var subseq3 = new Subseq(seq3);
+        var msa = new Msa();
+        assertTrue(msa.append([subseq1, subseq2, subseq3]));
+
+        var rect = UnitRect.createFromCoordinates(new Coordinate(left, top), new Coordinate(right, bottom));
+        assertEquals(expectedDelta, msa.slideRect(rect, delta));
+        assertEquals(expectedSeq1, msa.at(1).toString());
+        assertEquals(expectedSeq2, msa.at(2).toString());
+        assertEquals(expectedSeq3, msa.at(3).toString());
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_slideRectSpecific() {
+    var subseq1 = new Subseq('-AAB--');
+    var subseq2 = new Subseq('--AB-X');
+    var subseq3 = new Subseq('---A-X');
+
+    var msa = new Msa();
+    assertTrue(msa.append([subseq1, subseq2, subseq3]));
+
+    // ------------------------------------------------------------------------
+    // Test: slide region in negative direction, but limit to delta requested spots even if more are available
+    assertEquals(-1, msa.slideRect(UnitRect.createFromCoordinates(new Coordinate(3, 2), new Coordinate(4, 3)), -1));
+    assertEquals("-AAB--", msa.at(1).toString());
+    assertEquals("-AB--X", msa.at(2).toString());
+    assertEquals("--A--X", msa.at(3).toString());
+
+    // ------------------------------------------------------------------------
+    // Test: slide region in positive direction, but limit to delta requested spots even if more are available
+    assertEquals(1, msa.slideRect(UnitRect.createFromCoordinates(new Coordinate(2, 2), new Coordinate(3, 3)), 1));
+    assertEquals("-AAB--", msa.at(1).toString());
+    assertEquals("--AB-X", msa.at(2).toString());
+    assertEquals("---A-X", msa.at(3).toString());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_takeRows() {
+    var seq = 'ABCDEF';
+    var msa = new Msa();
+    var subseqs = [];
+    for (var i=0; i<6; ++i) {
+        subseqs.push(new Subseq(seq));
+        assertTrue(msa.append(subseqs.last()));
+    }
+
+    var extract = msa.takeRows(new ClosedIntRange(2, 4));
+
+    assertEquals(3, msa.rowCount());
+    assertEquals(subseqs[0], msa.at(1));
+    assertEquals(subseqs[4], msa.at(2));
+    assertEquals(subseqs[5], msa.at(3));
+
+    assertEquals(3, extract.length);
+    assertEquals(subseqs[1], extract[0]);
+    assertEquals(subseqs[2], extract[1]);
+    assertEquals(subseqs[3], extract[2]);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_trimLeft() {
+    var seq = "ABCDEF";
+    var seq2 = "TUVWXYZ";
+    //                          23 4
+    var subseq1 = new Subseq("--BC-D---", seq);
+    //                         3 4
+    var subseq2 = new Subseq("-V-W-----", seq2);
+
+    var msa = new Msa();
+    msa.append([subseq1, subseq2]);
+
+    // ------------------------------------------------------------------------
+    // Test: trim subseqs that do nothing
+    assertTrue(msa.trimLeft(1, new ClosedIntRange(1, 2)).isEmpty());
+    assertTrue(msa.trimLeft(1, new ClosedIntRange(1, 1)).isEmpty());
+    assertTrue(msa.trimLeft(1, new ClosedIntRange(2, 2)).isEmpty());
+
+    assertEquals("--BC-D---", subseq1.toString());
+    assertEquals("-V-W-----", subseq2.toString());
+    assertEquals(2, subseq1.start());
+    assertEquals(3, subseq2.start());
+
+    var changes = [];
+
+    // ------------------------------------------------------------------------
+    // Test: trim subseqs one character from one sequence
+    //  *
+    // --BC-D---
+    // -V-W-----
+    changes = msa.trimLeft(2, new ClosedIntRange(1, 2));
+    assertEquals(1, changes.length);
+    assertEquals(2, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(2, 2)));
+    assertEquals(TrimExtOp.eTrimLeft, changes[0].operation);
+    assertEquals("V", changes[0].difference.toString());
+    assertEquals("--BC-D---", subseq1.toString());
+    assertEquals("---W-----", subseq2.toString());
+    assertEquals(2, subseq1.start());
+    assertEquals(4, subseq2.start());
+
+    // ------------------------------------------------------------------------
+    // Test: trim subseqs one character from one sequence
+    //   *
+    // --BC-D---
+    // ---W-----
+    changes = msa.trimLeft(3, new ClosedIntRange(1, 2));
+    assertEquals(1, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(3, 3)));
+    assertEquals(TrimExtOp.eTrimLeft, changes[0].operation);
+    assertEquals("B", changes[0].difference.toString());
+    assertEquals("---C-D---", subseq1.toString());
+    assertEquals("---W-----", subseq2.toString());
+    assertEquals(3, subseq1.start());
+    assertEquals(4, subseq2.start());
+
+    // ------------------------------------------------------------------------
+    // Test: trim subseqs but prevent from removing last non-gap character from second sequence
+    //    *
+    // ---C-D---
+    // ---W-----
+    changes = msa.trimLeft(4, new ClosedIntRange(1, 2));
+    assertEquals(1, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(4, 4)));
+    assertEquals(TrimExtOp.eTrimLeft, changes[0].operation);
+    assertEquals("C", changes[0].difference.toString());
+    assertEquals("-----D---", subseq1.toString());
+    assertEquals("---W-----", subseq2.toString());
+    assertEquals(4, subseq1.start());
+    assertEquals(4, subseq2.start());
+
+    changes = msa.trimLeft(6, new ClosedIntRange(1, 2));
+    assertTrue(changes.isEmpty());
+    assertEquals("-----D---", subseq1.toString());
+    assertEquals("---W-----", subseq2.toString());
+    assertEquals(4, subseq1.start());
+    assertEquals(4, subseq2.start());
+
+    // ------------------------------------------------------------------------
+    // Test: trim subseqs all the way, should leave one character
+    msa.clear();
+    subseq1 = new Subseq("--ABCD---", seq);
+    subseq2 = new Subseq("TUVW-----", seq2);
+    msa.append([subseq1, subseq2]);
+
+    //         *
+    // --ABCD---
+    // TUVW-----
+    changes = msa.trimLeft(9, new ClosedIntRange(1, 2));
+    assertEquals(2, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(3, 5)));
+    assertEquals(TrimExtOp.eTrimLeft, changes[0].operation);
+    assertEquals("ABC", changes[0].difference.toString());
+    assertEquals(2, changes[1].row);
+    assertTrue(changes[1].columns.eq(new ClosedIntRange(1, 3)));
+    assertEquals(TrimExtOp.eTrimLeft, changes[1].operation);
+    assertEquals("TUV", changes[1].difference.toString());
+    assertEquals("-----D---", subseq1.toString());
+    assertEquals("---W-----", subseq2.toString());
+    assertEquals(4, subseq1.start());
+    assertEquals(4, subseq2.start());
+
+    // ------------------------------------------------------------------------
+    // Test: specific test
+    //      *
+    // --A-B-C-
+    msa.clear();
+    subseq1 = new Subseq("--A-B-C-", seq);
+    msa.append(subseq1);
+
+    changes = msa.trimLeft(6, new ClosedIntRange(1, 1));
+    assertEquals(1, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(3, 5)));
+    assertEquals(TrimExtOp.eTrimLeft, changes[0].operation);
+    assertEquals("A-B", changes[0].difference.toString());
+    assertEquals(3, subseq1.start());
+    assertEquals("------C-", subseq1.toString());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_trimRight() {
+    var seq = "ABCDEF";
+    var seq2 = "TUVWXYZ";
+    //                          23 4
+    var subseq1 = new Subseq("--BC-D-", seq);
+    //                         3 45
+    var subseq2 = new Subseq("-V-WX--", seq2);
+
+    var msa = new Msa();
+    msa.append([subseq1, subseq2]);
+
+    // ------------------------------------------------------------------------
+    // Test: trim subseqs that do nothing
+    assertTrue(msa.trimRight(7, new ClosedIntRange(1, 2)).isEmpty());
+    assertTrue(msa.trimRight(7, new ClosedIntRange(1, 1)).isEmpty());
+    assertTrue(msa.trimRight(7, new ClosedIntRange(2, 2)).isEmpty());
+    assertTrue(msa.trimRight(6, new ClosedIntRange(2, 2)).isEmpty());
+
+    assertEquals("--BC-D-", subseq1.toString());
+    assertEquals("-V-WX--", subseq2.toString());
+    assertEquals(4, subseq1.stop());
+    assertEquals(5, subseq2.stop());
+
+    var changes = [];
+
+    // ------------------------------------------------------------------------
+    // Test: trim subseqs one character from one sequence
+    //      *
+    // --BC-D-
+    // -V-WX--
+    changes = msa.trimRight(6, new ClosedIntRange(1, 2));
+    assertEquals(1, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(6, 6)));
+    assertEquals(TrimExtOp.eTrimRight, changes[0].operation);
+    assertEquals("D", changes[0].difference.toString());
+    assertEquals("--BC---", subseq1.toString());
+    assertEquals("-V-WX--", subseq2.toString());
+    assertEquals(3, subseq1.stop());
+    assertEquals(5, subseq2.stop());
+
+    // ------------------------------------------------------------------------
+    // Test: trim subseqs one character from other sequence
+    //     *
+    // --BC---
+    // -V-WX--
+    changes = msa.trimRight(5, new ClosedIntRange(1, 2));
+    assertEquals(1, changes.length);
+    assertEquals(2, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(5, 5)));
+    assertEquals(TrimExtOp.eTrimRight, changes[0].operation);
+    assertEquals("X", changes[0].difference.toString());
+    assertEquals("--BC---", subseq1.toString());
+    assertEquals("-V-W---", subseq2.toString());
+    assertEquals(3, subseq1.stop());
+    assertEquals(4, subseq2.stop());
+
+    // ------------------------------------------------------------------------
+    // Test: trim subseqs one character from both sequences
+    //    *
+    // --BC---
+    // -V-W---
+    changes = msa.trimRight(4, new ClosedIntRange(1, 2));
+    assertEquals(2, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(4, 4)));
+    assertEquals(TrimExtOp.eTrimRight, changes[0].operation);
+    assertEquals("C", changes[0].difference.toString());
+    assertEquals(2, changes[1].row);
+    assertTrue(changes[1].columns.eq(new ClosedIntRange(4, 4)));
+    assertEquals(TrimExtOp.eTrimRight, changes[1].operation);
+    assertEquals("W", changes[1].difference.toString());
+    assertEquals("--B----", subseq1.toString());
+    assertEquals("-V-----", subseq2.toString());
+    assertEquals(2, subseq1.stop());
+    assertEquals(3, subseq2.stop());
+
+    // ------------------------------------------------------------------------
+    // Test: trim subseqs but prevent from removing last non-gap characters
+    //   *
+    // --B----
+    // -V-----
+    changes = msa.trimRight(3, new ClosedIntRange(1, 2));
+    assertTrue(changes.isEmpty());
+    assertEquals("--B----", subseq1.toString());
+    assertEquals("-V-----", subseq2.toString());
+    assertEquals(2, subseq1.stop());
+    assertEquals(3, subseq2.stop());
+
+    changes = msa.trimRight(2, new ClosedIntRange(1, 2));
+    assertTrue(changes.isEmpty());
+    assertEquals("--B----", subseq1.toString());
+    assertEquals("-V-----", subseq2.toString());
+    assertEquals(2, subseq1.stop());
+    assertEquals(3, subseq2.stop());
+
+    changes = msa.trimRight(1, new ClosedIntRange(1, 2));
+    assertEquals("--B----", subseq1.toString());
+    assertEquals("-V-----", subseq2.toString());
+    assertEquals(2, subseq1.stop());
+    assertEquals(3, subseq2.stop());
+
+    // ------------------------------------------------------------------------
+    // Test: trim subseqs all the way, should leave one character
+    msa.clear();
+    subseq1 = new Subseq("--BCDEF", seq);
+    subseq2 = new Subseq("-VWXYZ-", seq2);
+    msa.append([subseq1, subseq2]);
+    // *
+    // --BCDEF
+    // -VWXYZ-
+    changes = msa.trimRight(1, new ClosedIntRange(1, 2));
+    assertEquals(2, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(4, 7)));
+    assertEquals(TrimExtOp.eTrimRight, changes[0].operation);
+    assertEquals("CDEF", changes[0].difference.toString());
+    assertEquals(2, changes[1].row);
+    assertTrue(changes[1].columns.eq(new ClosedIntRange(3, 6)));
+    assertEquals(TrimExtOp.eTrimRight, changes[1].operation);
+    assertEquals("WXYZ", changes[1].difference.toString());
+    assertEquals("--B----", subseq1.toString());
+    assertEquals("-V-----", subseq2.toString());
+    assertEquals(2, subseq1.stop());
+    assertEquals(3, subseq2.stop());
+
+    // ------------------------------------------------------------------------
+    // Test: specific extendOrTrim signal test
+    //    *
+    // --A-B-C-
+    msa.clear();
+    subseq1 = new Subseq("--A-B-C-", seq);
+    msa.append(subseq1);
+
+    changes = msa.trimRight(4, new ClosedIntRange(1, 1));
+    assertEquals(1, changes.length);
+    assertEquals(1, changes[0].row);
+    assertTrue(changes[0].columns.eq(new ClosedIntRange(5, 7)));
+    assertEquals(TrimExtOp.eTrimRight, changes[0].operation);
+    assertEquals("B-C", changes[0].difference.toString());
+    assertEquals(1, subseq1.start());
+    assertEquals("--A-----", subseq1.toString());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_undo() {
+    var seq = 'ABCDEF';
+    var subseq = new Subseq("----CD----", seq);
+    var msa = new Msa();
+    assertTrue(msa.append(subseq));
+
+    // Test: undo null SubseqChangePod
+    var changes = msa.undo([new MsaSubseqChange()]);
+    assertTrue(changes.isEmpty());
+
+    // Test: undo extend left by 2 characters
+    {
+        var changes = msa.extendLeft(3, new ClosedIntRange(1, 1));
+        assertEquals("--ABCD----", subseq.toString());
+        var inversePod = msa.undo(changes)[0];
+        assertEquals("----CD----", subseq.toString());
+        assertEquals(TrimExtOp.eTrimLeft, inversePod.operation);
+        assertTrue(msa.undo([inversePod])[0].eq(changes[0]));
+        assertEquals("--ABCD----", subseq.toString());
+    }
+
+    // Test: undo extend left with gapped biostring
+    // Not currently implemented in Msa!!
+    // {
+    //     msa.clear();
+    //     subseq = new Subseq("----CD----", seq);
+    //     assertTrue(msa.append(subseq));
+
+    //     var changes = msa.extendLeft(1, 1, "A-B");
+    //     assertEquals("A-B-CD----", subseq.toString());
+    //     var inversePod = msa.undo([changes])[0];
+    //     assertEquals("----CD----", subseq.toString());
+    //     assertEquals(TrimExtOp.eTrimLeft, inversePod.operation);
+    //     assertTrue(msa.undo([inversePod])[0].eq(changes));
+    //     assertEquals("A-B-CD----", subseq.toString());
+    // }
+
+    // Test: undo extend right by 2 characters
+    {
+        msa.clear();
+        subseq = new Subseq("----CD----", seq);
+        assertTrue(msa.append(subseq));
+
+        var changes = msa.extendRight(8, new ClosedIntRange(1, 1));
+        assertEquals("----CDEF--", subseq.toString());
+        var inversePod = msa.undo(changes)[0];
+        assertEquals("----CD----", subseq.toString());
+        assertEquals(TrimExtOp.eTrimRight, inversePod.operation);
+        assertTrue(msa.undo([inversePod])[0].eq(changes[0]));
+        assertEquals("----CDEF--", subseq.toString());
+    }
+
+    // Test: undo extend right with gapped biostring
+    // Not currently implemented in Msa!!
+    // {
+    //     msa.clear();
+    //     subseq = new Subseq("----CD----", seq);
+    //     assertTrue(msa.append(subseq));
+
+    //     var change = msa.extendRight(8, 1, "E-F");
+    //     assertEquals("----CD-E-F", subseq.toString());
+    //     var inversePod = msa.undo([change])[0];
+    //     assertEquals("----CD----", subseq.toString());
+    //     assertEquals(TrimExtOp.eTrimRight, inversePod.operation);
+    //     assertTrue(msa.undo([inversePod])[0].eq(change));
+    //     assertEquals("----CD-E-F", subseq.toString());
+    // }
+
+    // Test: undo trim left by 2 characters
+    {
+        msa.clear();
+        subseq = new Subseq("--ABCD----", seq);
+        assertTrue(msa.append(subseq));
+
+        var changes = msa.trimLeft(4, new ClosedIntRange(1, 1));
+        assertEquals("----CD----", subseq.toString());
+        var inversePod = msa.undo(changes)[0];
+        assertEquals("--ABCD----", subseq.toString());
+        assertEquals(TrimExtOp.eExtendLeft, inversePod.operation);
+        assertTrue(msa.undo([inversePod])[0].eq(changes[0]));
+        assertEquals("----CD----", subseq.toString());
+    }
+
+    // Test: undo trim left by 2 characters (gapped)
+    {
+        msa.clear();
+        subseq = new Subseq("-A-BCD----", seq);
+        assertTrue(msa.append(subseq));
+
+        var changes = msa.trimLeft(4, new ClosedIntRange(1, 1));
+        assertEquals("----CD----", subseq.toString());
+        var inversePod = msa.undo(changes)[0];
+        assertEquals("-A-BCD----", subseq.toString());
+        assertEquals(TrimExtOp.eExtendLeft, inversePod.operation);
+        assertTrue(msa.undo([inversePod])[0].eq(changes[0]));
+        assertEquals("----CD----", subseq.toString());
+    }
+
+    // Test: undo trim right by 2 characters
+    {
+        msa.clear();
+        subseq = new Subseq("----CDEF--", seq);
+        assertTrue(msa.append(subseq));
+
+        var changes = msa.trimRight(7, new ClosedIntRange(1, 1));
+        assertEquals("----CD----", subseq.toString());
+        var inversePod = msa.undo(changes)[0];
+        assertEquals("----CDEF--", subseq.toString());
+        assertEquals(TrimExtOp.eExtendRight, inversePod.operation);
+        assertTrue(msa.undo([inversePod])[0].eq(changes[0]));
+        assertEquals("----CD----", subseq.toString());
+    }
+
+    // Test: undo trim right by 2 characters (gapped)
+    {
+        msa.clear();
+        subseq = new Subseq("----CD-E--F", seq);
+        assertTrue(msa.append(subseq));
+
+        var changes = msa.trimRight(7, new ClosedIntRange(1, 1));
+        assertEquals("----CD-----", subseq.toString());
+        var inversePod = msa.undo(changes)[0];
+        assertEquals("----CD-E--F", subseq.toString());
+        assertEquals(TrimExtOp.eExtendRight, inversePod.operation);
+        assertTrue(msa.undo([inversePod])[0].eq(changes[0]));
+        assertEquals("----CD-----", subseq.toString());
+    }
+
+    // Test: undo collapse left
+    {
+        msa.clear();
+        //                   1234567890
+        subseq = new Subseq("--C-D-E--F", seq);
+        assertTrue(msa.append(subseq));
+
+        var change = msa.collapseLeft(new UnitRect(4, 1, 4, 1))[0];
+        assertEquals("--CDE----F", subseq.toString());
+        var inversePod = msa.undo([change])[0];
+        assertEquals("--C-D-E--F", subseq.toString());
+        assertEquals(TrimExtOp.eInternal, inversePod.operation);
+        assertTrue(msa.undo([inversePod])[0].eq(change));
+        assertEquals("--CDE----F", subseq.toString());
+    }
+
+    // Test: undo collapse right
+    {
+        msa.clear();
+        //                   1234567890
+        subseq = new Subseq("--C-D-E--F", seq);
+        assertTrue(msa.append(subseq));
+
+        var change = msa.collapseRight(new UnitRect(4, 1, 5, 1))[0];
+        assertEquals("--C---DE-F", subseq.toString());
+        var inversePod = msa.undo([change])[0];
+        assertEquals("--C-D-E--F", subseq.toString());
+        assertEquals(TrimExtOp.eInternal, inversePod.operation);
+        assertTrue(msa.undo([inversePod])[0].eq(change));
+        assertEquals("--C---DE-F", subseq.toString());
+    }
+
+    // ----------------------------------------------------
+    // Special spot checks
+    {
+        msa.clear();
+        subseq = new Subseq("CD-EF", seq);
+        assertTrue(msa.append(subseq));
+
+        var changes = msa.levelLeft(3, new ClosedIntRange(1, 1));
+        assertEquals("--DEF", subseq.toString());
+        var inversePods = msa.undo(changes);
+        assertEquals("CD-EF", subseq.toString());
+
+        assertEquals(TrimExtOp.eTrimLeft, inversePods[0].operation);
+        assertEquals(TrimExtOp.eExtendLeft, inversePods[1].operation);
+
+        msa.undo(inversePods);
+        assertEquals("--DEF", subseq.toString());
+    }
+};
+
+</script>
+</body>
+</html>

@@ -1,0 +1,225 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - ag.service.ProgressTicker</title>
+    <meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.meta.SignalSpy');
+goog.require('ag.service.ProgressTicker');
+</script>
+<body>
+<script>
+var ProgressTicker = ag.service.ProgressTicker;
+var SignalSpy = ag.meta.SignalSpy;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_constructor() {
+    var x = new ProgressTicker();
+    assertEquals(x.value(), 0);
+    assertEquals(x.endValue(), 100);
+    assertEquals(x.ticks(), 100);
+    assertEquals(x.progress(), 0.);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_end() {
+    var x = new ProgressTicker();
+    x.setEndValue(5);
+
+    assertFalse(x.value() === x.endValue());
+
+    var spy = new SignalSpy(x, ProgressTicker.SignalType.PROGRESS_TICK);
+    x.end();
+
+    assertTrue(x.value() === x.endValue());
+    assertEquals(x.progress(), 1.);
+    assertEquals(spy.size(), 1);
+    assertEquals(spy.signals()[0][0], 1.);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_endValue() {
+    var x = new ProgressTicker();
+    x.setValue(.2);
+    var spy = new SignalSpy(x, ProgressTicker.SignalType.PROGRESS_TICK);
+
+    for (var i=0.4; i< 5; i+= .4) {
+        x.setEndValue(i);
+        assertEquals(x.endValue(), i);
+        assertEquals(x.value(), .2);
+
+        assertEquals(spy.size(), 0);
+    }
+}; 
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_progress() {
+    var x = new ProgressTicker();
+    x.setEndValue(5);
+
+    for (var i=0; i<= 5; i++) {
+        x.setValue(i);
+        assertEquals(x.progress(), i / 5);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_reset() {
+    var x = new ProgressTicker();
+    x.setEndValue(10);
+    x.reset();
+
+    x.setValue(4);
+    assertEquals(x.value(), 4);
+    var spy = new SignalSpy(x, ProgressTicker.SignalType.PROGRESS_TICK);
+    x.reset();
+    assertEquals(x.value(), 0);
+    assertEquals(spy.size(), 1);
+    assertEquals(spy.signals()[0][0], 0);
+    spy.clear();
+
+    x.setValue(0);
+    assertEquals(spy.size(), 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_ticks() {
+    var x = new ProgressTicker();
+    x.setTicks(2);
+    assertEquals(x.ticks(), 2);
+
+    x.setTicks(5);
+    assertEquals(x.ticks(), 5);
+
+    x.setTicks(2);
+    assertEquals(x.ticks(), 2);
+
+    x.setEndValue(10);
+
+    var spy = new SignalSpy(x, ProgressTicker.SignalType.PROGRESS_TICK);
+    for (var i=0; i<12; i++)
+        x.setValue(i);
+    assertEquals(spy.size(), 2);
+
+    spy.clear();
+    x.setTicks(5);
+    for (var i=0; i<12; i++)
+        x.setValue(i);
+    assertEquals(spy.size(), 5);
+    x.reset();
+    spy.clear();
+
+    x.setTicks(30);
+    // ^^^^^^^^^^^ This will cause a tick to be sent when the value is set for the first time
+    // regardless if it is the same value already.
+    for (var i=0; i<12; i++)
+        x.setValue(i);
+    assertEquals(spy.size(), 11);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setValue() {
+    var x = new ProgressTicker();
+    x.setTicks(10);
+    x.setEndValue(9);
+
+    var spy = new SignalSpy(x, ProgressTicker.SignalType.PROGRESS_TICK);
+    assertEquals(x.value(), 0);
+    x.setValue(0);
+    assertEquals(spy.size(), 1);
+    spy.clear();
+    x.setValue(0);
+    assertEquals(spy.size(), 0);
+    x.setValue(.9);
+    assertEquals(x.value(), .9);
+    assertEquals(spy.size(), 0);
+    x.setValue(1);
+    assertEquals(x.value(), 1);
+    assertEquals(spy.size(), 1);
+    spy.clear();
+    x.setValue(.99);
+    assertEquals(x.value(), .99);
+    assertEquals(spy.size(), 1);
+    spy.clear();
+
+    x.setValue(8.999);
+    assertEquals(x.value(), 8.999);
+    assertEquals(spy.size(), 1);
+    spy.clear();
+    x.setValue(8.1);
+    x.setValue(8.2);
+    x.setValue(8.3);
+    x.setValue(8.8);
+    assertEquals(spy.size(), 0);
+    x.setValue(9);
+    assertEquals(spy.size(), 1);
+    spy.clear();
+    x.setValue(9);
+    assertEquals(spy.size(), 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setValueAndEndValue() {
+    var x = new ProgressTicker();
+   
+    x.setValue(0);
+
+    var spy = new SignalSpy(x, ProgressTicker.SignalType.PROGRESS_TICK);
+    x.setValueAndEndValue(0, 10);
+    assertEquals(x.value(), 0);
+    assertEquals(x.endValue(), 10);
+    assertEquals(spy.size(), 0);
+    spy.clear();
+
+    x.setValueAndEndValue(5, 8);
+    assertEquals(x.value(), 5);
+    assertEquals(x.endValue(), 8);
+    assertEquals(spy.size(), 1);
+    spy.clear();
+}; 
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_update() {
+    var x = new ProgressTicker();
+    x.setEndValue(9);
+    x.setTicks(4);
+
+    var spy = new SignalSpy(x, ProgressTicker.SignalType.PROGRESS_TICK);
+
+    // Update should update by one by default
+    x.update();
+    assertEquals(x.value(), 1);
+    assertEquals(spy.size(), 1);
+    assertEquals(spy.signals()[0][0], 1./9.);
+    spy.clear();
+
+    x.update();
+    assertEquals(x.value(), 2);
+    assertEquals(spy.size(), 0);
+
+    x.update();
+    assertEquals(x.value(), 3);
+    assertEquals(spy.size(), 1);
+    assertEquals(spy.signals()[0][0], 3./9.);
+    spy.clear();
+
+    x.update(2);
+    assertEquals(x.value(), 5);
+    assertEquals(spy.size(), 0);
+
+    x.update(-3);
+    assertEquals(x.value(), 2);
+    assertEquals(spy.size(), 1);
+    assertEquals(spy.signals()[0][0], 2./9.);
+    spy.clear();
+};
+
+
+</script>
+</body>
+</html>

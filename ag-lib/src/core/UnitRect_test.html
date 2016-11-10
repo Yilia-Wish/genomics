@@ -1,0 +1,1113 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.core.UnitRect</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.math.Coordinate');
+goog.require('goog.math.Size');
+goog.require('ag.core.ClosedIntRange');
+goog.require('ag.core.UnitRect');
+</script>
+<body>
+<script>
+// Aliases
+var Coordinate = goog.math.Coordinate;
+var Size = goog.math.Size;
+
+var ClosedIntRange = ag.core.ClosedIntRange;
+var UnitRect = ag.core.UnitRect;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_constructor() {
+	var r = new UnitRect();
+
+	// Check defaults
+	assertEquals(r.x1, 0);
+	assertEquals(r.y1, 0);
+	assertEquals(r.x2, 0);
+	assertEquals(r.y2, 0);
+
+	// Width and height should be 1
+	assertEquals(r.width(), 1);
+	assertEquals(r.height(), 1);
+
+	r = new UnitRect(1, 2, 3, 3);
+
+	assertEquals(r.x1, 1);
+	assertEquals(r.y1, 2);
+	assertEquals(r.x2, 3);
+	assertEquals(r.y2, 4);
+
+	// Width and height should be 1
+	assertEquals(r.width(), 3);
+	assertEquals(r.height(), 3);
+
+	// Non-integers should be set to zero
+	r = new UnitRect(1.9, 0.3, 54.3, 99.5);
+	assertEquals(r.x1, 1);
+	assertEquals(r.y1, 0);
+	assertEquals(r.x2, 54);
+	assertEquals(r.y2, 98);
+	assertEquals(r.width(), 54);
+	assertEquals(r.height(), 99);
+
+	r = new UnitRect(0, 0, -1, -1);
+	assertEquals(r.width(), 1);
+	assertEquals(r.height(), 1);
+	assertEquals(r.x1, 0);
+	assertEquals(r.y1, 0);
+	assertEquals(r.x2, 0);
+	assertEquals(r.y2, 0);
+
+	r = new UnitRect(0, 0, -2, -3)
+	assertEquals(r.width(), -2);
+	assertEquals(r.height(), -3);
+	assertEquals(r.x1, 0);
+	assertEquals(r.y1, 0);
+	assertEquals(r.x2, -1);
+	assertEquals(r.y2, -2);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_createFromCoordinates() {
+	var r = UnitRect.createFromCoordinates(new Coordinate(), new Coordinate(2, 1));
+	assertEquals(r.x1, 0);
+	assertEquals(r.y1, 0);
+	assertEquals(r.x2, 2);
+	assertEquals(r.y2, 1);
+
+	r = UnitRect.createFromCoordinates(new Coordinate(-5, 5), new Coordinate(-1, 1));
+	assertEquals(r.x1, -5);
+	assertEquals(r.y1, 5);
+	assertEquals(r.x2, -1);
+	assertEquals(r.y2, 1);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_createFromCoordinateSize() {
+	var r = UnitRect.createFromCoordinateSize(new Coordinate(1, 1), new Size(10, 20));
+	assertEquals(r.x1, 1);
+	assertEquals(r.y1, 1);
+	assertEquals(r.x2, 10);
+	assertEquals(r.y2, 20);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_coverage() {
+	var cases = [
+		// Test: empty array
+		{input: [],
+		 expect: {}},
+
+		// Test: single basic rect
+		{input: [new UnitRect(0, 0)],
+		 expect: {'0,0': 1}},
+
+		// Test: two basic rects overlapping
+		{input: [new UnitRect(0, 0),
+			     new UnitRect(0, 0)],
+		 expect: {'0,0': 2}},
+
+		// Test:
+		// XA X  XB
+		// XA X  X
+		// X  XC XC
+		{input: [new UnitRect(0, 0, 3, 3),
+				 new UnitRect(0, 0, 1, 2),
+				 new UnitRect(2, 0),
+				 new UnitRect(1, 2, 2, 1)],
+		 expect: {'0,0': 2,
+		 		  '1,0': 1,
+		 		  '2,0': 2,
+		 		  '0,1': 2,
+		 		  '1,1': 1,
+		 		  '2,1': 1,
+		 		  '0,2': 1,
+		 		  '1,2': 2,
+		 		  '2,2': 2
+		          }},
+
+		// Test: non-normal rectangle
+		{input: [new UnitRect(3, 3, -3, -2)],
+		 expect: {'1,2': 1,
+				  '2,2': 1,
+				  '3,2': 1,
+				  '1,3': 1,
+				  '2,3': 1,
+				  '3,3': 1}},
+
+		// Test: UnitRect directly not in array format
+		{input: new UnitRect(0, 0, 2, 3),
+		 expect: {'0,0': 1,
+				  '1,0': 1,
+				  '0,1': 1,
+				  '1,1': 1,
+				  '0,2': 1,
+				  '1,2': 1}}
+	];
+
+	for (var i=0; i<cases.length; i++) {
+		var input = cases[i].input;
+		var expect = cases[i].expect;
+
+		assertHashEquals(UnitRect.coverage(input), expect);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_area() {
+	var testRows = [
+		[new UnitRect(0, 0), 1],
+		[new UnitRect(0, 0, 2, 1), 2],
+		[new UnitRect(0, 0, 2, 2), 4],
+		[new UnitRect(0, 0, -1, 1), 1],
+		[new UnitRect(0, 0, -1, -1), 1],
+		[new UnitRect(-2, -2), 1],
+
+		[new UnitRect(-2, 2, 2, -2), 4],
+		[new UnitRect(0, 0, -2, -3), 6],
+		[new UnitRect(0, 0, -2, 4), 8]
+	];
+
+	for (var i=0; i<testRows.length; i++)
+		assertEquals(testRows[i][0].area(), testRows[i][1]);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_assign() {
+	var x = new UnitRect(1, 2, 3, 4);
+	var y = new UnitRect();
+	assertFalse(x.eq(y));
+	y.assign(x);
+	assertTrue(x.eq(y));
+	assertFalse(x === y);
+	assertEquals(y.x1, 1);
+	assertEquals(y.y1, 2);
+	assertEquals(y.x2, 3);
+	assertEquals(y.y2, 5);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_eq() {
+	var r = new UnitRect();
+
+	assertTrue(r.eq(r));
+
+	var r2 = new UnitRect();
+	assertTrue(r.eq(r2));
+
+	r2.x1 = 5;
+	assertFalse(r.eq(r2));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_ne() {
+	var r = new UnitRect();
+	assertFalse(r.ne(r));
+
+	var r2 = new UnitRect();
+	assertFalse(r.ne(r2));
+	r2.x1 = 5;
+	assertTrue(r.ne(r2));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_clone() {
+	var x = new UnitRect(1, 2, 3, 4);
+	var y = x.clone();
+	assertTrue(y instanceof UnitRect);
+	assertTrue(x.eq(y));
+	assertTrue(y.eq(x));
+	assertTrue(y !== x);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_bottom() {
+	var r = new UnitRect(1, 2, 3, 3);
+	assertEquals(r.bottom(), 4);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_bottomLeft() {
+	var r = new UnitRect(1, 2, 3, 3);
+	assertTrue(Coordinate.equals(r.bottomLeft(), new Coordinate(1, 4)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_bottomRight() {
+	var r = new UnitRect(1, 2, 3, 3);
+	assertTrue(Coordinate.equals(r.bottomRight(), new Coordinate(3, 4)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_center() {
+	var r = new UnitRect(1, 2, 3, 3);
+	assertTrue(Coordinate.equals(r.center(), new Coordinate(2, 3)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_centerF() {
+	var r = new UnitRect(1, 2, 4, 4);
+	assertTrue(Coordinate.equals(r.centerF(), new Coordinate(2.5, 3.5)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_contains() {
+	var r = new UnitRect(0, 0, 3, 3);
+	for (var i=-1; i<=3; i++) {
+		for (var j=-1; j<=3; j++) {
+			var expect = (i >= 0 && i <= 2 && j >= 0 && j <= 2);
+			assertEquals(r.contains(i, j), expect);
+			assertEquals(r.containsCoordinate(new Coordinate(i, j)), expect);
+
+			expect = (i === 1 && j === 1);
+			assertEquals(r.contains(i, j, true), expect);
+			assertEquals(r.containsCoordinate(new Coordinate(i, j), true), expect);
+		}
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_containsUnitRect() {
+	var rect = new UnitRect();
+
+    // ------------------------------------------------------------------------
+    // Test: proper = false; points on edges counts
+    assertEquals(rect.containsUnitRect(new UnitRect(), false), true);
+    assertEquals(rect.containsUnitRect(new UnitRect(1, 1, 2, 2), false), false);
+
+    rect.setRight(10);
+    for (var w=-3; w< 15; ++w)
+        for (var h=-1; h<3; ++h)
+        	if (w != 0 && h != 0)
+            	assertEquals(rect.containsUnitRect(new UnitRect(0, 0, w, h), false), (h === 1 || h === -1) && w >= -1 && w <= 11);
+
+    rect.setBottom(10);
+    for (var w=0; w< 11; ++w)
+        for (var h=0; h< 11; ++h)
+            for (var x=-5; x<10; ++x)
+                for (var y=-5; y<10; ++y)
+                	if (w != 0 && h != 0)
+                    	assertEquals(rect.containsUnitRect(new UnitRect(x, y, w, h), false),
+                        	     (x >= 0 && x + w - 1 <= 10) &&
+                            	 (y >= 0 && y + h - 1 <= 10));
+
+    // ------------------------------------------------------------------------
+    // Test: proper = true; points on edges do not count
+    assertEquals(rect.containsUnitRect(new UnitRect(), true), false);
+    rect.setBottom(2);
+    rect.setRight(2);
+
+    assertEquals(rect.containsUnitRect(new UnitRect(0, 0), true), false);
+    assertEquals(rect.containsUnitRect(new UnitRect(0, 1), true), false);
+    assertEquals(rect.containsUnitRect(new UnitRect(0, 2), true), false);
+    assertEquals(rect.containsUnitRect(new UnitRect(1, 0), true), false);
+    assertEquals(rect.containsUnitRect(new UnitRect(1, 2), true), false);
+    assertEquals(rect.containsUnitRect(new UnitRect(2, 0), true), false);
+    assertEquals(rect.containsUnitRect(new UnitRect(2, 1), true), false);
+    assertEquals(rect.containsUnitRect(new UnitRect(2, 2), true), false);
+
+    assertEquals(rect.containsUnitRect(new UnitRect(1, 1), true), true);
+
+    // ------------------------------------------------------------------------
+    // Test: smaller inside larger and vice versa
+    assertEquals(new UnitRect(0, 0, 10, 10).containsUnitRect(new UnitRect(2, 2, 5, 5)), true);
+    assertEquals(new UnitRect(2, 2, 5, 5).containsUnitRect(new UnitRect(0, 0, 10, 10)), false);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function swapXs(rect) {
+	var x1 = rect.x1;
+	rect.x1 = rect.x2;
+	rect.x2 = x1;
+};
+
+function swapYs(rect) {
+	var y1 = rect.y1;
+	rect.y1 = rect.y2;
+	rect.y2 = y1;
+};
+
+function test_difference() {
+	var a = UnitRect.createFromCoordinates(new Coordinate(0, 0), new Coordinate(5, 5));
+
+	var cases = [
+		// No intersection
+		{b: UnitRect.createFromCoordinates(new Coordinate(10, 0), new Coordinate(10, 5)),
+		 expect: [a]
+		},
+
+		// B completely overlaps a
+		{b: a,
+		 expect: []
+		},
+
+		// ------------------------------
+		// Suite: 1 rectangle returned; b overlaps entire side of a
+		// B overlaps top side of a
+		{b: UnitRect.createFromCoordinates(new Coordinate(-2, -2), new Coordinate(7, 2)),
+		 expect: [
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 3), new Coordinate(5, 5))
+		 ]
+		},
+
+		// B overlaps right side of a
+		{b: UnitRect.createFromCoordinates(new Coordinate(3, -2), new Coordinate(7, 6)),
+		 expect: [
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 0), new Coordinate(2, 5))
+		 ]
+		},
+
+		// B overlaps bottom side of a
+		{b: UnitRect.createFromCoordinates(new Coordinate(-2, 3), new Coordinate(7, 7)),
+		 expect: [
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 0), new Coordinate(5, 2))
+		 ]
+		},
+
+		// B overlaps left side of a
+		{b: UnitRect.createFromCoordinates(new Coordinate(-2, -2), new Coordinate(3, 7)),
+		 expect: [
+		 	UnitRect.createFromCoordinates(new Coordinate(4, 0), new Coordinate(5, 5))
+		 ]
+		},
+
+		// ------------------------------
+		// Suite: 2 rectangles returned; b overlaps corner of a
+		// b overlaps top left corner of a
+		{b: UnitRect.createFromCoordinates(new Coordinate(-2, -2), new Coordinate(2, 2)),
+		 expect: [
+		 	UnitRect.createFromCoordinates(new Coordinate(3, 0), new Coordinate(5, 2)),
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 3), new Coordinate(5, 5))
+		 ]
+		},
+
+		// b overlaps top right corner of a
+		{b: UnitRect.createFromCoordinates(new Coordinate(3, -2), new Coordinate(9, 2)),
+		 expect: [
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 0), new Coordinate(2, 2)),
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 3), new Coordinate(5, 5))
+		 ]
+		},
+
+		// b overlaps bottom right corner of a
+		{b: UnitRect.createFromCoordinates(new Coordinate(3, 3), new Coordinate(7, 7)),
+		 expect: [
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 0), new Coordinate(5, 2)),
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 3), new Coordinate(2, 5))
+		 ]
+		},
+
+		// b overlaps bottom left corner of a
+		{b: UnitRect.createFromCoordinates(new Coordinate(-2, 3), new Coordinate(3, 7)),
+		 expect: [
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 0), new Coordinate(5, 2)),
+		 	UnitRect.createFromCoordinates(new Coordinate(4, 3), new Coordinate(5, 5))
+		 ]
+		},
+
+		// b extends beyond both left and right sides but is vertically inside a
+		{b: UnitRect.createFromCoordinates(new Coordinate(-2, 1), new Coordinate(7, 3)),
+		 expect: [
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 0), new Coordinate(5, 0)),
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 4), new Coordinate(5, 5))
+		 ]
+		},
+
+		// b extends beyond both top and bottom sides but is horizontally inside a
+		{b: UnitRect.createFromCoordinates(new Coordinate(1, -2), new Coordinate(3, 7)),
+		 expect: [
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 0), new Coordinate(0, 5)),
+		 	UnitRect.createFromCoordinates(new Coordinate(4, 0), new Coordinate(5, 5))
+		 ]
+		},
+
+		// ------------------------------
+		// Suite: 3 rectangles returned; b overlaps a with space on both edges of the b
+		// b touches top of a
+		{b: UnitRect.createFromCoordinates(new Coordinate(2, 0), new Coordinate(4, 2)),
+		 expect: [
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 0), new Coordinate(1, 2)),
+		 	UnitRect.createFromCoordinates(new Coordinate(5, 0), new Coordinate(5, 2)),
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 3), new Coordinate(5, 5))
+		 ]
+		},
+
+		// b touches right of a
+		{b: UnitRect.createFromCoordinates(new Coordinate(4, 2), new Coordinate(5, 4)),
+		 expect: [
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 0), new Coordinate(5, 1)),
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 2), new Coordinate(3, 4)),
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 5), new Coordinate(5, 5))
+		 ]
+		},
+
+		// b touches bottom of a
+		{b: UnitRect.createFromCoordinates(new Coordinate(2, 3), new Coordinate(4, 5)),
+		 expect: [
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 0), new Coordinate(5, 2)),
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 3), new Coordinate(1, 5)),
+		 	UnitRect.createFromCoordinates(new Coordinate(5, 3), new Coordinate(5, 5))
+		 ]
+		},
+
+		// b touches left of a
+		{b: UnitRect.createFromCoordinates(new Coordinate(0, 3), new Coordinate(3, 4)),
+		 expect: [
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 0), new Coordinate(5, 2)),
+		 	UnitRect.createFromCoordinates(new Coordinate(4, 3), new Coordinate(5, 4)),
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 5), new Coordinate(5, 5))
+		 ]
+		},
+
+		// ------------------------------
+		// Suite: 4 rectangles returned; b completely inside a
+		{b: UnitRect.createFromCoordinates(new Coordinate(2, 2), new Coordinate(3, 3)),
+		 expect: [
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 0), new Coordinate(5, 1)),
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 2), new Coordinate(1, 3)),
+		 	UnitRect.createFromCoordinates(new Coordinate(4, 2), new Coordinate(5, 3)),
+		 	UnitRect.createFromCoordinates(new Coordinate(0, 4), new Coordinate(5, 5))
+		 ]
+		}
+	];
+
+	for (var i=0; i< cases.length; i++) {
+		var b = cases[i].b;
+		var expect = cases[i].expect;
+
+		var result = a.difference(b);
+		assertEquals(result.length, expect.length);
+		for (var j=0; j<result.length; j++)
+			assertTrue(expect[j].eq(result[j]));
+
+		// Non-normal on either side should give the same result
+		// 1) Normal a, inverted b
+		var c = b.clone();
+		swapXs(c);
+		swapYs(c);
+		result = a.difference(c);
+		assertEquals(result.length, expect.length);
+		for (var j=0; j<result.length; j++)
+			assertTrue(expect[j].eq(result[j]));
+
+		// 2) Inverted a, Normal b
+		var aa = a.clone();
+		swapXs(aa);
+		swapYs(aa);
+		result = aa.difference(b);
+		assertEquals(result.length, expect.length);
+		for (var j=0; j<result.length; j++)
+			assertTrue(expect[j].eq(result[j]));
+
+		// 3) Inverted a, inverted b
+		result = aa.difference(c);
+		assertEquals(result.length, expect.length);
+		for (var j=0; j<result.length; j++)
+			assertTrue(expect[j].eq(result[j]));
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_hasReversedX() {
+	var r = new UnitRect();
+	assertFalse(r.hasReversedX());
+	r.x2 = -3;
+	assertTrue(r.hasReversedX());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_hasReversedY() {
+	var r = new UnitRect();
+	assertFalse(r.hasReversedY());
+	r.y2 = -3;
+	assertTrue(r.hasReversedY());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_height() {
+	var r = new UnitRect();
+	assertEquals(r.height(), 1);
+	r.y2 = -1;
+	assertEquals(r.height(), -2);
+	r.y2 = 1;
+	assertEquals(r.height(), 2);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_horizontalRange() {
+	var r = new UnitRect(0, 0, 3, 5);
+	assertTrue(r.horizontalRange().eq(new ClosedIntRange(0, 2)));
+	r.x1 = 5;
+	assertTrue(r.horizontalRange().eq(new ClosedIntRange(5, 2)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_intersection() {
+	var baseUnitRect = new UnitRect();
+	var cornerBaseRect = new UnitRect(-2, 2, 5, -5);
+
+	var cases = [
+	    // Test: Two default rectangles
+		[baseUnitRect, 							baseUnitRect, 					baseUnitRect],
+		[baseUnitRect, 							new UnitRect(0, 0, 2, 1), 		baseUnitRect],
+	    // Test: Two completely overlapping rectangles
+		[new UnitRect(2, 1),					new UnitRect(2, 1),				new UnitRect(2, 1)],
+	    // Test: Two horizontally touching non-null rectangles
+	    [new UnitRect(0, 0, 2, 2),				new UnitRect(2, 0, 2, 2),		null],
+	    // Test: Two vertically touching non-null rectangles
+	    //           (0, 0) -> (9, 9)
+	    [new UnitRect(0, 0, 10, 10),			UnitRect.createFromCoordinates(new Coordinate(0, 10), new Coordinate(10, 12)),		null],
+	    // Test: Two diagonally touching non-null rectangles
+	    [new UnitRect(0, 0, 10, 10),			UnitRect.createFromCoordinates(new Coordinate(10, 10), new Coordinate(12, 12)),		null],
+	    // Test: overlap by one unit and vice versa
+	    [new UnitRect(0, 0, 2, 2),				new UnitRect(1, 1, 2, 1),		new UnitRect(1, 1)],
+	    [new UnitRect(0, 0, 2, 1),				new UnitRect(1, 1, 10),			null],
+	    [baseUnitRect,							UnitRect.createFromCoordinates(new Coordinate(0, -1), new Coordinate(1, 1)),		baseUnitRect],
+	    [UnitRect.createFromCoordinates(new Coordinate(0, -1), new Coordinate(1, 1)),	baseUnitRect,	baseUnitRect],
+        // Test: rectangle inside rectangle
+        [new UnitRect(2, 2, 3, 3),				new UnitRect(0, 0, 10, 10),		new UnitRect(2, 2, 3, 3)],
+	    // Test: self intersection
+	    [new UnitRect(-2, 2, 5, -5),			new UnitRect(-2, 2, 5, -5),		new UnitRect(-2, -2, 5, 5)],
+
+	    // Test: corners
+    	// Top left
+    	[cornerBaseRect,						UnitRect.createFromCoordinates(new Coordinate(-5, 5), new Coordinate(-1, 1)),		new UnitRect(-2, 1, 2, 2)],
+    	[UnitRect.createFromCoordinates(new Coordinate(-5, 5), new Coordinate(-1, 1)),						cornerBaseRect,			new UnitRect(-2, 1, 2, 2)],
+
+    	// Top right
+    	[cornerBaseRect,						UnitRect.createFromCoordinates(new Coordinate(5, 5), new Coordinate(1, 1)),			new UnitRect(1, 1, 2, 2)],
+    	[UnitRect.createFromCoordinates(new Coordinate(5, 5), new Coordinate(1, 1)),						cornerBaseRect,			new UnitRect(1, 1, 2, 2)],
+
+    	// Bottom right
+    	[cornerBaseRect,						UnitRect.createFromCoordinates(new Coordinate(5, -5), new Coordinate(1, -1)),		new UnitRect(1, -2, 2, 2)],
+    	[UnitRect.createFromCoordinates(new Coordinate(5, -5), new Coordinate(1, -1)),						cornerBaseRect,			new UnitRect(1, -2, 2, 2)],
+
+
+    	// Bottom left
+    	[cornerBaseRect,						UnitRect.createFromCoordinates(new Coordinate(-5, -5), new Coordinate(-1, -1)),		new UnitRect(-2, -2, 2, 2)],
+    	[UnitRect.createFromCoordinates(new Coordinate(-5, -5), new Coordinate(-1, -1)),					cornerBaseRect,			new UnitRect(-2, -2, 2, 2)],
+
+	    // ------------------------------------------------------------------------
+    	// Test: sides
+
+    	// Left
+    	[cornerBaseRect,						UnitRect.createFromCoordinates(new Coordinate(-4, 4), new Coordinate(-1, -4)),		new UnitRect(-2, -2, 2, 5)],
+    	[UnitRect.createFromCoordinates(new Coordinate(-4, 4), new Coordinate(-1, -4)),						cornerBaseRect,			new UnitRect(-2, -2, 2, 5)],
+
+    	// Top
+    	[cornerBaseRect,						UnitRect.createFromCoordinates(new Coordinate(-4, 4), new Coordinate(4, 1)),		new UnitRect(-2, 1, 5, 2)],
+    	[UnitRect.createFromCoordinates(new Coordinate(-4, 4), new Coordinate(4, 1)),						cornerBaseRect,			new UnitRect(-2, 1, 5, 2)],
+
+		// Right
+		[cornerBaseRect,						UnitRect.createFromCoordinates(new Coordinate(4, 4), new Coordinate(1, -4)),		new UnitRect(1, -2, 2, 5)],
+		[UnitRect.createFromCoordinates(new Coordinate(4, 4), new Coordinate(1, -4)),						cornerBaseRect,			new UnitRect(1, -2, 2, 5)],
+
+		// Bottom
+		[cornerBaseRect,						UnitRect.createFromCoordinates(new Coordinate(4, -4), new Coordinate(-4, -1)),		new UnitRect(-2, -2, 5, 2)],
+		[UnitRect.createFromCoordinates(new Coordinate(4, -4), new Coordinate(-4, -1)),						cornerBaseRect,			new UnitRect(-2, -2, 5, 2)]
+	];
+
+	for (var i=0; i< cases.length; i++) {
+		var r1 = cases[i][0];
+		var r2 = cases[i][1];
+		var r3 = cases[i][2];
+
+		if (r3) {
+			assertTrue(r1.intersection(r2).eq(r3));
+			assertTrue(r2.intersection(r1).eq(r3));
+		}
+		else {
+			assertNull(r1.intersection(r2));
+			assertNull(r2.intersection(r1));
+		}
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_intersects() {
+	var baseUnitRect = new UnitRect();
+	var cornerBaseRect = new UnitRect(-2, 2, 5, -5);
+
+	var cases = [
+	    // Test: Two default rectangles
+		[baseUnitRect, 							baseUnitRect, 					true],
+		[baseUnitRect, 							new UnitRect(0, 0, 2, 1), 		true],
+	    // Test: Two completely overlapping rectangles
+		[new UnitRect(2, 1),					new UnitRect(2, 1),				true],
+	    // Test: Two horizontally touching non-null rectangles
+	    [new UnitRect(0, 0, 2, 2),				new UnitRect(2, 0, 2, 2),		false],
+	    // Test: Two vertically touching non-null rectangles
+	    //           (0, 0) -> (9, 9)
+	    [new UnitRect(0, 0, 10, 10),			UnitRect.createFromCoordinates(new Coordinate(0, 10), new Coordinate(10, 12)),		false],
+	    // Test: Two diagonally touching non-null rectangles
+	    [new UnitRect(0, 0, 10, 10),			UnitRect.createFromCoordinates(new Coordinate(10, 10), new Coordinate(12, 12)),		false],
+	    // Test: overlap by one unit and vice versa
+	    [new UnitRect(0, 0, 2, 2),				new UnitRect(1, 1, 2, 1),		true],
+	    [new UnitRect(0, 0, 2, 1),				new UnitRect(1, 1, 10),			false],
+	    [baseUnitRect,							UnitRect.createFromCoordinates(new Coordinate(0, -1), new Coordinate(1, 1)),		true],
+	    [UnitRect.createFromCoordinates(new Coordinate(0, -1), new Coordinate(1, 1)),	baseUnitRect,	true],
+        // Test: rectangle inside rectangle
+        [new UnitRect(2, 2, 3, 3),				new UnitRect(0, 0, 10, 10),		true],
+	    // Test: self intersection
+	    [new UnitRect(-2, 2, 5, -5),			new UnitRect(-2, 2, 5, -5),		true],
+
+	    // Test: corners
+    	// Top left
+    	[cornerBaseRect,						UnitRect.createFromCoordinates(new Coordinate(-5, 5), new Coordinate(-1, 1)),		true],
+    	[UnitRect.createFromCoordinates(new Coordinate(-5, 5), new Coordinate(-1, 1)),						cornerBaseRect,			true],
+
+    	// Top right
+    	[cornerBaseRect,						UnitRect.createFromCoordinates(new Coordinate(5, 5), new Coordinate(1, 1)),			true],
+    	[UnitRect.createFromCoordinates(new Coordinate(5, 5), new Coordinate(1, 1)),						cornerBaseRect,			true],
+
+    	// Bottom right
+    	[cornerBaseRect,						UnitRect.createFromCoordinates(new Coordinate(5, -5), new Coordinate(1, -1)),		true],
+    	[UnitRect.createFromCoordinates(new Coordinate(5, -5), new Coordinate(1, -1)),						cornerBaseRect,			true],
+
+
+    	// Bottom left
+    	[cornerBaseRect,						UnitRect.createFromCoordinates(new Coordinate(-5, -5), new Coordinate(-1, -1)),		true],
+    	[UnitRect.createFromCoordinates(new Coordinate(-5, -5), new Coordinate(-1, -1)),					cornerBaseRect,			true],
+
+	    // ------------------------------------------------------------------------
+    	// Test: sides
+
+    	// Left
+    	[cornerBaseRect,						UnitRect.createFromCoordinates(new Coordinate(-4, 4), new Coordinate(-1, -4)),		true],
+    	[UnitRect.createFromCoordinates(new Coordinate(-4, 4), new Coordinate(-1, -4)),						cornerBaseRect,			true],
+
+    	// Top
+    	[cornerBaseRect,						UnitRect.createFromCoordinates(new Coordinate(-4, 4), new Coordinate(4, 1)),		true],
+    	[UnitRect.createFromCoordinates(new Coordinate(-4, 4), new Coordinate(4, 1)),						cornerBaseRect,			true],
+
+		// Right
+		[cornerBaseRect,						UnitRect.createFromCoordinates(new Coordinate(4, 4), new Coordinate(1, -4)),		true],
+		[UnitRect.createFromCoordinates(new Coordinate(4, 4), new Coordinate(1, -4)),						cornerBaseRect,			true],
+
+		// Bottom
+		[cornerBaseRect,						UnitRect.createFromCoordinates(new Coordinate(4, -4), new Coordinate(-4, -1)),		true],
+		[UnitRect.createFromCoordinates(new Coordinate(4, -4), new Coordinate(-4, -1)),						cornerBaseRect,			true]
+	];
+
+	for (var i=0; i< cases.length; i++) {
+		var r1 = cases[i][0];
+		var r2 = cases[i][1];
+		var expect = cases[i][2];
+
+		assertEquals(r1.intersects(r2), expect);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_intersectsX() {
+	var r = new UnitRect(0, 0, 3, 5);
+	var r2 = new UnitRect(2, 4, -3, -5);
+
+	for (var x=-5; x< 10; x++) {
+		assertEquals(r.intersectsX(x), x >= 0 && x <= 2);
+		assertEquals(r2.intersectsX(x), x >= 0 && x <= 2);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_intersectsY() {
+	var r = new UnitRect(0, 0, 3, 5);
+	var r2 = new UnitRect(2, 4, -3, -5);
+
+	for (var y=-5; y< 10; y++) {
+		assertEquals(r.intersectsY(y), y >= 0 && y <= 4);
+		assertEquals(r2.intersectsY(y), y >= 0 && y <= 4);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_invert() {
+	var r = UnitRect.createFromCoordinates(new Coordinate(0, 0), new Coordinate(3, 3));
+	r.invertX();
+	assertEquals(3, r.x1);
+	assertEquals(0, r.x2);
+	assertEquals(0, r.y1);
+	assertEquals(3, r.y2);
+
+	r.invertY();
+	assertEquals(3, r.x1);
+	assertEquals(0, r.x2);
+	assertEquals(3, r.y1);
+	assertEquals(0, r.y2);
+
+	r.invert();
+	assertEquals(0, r.x1);
+	assertEquals(3, r.x2);
+	assertEquals(0, r.y1);
+	assertEquals(3, r.y2);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_isDefault() {
+	var r = new UnitRect();
+	assertTrue(r.isDefault());
+	r.x1 = 1;
+	assertFalse(r.isDefault());
+	r.x1 = 0;
+	assertTrue(r.isDefault());
+
+	r.x2 = 1;
+	assertFalse(r.isDefault());
+	r.x2 = 0;
+	assertTrue(r.isDefault());
+
+	r.y1 = 1;
+	assertFalse(r.isDefault());
+	r.y1 = 0;
+	assertTrue(r.isDefault());
+
+	r.y2 = 1;
+	assertFalse(r.isDefault());
+	r.y2 = 0;
+	assertTrue(r.isDefault());
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_isNormal() {
+	var normalRect = new UnitRect(-1, -1, 3, 3);
+
+	var cases = [
+		// Top left to bottom right
+		UnitRect.createFromCoordinates(new Coordinate(-1, -1), new Coordinate(1, 1)),
+		// Bottom left to top right
+		UnitRect.createFromCoordinates(new Coordinate(-1, 1), new Coordinate(1, -1)),
+		// Bottom right to top left
+		UnitRect.createFromCoordinates(new Coordinate(1, 1), new Coordinate(-1, -1)),
+		// Top right to bottom left
+		UnitRect.createFromCoordinates(new Coordinate(1, -1), new Coordinate(-1, 1))
+	];
+
+	for (var i=0; i<cases.length; i++)
+		assertEquals(cases[i].isNormal(), cases[i].eq(normalRect));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_isPositive() {
+	var r = new UnitRect();
+	assertFalse(r.isPositive());
+	r.x1 = 1;
+	assertFalse(r.isPositive());
+	r.y1 = 1;
+	assertFalse(r.isPositive());
+	r.x2 = 1;
+	assertFalse(r.isPositive());
+	r.y2 = 1;
+	assertTrue(r.isPositive());
+
+	r.x1 = -1;
+	assertFalse(r.isPositive());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_left() {
+	var r = new UnitRect(3, 4, 2, 3);
+	assertEquals(r.left(), 3);
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_moveBottom() {
+    var rect = new UnitRect(0, 0, 5, 5);
+
+    for (var i=-5; i< 5; ++i) {
+        rect.moveBottom(i);
+        assertEquals(rect.bottom(), i);
+        assertEquals(rect.height(), 5);
+        assertEquals(rect.top(), i-4);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_moveLeft() {
+    var rect = new UnitRect(0, 0, 5, 5);
+
+    for (var i=-5; i< 5; ++i) {
+        rect.moveLeft(i);
+        assertEquals(rect.left(), i);
+        assertEquals(rect.width(), 5);
+        assertEquals(rect.right(), i+4);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_moveRight() {
+    var rect = new UnitRect(0, 0, 5, 5);
+
+    for (var i=-5; i< 5; ++i) {
+        rect.moveRight(i);
+        assertEquals(rect.right(), i);
+        assertEquals(rect.width(), 5);
+        assertEquals(rect.left(), i-4);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_moveTop() {
+    var rect = new UnitRect(0, 0, 5, 5);
+
+    for (var i=-5; i< 5; ++i) {
+        rect.moveTop(i);
+        assertEquals(rect.top(), i);
+        assertEquals(rect.height(), 5);
+        assertEquals(rect.bottom(), i+4);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_normalized() {
+	var normalRect = new UnitRect(-1, -1, 3, 3);
+
+	var cases = [
+		// Top left to bottom right
+		UnitRect.createFromCoordinates(new Coordinate(-1, -1), new Coordinate(1, 1)),
+		// Bottom left to top right
+		UnitRect.createFromCoordinates(new Coordinate(-1, 1), new Coordinate(1, -1)),
+		// Bottom right to top left
+		UnitRect.createFromCoordinates(new Coordinate(1, 1), new Coordinate(-1, -1)),
+		// Top right to bottom left
+		UnitRect.createFromCoordinates(new Coordinate(1, -1), new Coordinate(-1, 1))
+	];
+
+	for (var i=0; i<cases.length; i++)
+		assertTrue(cases[i].normalized().eq(normalRect));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_right() {
+	var r = new UnitRect(-2, 2, 5, 5);
+	assertEquals(r.right(), 2);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setBottom() {
+    var rect = new UnitRect();
+
+    for (var i=-50; i<50; ++i) {
+        rect.setBottom(i);
+        assertEquals(rect.bottom(), i);
+        assertTrue(Coordinate.equals(rect.bottomLeft(), new Coordinate(0, i)));
+        assertTrue(Coordinate.equals(rect.bottomRight(), new Coordinate(0, i)));
+        assertTrue(rect.top() === 0);
+        assertTrue(rect.y1 === 0);
+  	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setHeight() {
+    var rect = new UnitRect();
+
+    for (var i=-50; i< 50; ++i) {
+    	if (i === 0)
+    		continue;
+        rect.setHeight(i);
+        assertEquals(rect.height(), (i != -1) ? i : 1);
+        assertTrue(rect.top() === 0);
+        var expectBottom = (i < 0) ? i+1 : i-1;
+        assertEquals(rect.bottom(), expectBottom);
+        assertEquals(rect.width(), 1);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setLeft() {
+    var rect = new UnitRect();
+
+    for (var i=-50; i<50; ++i) {
+        rect.setLeft(i);
+        assertEquals(rect.left(), i);
+        assertTrue(Coordinate.equals(rect.bottomLeft(), new Coordinate(i, 0)));
+        assertTrue(Coordinate.equals(rect.topLeft(), new Coordinate(i, 0)));
+        assertTrue(rect.right() === 0);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setRect() {
+	var cases = [
+		[0, 0, 1, 1],
+		[3, 2, 1, 1],
+		[3, 2, -1, -1]
+	];
+
+	for (var i=0; i< cases.length; i++) {
+		var x = cases[i][0];
+		var y = cases[i][1];
+		var w = cases[i][2];
+		var h = cases[i][3];
+		var rect = new UnitRect();
+		rect.setRect(x, y, w, h);
+	    assertEquals(rect.x1, x);
+	    assertEquals(rect.y1, y);
+	    assertEquals(rect.width(), Math.abs(w));
+	    assertEquals(rect.height(), Math.abs(h));
+	    assertEquals(rect.right(), x);
+	    assertEquals(rect.bottom(), y);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setRectFromCoordinates() {
+	var cases = [
+		[new Coordinate(0, 0), new Coordinate(0, 0), true],
+		[new Coordinate(1, 1), new Coordinate(10, 10), false],
+		[new Coordinate(10, 1), new Coordinate(1, 10), false],
+		[new Coordinate(-1, -1), new Coordinate(-10, -10), false],
+		[new Coordinate(-10, -1), new Coordinate(-1, -10), false]
+	];
+
+	for (var i=0; i<cases.length; i++) {
+		var a = cases[i][0];
+		var b = cases[i][1];
+		var expect = cases[i][2];
+
+	    // Test: can only test two quadrants
+	    // Quadrant I
+        var rect = new UnitRect();
+        rect.setRectFromCoordinates(a, b);
+        assertEquals(rect.x1, a.x);
+        assertEquals(rect.y1, a.y);
+        assertEquals(rect.right(), b.x);
+        assertEquals(rect.bottom(), b.y);
+
+	    // Quadrant IV
+        rect = new UnitRect();
+        rect.setRectFromCoordinates(b, a);
+        assertEquals(rect.x1, b.x);
+        assertEquals(rect.y1, b.y);
+        assertEquals(rect.right(), a.x);
+        assertEquals(rect.bottom(), a.y);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setRight() {
+    var rect = new UnitRect();
+
+    for (var i=-50; i<50; ++i) {
+        rect.setRight(i);
+        assertEquals(rect.right(), i);
+        assertTrue(Coordinate.equals(rect.topRight(), new Coordinate(i, 0)));
+        assertTrue(Coordinate.equals(rect.bottomRight(), new Coordinate(i, 0)));
+        assertTrue(rect.left() === 0);
+        assertTrue(rect.x1 === 0);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setSize() {
+    var rect = UnitRect.createFromCoordinates(new Coordinate(5, 3), new Coordinate(6, 4));
+
+    for (var i=-10; i< 10; ++i) {
+    	if (i === 0)
+    		continue;
+        rect.setSize(new Size(i, i*2));
+        if (i !== -1) {
+        	assertTrue(Size.equals(rect.size(), new Size(i, i*2)));
+	        assertEquals(rect.width(), i);
+    	    assertEquals(rect.height(), i*2);
+    	}
+        else {
+        	assertTrue(Size.equals(rect.size(), new Size(1, i*2)))
+	        assertEquals(rect.width(), 1);
+    	    assertEquals(rect.height(), i*2);
+        }
+
+        assertEquals(rect.left(), 5);
+        assertEquals(rect.top(), 3);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setTop() {
+    var rect = new UnitRect();
+
+    for (var i=-50; i<50; ++i) {
+        rect.setTop(i);
+        assertEquals(rect.top(), i);
+        assertEquals(rect.y1, i);
+        assertTrue(Coordinate.equals(rect.topLeft(), new Coordinate(0, i)));
+        assertTrue(Coordinate.equals(rect.topRight(), new Coordinate(0, i)));
+        assertTrue(rect.bottom() === 0);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setWidth() {
+    var rect = new UnitRect();
+
+    for (var i=-50; i< 50; ++i) {
+    	if (i === 0)
+    		continue;
+        rect.setWidth(i);
+        assertEquals(rect.width(), (i != -1) ? i : 1);
+        assertTrue(rect.left() === 0);
+        var expectRight = (i < 0) ? i+1 : i-1;
+        assertEquals(rect.right(), expectRight);
+        assertEquals(rect.height(), 1);
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_shift() {
+	var r = new UnitRect(0, 0, 2, 4);
+	var r2 = r.clone();
+	r.shift(0, 0);
+	assertTrue(r.eq(r2));
+
+	r.shift(-2, 5);
+	r2.moveLeft(-2);
+	r2.moveTop(5);
+	assertTrue(r.eq(r2));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_top() {
+	var r = new UnitRect(-2, -3, 2, 2);
+	assertEquals(r.top(), -3);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_topLeft() {
+	var r = new UnitRect(1, 2, 3, 3);
+	assertTrue(Coordinate.equals(r.topLeft(), new Coordinate(1, 2)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_topRight() {
+	var r = new UnitRect(1, 2, 3, 3);
+	assertTrue(Coordinate.equals(r.topRight(), new Coordinate(3, 2)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_verticalRange() {
+	var r = new UnitRect(0, 0, 3, 5);
+	assertTrue(r.verticalRange().eq(new ClosedIntRange(0, 4)));
+	r.y1 = 7;
+	assertTrue(r.verticalRange().eq(new ClosedIntRange(7, 4)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_width() {
+	var r = new UnitRect();
+	assertEquals(r.width(), 1);
+	r.x2 = -1;
+	assertEquals(r.width(), -2);
+	r.x2 = 1;
+	assertEquals(r.width(), 2);
+};
+
+</script>
+</body>
+</html>

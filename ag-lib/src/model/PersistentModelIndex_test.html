@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.model.PersistentModelIndex</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.model.MockItemModel');
+</script>
+<body>
+<script>
+// Aliases
+var MockItemModel = ag.model.MockItemModel;
+var ModelIndex = ag.model.ModelIndex;
+var PersistentModelIndex = ag.model.PersistentModelIndex;
+
+var model = null;
+
+// --------------------------------------------------------------------------------------------------------------------
+function setUp() {
+	model = new MockItemModel();
+};
+
+function tearDown() {
+	model = null;
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	var y = model.index(0, 1);
+	assertTrue(y.isValid());
+
+	var x = new PersistentModelIndex(y);
+	assertTrue(goog.isNumber(x.uid()));
+	assertTrue(x.isValid());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: invalidate
+function test_invalidate() {
+	var y = model.index(0, 1);
+	var x = new PersistentModelIndex(y);
+	assertTrue(x.isValid());
+	assertEquals(x.row(), 0);
+	assertEquals(x.column(), 1);
+	assertEquals(x.model(), model);
+
+	x.invalidate();
+	assertFalse(x.isValid());
+};
+
+</script>
+</body>
+</html>

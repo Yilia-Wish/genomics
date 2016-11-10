@@ -1,0 +1,808 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.model.AbstractTableModel</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.object');
+goog.require('ag.core.Entity');
+goog.require('ag.model.AbstractItemModel');
+goog.require('ag.model.AbstractTableModel');
+goog.require('ag.model.MockTableModel');
+goog.require('ag.model.BinaryInsertStrategy');
+goog.require('ag.meta.SignalSpy');
+</script>
+<body>
+<script>
+// Aliases
+var object = goog.object;
+
+var AbstractItemModel = ag.model.AbstractItemModel;
+var AbstractTableModel = ag.model.AbstractTableModel;
+var BinaryInsertStrategy = ag.model.BinaryInsertStrategy;
+var MockTableModel = ag.model.MockTableModel;
+var ModelIndex = ag.model.ModelIndex;
+var Entity = ag.core.Entity;
+var MockEntity = ag.core.MockEntity;
+var SignalSpy = ag.meta.SignalSpy;
+
+var ModelSignals = AbstractItemModel.SignalType;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	var x = new AbstractTableModel();
+
+	assertEquals(x.rowCount(), 0);
+	assertNull(x.invalidFields());
+	assertTrue(goog.isArray(x.entities()));
+	assertEquals(x.entities().length, 0);
+	assertNull(x.headerData());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: append
+function test_append() {
+	var x = new AbstractTableModel();
+
+	var aboutToInsertSpy = new SignalSpy(x, ModelSignals.ROWS_ABOUT_TO_BE_INSERTED);
+	var insertedSpy = new SignalSpy(x, ModelSignals.ROWS_INSERTED);
+
+	var y = new Entity(50);
+	assertTrue(x.append(y));
+	assertEquals(x.rowCount(), 1);
+	assertEquals(x.entities().length, 1);
+	assertEquals(x.entities()[0], y);
+
+	assertEquals(aboutToInsertSpy.size(), 1);
+	assertArrayEquals(aboutToInsertSpy.signals()[0], [0, 0]);
+	aboutToInsertSpy.clear();
+	assertEquals(insertedSpy.size(), 1);
+	assertArrayEquals(insertedSpy.signals()[0], [0, 0]);
+	insertedSpy.clear();
+
+	var z = new Entity(90);
+	assertTrue(x.append(z));
+	assertEquals(x.rowCount(), 2);
+	assertEquals(x.entities().length, 2);
+	assertEquals(x.entities()[0], y);
+	assertEquals(x.entities()[1], z);
+
+	assertEquals(aboutToInsertSpy.size(), 1);
+	assertArrayEquals(aboutToInsertSpy.signals()[0], [1, 1]);
+	aboutToInsertSpy.clear();
+	assertEquals(insertedSpy.size(), 1);
+	assertArrayEquals(insertedSpy.signals()[0], [1, 1]);
+	insertedSpy.clear();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: columnCount
+function test_columnCount() {
+	var x = new MockTableModel();
+
+	assertEquals(x.columnCount(), 3);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: data
+function test_data() {
+	var model = new MockTableModel();
+	assertTrue(model.append(new MockEntity(1, 'Luke', 32)));
+	assertTrue(model.append(new MockEntity(2, 'Igor', 50)));
+
+	assertEquals(model.data(model.index(0, 0)), 1);
+	assertEquals(model.data(model.index(0, 0), AbstractItemModel.DataRole.kEdit), 'edit-1');
+	assertEquals(model.data(model.index(0, 1)), 'Luke');
+	assertEquals(model.data(model.index(0, 1), AbstractItemModel.DataRole.kEdit), 'edit-Luke');
+	assertEquals(model.data(model.index(0, 2)), 32);
+	assertEquals(model.data(model.index(0, 2), AbstractItemModel.DataRole.kEdit), 'edit-32');
+
+	assertEquals(model.data(model.index(1, 0)), 2);
+	assertEquals(model.data(model.index(1, 0), AbstractItemModel.DataRole.kEdit), 'edit-2');
+	assertEquals(model.data(model.index(1, 1)), 'Igor');
+	assertEquals(model.data(model.index(1, 1), AbstractItemModel.DataRole.kEdit), 'edit-Igor');
+	assertEquals(model.data(model.index(1, 2)), 50);
+	assertEquals(model.data(model.index(1, 2), AbstractItemModel.DataRole.kEdit), 'edit-50');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: entities
+function test_entities() {
+	var model = new MockTableModel();
+	var e0 = new Entity();
+	var e1 = new Entity();
+	assertTrue(model.append(e0));
+	assertTrue(model.append(e1));
+	var entities = model.entities();
+	assertEquals(entities[0], e0);
+	assertEquals(entities[1], e1);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: entityAtRow
+function test_entityAtRow() {
+	var model = new MockTableModel();
+	var e0 = new Entity();
+	var e1 = new Entity();
+	assertTrue(model.append(e0));
+	assertTrue(model.append(e1));
+
+	assertEquals(model.entityAtRow(0), e0);
+	assertEquals(model.entityAtRow(1), e1);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_entityForIndex() {
+	var model = new MockTableModel();
+	var e0 = new Entity();
+	var e1 = new Entity();
+	assertTrue(model.append(e0));
+	assertTrue(model.append(e1));
+
+	assertEquals(model.entityForIndex(model.index(0, 0)), e0);
+	assertEquals(model.entityForIndex(model.index(1, 0)), e1);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: entitySlice
+function test_entitySlice() {
+	var model = new MockTableModel();
+	var e0 = new Entity();
+	var e1 = new Entity();
+	var e2 = new Entity();
+	assertTrue(model.append(e0));
+	assertTrue(model.append(e1));
+	assertTrue(model.append(e2));
+
+	var entities = model.entitySlice(0, 2);
+	assertArrayEquals(entities, [e0, e1, e2]);
+
+	entities = model.entitySlice(0, 1);
+	assertArrayEquals(entities, [e0, e1]);
+
+	entities = model.entitySlice(1, 1);
+	assertArrayEquals(entities, [e1]);
+
+	entities = model.entitySlice(1, 2);
+	assertArrayEquals(entities, [e1, e2]);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: entityWithId
+/*
+function test_entityWithId() {
+	var model = new MockTableModel();
+	var e0 = new Entity('bob');
+	var e1 = new Entity('luke');
+	var e2 = new Entity('igor');
+	var e3 = new Entity(90);
+	assertTrue(model.append(e0));
+	assertTrue(model.append(e1));
+	assertTrue(model.append(e2));
+	assertTrue(model.append(e3));
+
+	assertNull(model.entityWithId(34));
+	assertNull(model.entityWithId('paul'));
+
+	assertEquals(model.entityWithId('bob'), e0);
+	assertEquals(model.entityWithId('luke'), e1);
+	assertEquals(model.entityWithId('igor'), e2);
+	assertEquals(model.entityWithId(90), e3);
+};
+*/
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: entityWithValue
+function test_entityWithValue() {
+	var model = new MockTableModel();
+	var e0 = new MockEntity(1, 'Luke', 32);
+	var e1 = new MockEntity(2, 'Igor', 50);
+	assertTrue(model.append(e0));
+	assertTrue(model.append(e1));
+
+	assertNull(model.entityWithValue(0, 3));
+	assertNull(model.entityWithValue(1, 'paul'));
+	assertNull(model.entityWithValue(2, 'string'));
+
+	assertEquals(model.entityWithValue(0, 1), e0);
+	assertEquals(model.entityWithValue(0, 2), e1);
+
+	assertEquals(model.entityWithValue(1, 'Luke'), e0);
+	assertEquals(model.entityWithValue(1, 'Igor'), e1);
+
+	assertEquals(model.entityWithValue(2, 32), e0);
+	assertEquals(model.entityWithValue(2, 50), e1);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: findRowById
+/*
+function test_findRowById() {
+	var model = new MockTableModel();
+	var e0 = new Entity('bob');
+	var e1 = new Entity('luke');
+	var e2 = new Entity('igor');
+	var e3 = new Entity(90);
+	assertTrue(model.append(e0));
+	assertTrue(model.append(e1));
+	assertTrue(model.append(e2));
+	assertTrue(model.append(e3));
+
+	assertEquals(model.findRowById('paul'), -1);
+	assertEquals(model.findRowById(100), -1);
+
+	assertEquals(model.findRowById('bob'), 0);
+	assertEquals(model.findRowById('luke'), 1);
+	assertEquals(model.findRowById('igor'), 2);
+	assertEquals(model.findRowById(90), 3);
+};
+*/
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: findRowWithValue
+function test_findRowWithValue() {
+	var model = new MockTableModel();
+	var e0 = new MockEntity(1, 'Luke', 32);
+	var e1 = new MockEntity(2, 'Igor', 50);
+	assertTrue(model.append(e0));
+	assertTrue(model.append(e1));
+
+	assertEquals(model.findRowWithValue(0, 3), -1);
+	assertEquals(model.findRowWithValue(1, 'paul'), -1);
+	assertEquals(model.findRowWithValue(2, 'string'), -1);
+
+	assertEquals(model.findRowWithValue(0, 1), 0);
+	assertEquals(model.findRowWithValue(0, 2), 1);
+
+	assertEquals(model.findRowWithValue(1, 'Luke'), 0);
+	assertEquals(model.findRowWithValue(1, 'Igor'), 1);
+
+	assertEquals(model.findRowWithValue(2, 32), 0);
+	assertEquals(model.findRowWithValue(2, 50), 1);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: headerData
+function test_headerData() {
+	var x = new MockTableModel();
+	assertNull(x.headerData());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: index
+function test_index() {
+	var model = new MockTableModel();
+	var x = model.index(3, 5);
+	assertFalse(x.isValid());
+
+	x = model.index(0, 0);
+	assertFalse(x.isValid());
+
+	assertTrue(model.append(new MockEntity(1, 'Luke', 32)));
+	for (var i=0; i< model.columnCount(); i++) {
+		x = model.index(0, i);
+		assertTrue(x.isValid());
+		assertEquals(x.row(), 0);
+		assertEquals(x.column(), i);
+		assertEquals(x.model(), model);
+	}
+
+	assertEquals(model.index(0, 0).data(), 1);
+	assertEquals(model.index(0, 1).data(), 'Luke');
+	assertEquals(model.index(0, 2).data(), 32);
+
+	assertTrue(model.append(new MockEntity(2, 'Igor', 50)));
+	x = model.index(2, 0);
+	assertFalse(x.isValid());
+	for (var i=0; i< model.rowCount(); i++) {
+		for (var j=0; j< model.columnCount(); j++) {
+			x = model.index(i, j);
+			assertTrue(x.isValid());
+			assertEquals(x.row(), i);
+			assertEquals(x.column(), j);
+			assertEquals(x.model(), model);
+		}
+	}
+
+	assertEquals(model.index(1, 0).data(), 2);
+	assertEquals(model.index(1, 1).data(), 'Igor');
+	assertEquals(model.index(1, 2).data(), 50);
+
+	model.clear();
+	assertFalse(model.index(0, 0).isValid());
+	assertFalse(model.index(1, 0).isValid());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: insert
+function test_insert() {
+	var x = new AbstractTableModel();
+
+	var aboutToInsertSpy = new SignalSpy(x, ModelSignals.ROWS_ABOUT_TO_BE_INSERTED);
+	var insertedSpy = new SignalSpy(x, ModelSignals.ROWS_INSERTED);
+
+	assertFalse(x.insert([]));
+	assertFalse(x.insert(null));
+
+	assertTrue(aboutToInsertSpy.isEmpty());
+	assertTrue(insertedSpy.isEmpty());
+
+	var e0 = new Entity(0);
+	var e1 = new Entity(1);
+	var e2 = new Entity(2);
+	var e3 = new Entity(3);
+
+	// Single entity
+	assertTrue(x.insert(e0));
+	assertEquals(x.rowCount(), 1);
+	assertEquals(x.entityAtRow(0), e0);
+
+	assertEquals(aboutToInsertSpy.size(), 1);
+	assertArrayEquals(aboutToInsertSpy.signals()[0], [0, 0]);
+	aboutToInsertSpy.clear();
+	assertEquals(insertedSpy.size(), 1);
+	assertArrayEquals(insertedSpy.signals()[0], [0, 0]);
+	insertedSpy.clear();
+
+	// Insert by default is at 0
+	assertTrue(x.insert(e1));
+	assertEquals(x.rowCount(), 2);
+	assertEquals(x.entityAtRow(0), e1);
+	assertEquals(x.entityAtRow(1), e0);
+
+	assertEquals(aboutToInsertSpy.size(), 1);
+	assertArrayEquals(aboutToInsertSpy.signals()[0], [0, 0]);
+	aboutToInsertSpy.clear();
+	assertEquals(insertedSpy.size(), 1);
+	assertArrayEquals(insertedSpy.signals()[0], [0, 0]);
+	insertedSpy.clear();
+
+	// Insert array
+	assertTrue(x.insert([e2, e3]));
+	assertEquals(x.rowCount(), 4);
+	assertEquals(x.entityAtRow(0), e2);
+	assertEquals(x.entityAtRow(1), e3);
+	assertEquals(x.entityAtRow(2), e1);
+	assertEquals(x.entityAtRow(3), e0);
+
+	assertEquals(aboutToInsertSpy.size(), 1);
+	assertArrayEquals(aboutToInsertSpy.signals()[0], [0, 1]);
+	aboutToInsertSpy.clear();
+	assertEquals(insertedSpy.size(), 1);
+	assertArrayEquals(insertedSpy.signals()[0], [0, 1]);
+	insertedSpy.clear();
+
+	x.clear();
+	assertTrue(x.insert([e0, e1, e2]));
+	assertEquals(x.rowCount(), 3);
+
+	assertEquals(aboutToInsertSpy.size(), 1);
+	assertArrayEquals(aboutToInsertSpy.signals()[0], [0, 2]);
+	aboutToInsertSpy.clear();
+	assertEquals(insertedSpy.size(), 1);
+	assertArrayEquals(insertedSpy.signals()[0], [0, 2]);
+	insertedSpy.clear();
+
+	// Insert in middle
+	assertTrue(x.insert(e3, 1));
+	assertEquals(x.rowCount(), 4);
+	assertEquals(x.entityAtRow(0), e0);
+	assertEquals(x.entityAtRow(1), e3);
+	assertEquals(x.entityAtRow(2), e1);
+	assertEquals(x.entityAtRow(3), e2);
+
+	assertEquals(aboutToInsertSpy.size(), 1);
+	assertArrayEquals(aboutToInsertSpy.signals()[0], [1, 1]);
+	aboutToInsertSpy.clear();
+	assertEquals(insertedSpy.size(), 1);
+	assertArrayEquals(insertedSpy.signals()[0], [1, 1]);
+	insertedSpy.clear();
+
+	// Insert at end
+	x.clear();
+	x.insert([e0, e1, e2]);
+
+	aboutToInsertSpy.clear();
+	insertedSpy.clear();
+
+	assertTrue(x.insert(e3, 3));
+	assertEquals(x.entityAtRow(0), e0);
+	assertEquals(x.entityAtRow(1), e1);
+	assertEquals(x.entityAtRow(2), e2);
+	assertEquals(x.entityAtRow(3), e3);
+
+	assertEquals(aboutToInsertSpy.size(), 1);
+	assertArrayEquals(aboutToInsertSpy.signals()[0], [3, 3]);
+	aboutToInsertSpy.clear();
+	assertEquals(insertedSpy.size(), 1);
+	assertArrayEquals(insertedSpy.signals()[0], [3, 3]);
+	insertedSpy.clear();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: isValidColumn
+function test_isValidColumn() {
+	var model = new MockTableModel();
+
+	for (var i=-3; i< model.columnCount() + 3; i++)
+		assertEquals(model.isValidColumn(i), i>=0 && i< model.columnCount());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: isValidIndex
+function test_isValidIndex() {
+	var m0 = new MockTableModel();
+	var m1 = new MockTableModel();
+
+	var e0 = new MockEntity(1, 'Luke', 32);
+	var e1 = new MockEntity(1, 'Luke', 32);
+	assertTrue(m0.append(e0));
+	assertTrue(m1.append(e1));
+
+	assertFalse(m0.isValidIndex(new ModelIndex()));
+
+	var i0 = m0.index(0, 0);
+	assertTrue(i0.isValid());
+	assertTrue(m0.isValidIndex(i0));
+	assertFalse(m1.isValidIndex(i0));
+
+	var i1 = m1.index(0, 2);
+	assertTrue(i1.isValid());
+	assertTrue(m1.isValidIndex(i1));
+	assertFalse(m0.isValidIndex(i1));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: isValidRow
+function test_isValidRow() {
+	var model = new AbstractTableModel();
+	assertTrue(model.append(new Entity()));
+	assertTrue(model.append(new Entity()));
+	assertTrue(model.append(new Entity()));
+
+	for (var i=-3; i< model.rowCount() + 3; i++)
+		assertEquals(model.isValidRow(i), i>=0 && i< model.rowCount());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: prepend
+function test_prepend() {
+	var model = new AbstractTableModel();
+	var e0 = new Entity();
+	var e1 = new Entity();
+	var e2 = new Entity();
+
+	var aboutToInsertSpy = new SignalSpy(model, ModelSignals.ROWS_ABOUT_TO_BE_INSERTED);
+	var insertedSpy = new SignalSpy(model, ModelSignals.ROWS_INSERTED);
+
+	assertTrue(model.prepend(e0));
+	assertEquals(model.entityAtRow(0), e0);
+
+	assertEquals(aboutToInsertSpy.size(), 1);
+	assertArrayEquals(aboutToInsertSpy.signals()[0], [0, 0]);
+	aboutToInsertSpy.clear();
+	assertEquals(insertedSpy.size(), 1);
+	assertArrayEquals(insertedSpy.signals()[0], [0, 0]);
+	insertedSpy.clear();
+
+	assertTrue(model.prepend(e1));
+	assertEquals(model.entityAtRow(0), e1);
+
+	assertEquals(aboutToInsertSpy.size(), 1);
+	assertArrayEquals(aboutToInsertSpy.signals()[0], [0, 0]);
+	aboutToInsertSpy.clear();
+	assertEquals(insertedSpy.size(), 1);
+	assertArrayEquals(insertedSpy.signals()[0], [0, 0]);
+	insertedSpy.clear();
+
+	assertTrue(model.prepend(e2));
+	assertEquals(model.entityAtRow(0), e2);
+	assertEquals(model.entityAtRow(1), e1);
+	assertEquals(model.entityAtRow(2), e0);
+
+	assertEquals(aboutToInsertSpy.size(), 1);
+	assertArrayEquals(aboutToInsertSpy.signals()[0], [0, 0]);
+	aboutToInsertSpy.clear();
+	assertEquals(insertedSpy.size(), 1);
+	assertArrayEquals(insertedSpy.signals()[0], [0, 0]);
+	insertedSpy.clear();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: removeById
+/*
+function test_removeById() {
+	var model = new AbstractTableModel();
+	var e0 = new Entity(5);
+	var e1 = new Entity(-98);
+	var e2 = new Entity('luke');
+
+	var aboutToRemoveSpy = new SignalSpy(model, ModelSignals.ROWS_ABOUT_TO_BE_REMOVED);
+	var removedSpy = new SignalSpy(model, ModelSignals.ROWS_REMOVED);
+
+	assertTrue(model.insert([e0, e1, e2]));
+
+	assertFalse(model.removeById('igor'));
+	assertEquals(model.rowCount(), 3);
+
+	assertTrue(aboutToRemoveSpy.isEmpty());
+	assertTrue(removedSpy.isEmpty());
+
+	assertTrue(model.removeById(-98));
+
+	assertEquals(aboutToRemoveSpy.size(), 1);
+	assertArrayEquals(aboutToRemoveSpy.signals()[0], [1, 1]);
+	aboutToRemoveSpy.clear();
+	assertEquals(removedSpy.size(), 1);
+	assertArrayEquals(removedSpy.signals()[0], [1, 1]);
+	removedSpy.clear();
+
+	assertEquals(model.rowCount(), 2);
+
+	assertEquals(model.entityAtRow(0), e0);
+	assertEquals(model.entityAtRow(1), e2);
+};
+*/
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: removeRows
+function test_removeRows() {
+	var model = new AbstractTableModel();
+	var e0 = new Entity(5);
+	var e1 = new Entity(-98);
+	var e2 = new Entity('luke');
+
+	var aboutToRemoveSpy = new SignalSpy(model, ModelSignals.ROWS_ABOUT_TO_BE_REMOVED);
+	var removedSpy = new SignalSpy(model, ModelSignals.ROWS_REMOVED);
+
+	assertTrue(model.insert([e0, e1, e2]));
+
+	// Remove one row
+	model.removeRows(0);
+	assertArrayEquals(model.entities(), [e1, e2]);
+
+	assertEquals(aboutToRemoveSpy.size(), 1);
+	assertArrayEquals(aboutToRemoveSpy.signals()[0], [0, 0]);
+	aboutToRemoveSpy.clear();
+	assertEquals(removedSpy.size(), 1);
+	assertArrayEquals(removedSpy.signals()[0], [0, 0]);
+	removedSpy.clear();
+
+	model.removeRows(1);
+	assertArrayEquals(model.entities(), [e1]);
+
+	assertEquals(aboutToRemoveSpy.size(), 1);
+	assertArrayEquals(aboutToRemoveSpy.signals()[0], [1, 1]);
+	aboutToRemoveSpy.clear();
+	assertEquals(removedSpy.size(), 1);
+	assertArrayEquals(removedSpy.signals()[0], [1, 1]);
+	removedSpy.clear();
+
+	model.clear();
+	aboutToRemoveSpy.clear();
+	removedSpy.clear();
+	model.insert([e0, e1, e2]);
+
+	// Remove multiple rows
+	model.removeRows(1, 2);
+	assertArrayEquals(model.entities(), [e0]);
+
+	assertEquals(aboutToRemoveSpy.size(), 1);
+	assertArrayEquals(aboutToRemoveSpy.signals()[0], [1, 2]);
+	aboutToRemoveSpy.clear();
+	assertEquals(removedSpy.size(), 1);
+	assertArrayEquals(removedSpy.signals()[0], [1, 2]);
+	removedSpy.clear();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: rowCount
+function test_rowCount() {
+	var model = new AbstractTableModel();
+	var e0 = new Entity(5);
+	var e1 = new Entity(-98);
+	var e2 = new Entity('luke');
+
+	assertTrue(model.insert([e0, e1, e2]));
+	assertEquals(model.rowCount(), 3);
+	model.removeRows(0);
+	assertEquals(model.rowCount(), 2);
+	model.clear();
+	assertEquals(model.rowCount(), 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: setData
+function test_setData() {
+	var model = new MockTableModel();
+	var e0 = new MockEntity(1, 'Luke', 32);
+	var e1 = new MockEntity(2, 'Igor', 50);
+	assertTrue(model.append(e0));
+	assertTrue(model.append(e1));
+
+	var i00 = model.index(0, 0);
+	var i01 = model.index(0, 1);
+	var i02 = model.index(0, 2);
+	var i10 = model.index(1, 0);
+	var i11 = model.index(1, 1);
+	var i12 = model.index(1, 2);
+
+	var dataChangedSpy = new SignalSpy(model, ModelSignals.DATA_CHANGED);
+
+	// Cannot set the id
+	assertFalse(model.setData(i00, 'bob'));
+	assertFalse(model.setData(i10, 24));
+
+	// Set to identical value, should not emit signal
+	assertTrue(model.setData(i01, 'Luke'));
+	assertTrue(model.setData(i12, 50));
+
+	assertTrue(dataChangedSpy.isEmpty());
+
+	// Identical value but different type
+	assertTrue(model.setData(i12, '50'));
+
+	assertEquals(dataChangedSpy.size(), 1);
+	assertEquals(dataChangedSpy.signals()[0][0], i12);
+	dataChangedSpy.clear();
+
+	assertEquals(model.data(i12), '50');
+
+	// Different value
+	assertTrue(model.setData(i01, 'paul'));
+
+	assertEquals(dataChangedSpy.size(), 1);
+	assertEquals(dataChangedSpy.signals()[0][0], i01);
+	dataChangedSpy.clear();
+
+	assertEquals(model.data(i01), 'paul');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setEntities() {
+	var x = new AbstractTableModel();
+
+	var aboutToResetSpy = new SignalSpy(x, ModelSignals.MODEL_ABOUT_TO_BE_RESET);
+	var resetSpy = new SignalSpy(x, ModelSignals.MODEL_RESET);
+
+	x.setEntities();
+	assertEquals(x.rowCount(), 0);
+	assertEquals(aboutToResetSpy.size(), 1);
+	aboutToResetSpy.clear();
+	assertEquals(resetSpy.size(), 1);
+	resetSpy.clear();
+
+	var y = new Entity(50);
+	assertTrue(x.append(y));
+
+	x.setEntities();
+	assertEquals(x.rowCount(), 0);
+	assertEquals(aboutToResetSpy.size(), 1);
+	aboutToResetSpy.clear();
+	assertEquals(resetSpy.size(), 1);
+	resetSpy.clear();
+
+	assertTrue(x.append(y));
+	var z = new Entity(30);
+	x.setEntities(z);
+	assertEquals(x.rowCount(), 1);
+	assertEquals(x.entityAtRow(0), z);
+	assertEquals(aboutToResetSpy.size(), 1);
+	aboutToResetSpy.clear();
+	assertEquals(resetSpy.size(), 1);
+	resetSpy.clear();
+
+	var entities = [y, z];
+	x.setEntities(entities);
+	assertEquals(x.rowCount(), 2);
+	assertEquals(x.entityAtRow(0), y);
+	assertEquals(x.entityAtRow(1), z);
+	assertEquals(aboutToResetSpy.size(), 1);
+	aboutToResetSpy.clear();
+	assertEquals(resetSpy.size(), 1);
+	resetSpy.clear();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: setInsertStrategy
+function test_setInsertStrategy() {
+	var model = new MockTableModel();
+	var binaryStrategy = new BinaryInsertStrategy(2);
+	model.setInsertStrategy(binaryStrategy);
+
+	var e0 = new MockEntity(1, 'Luke', 32);
+	var e1 = new MockEntity(2, 'Igor', 50);
+	var e2 = new MockEntity(3, 'Paul', 34);
+
+	assertTrue(model.insert(e1));
+	assertTrue(model.insert(e0));
+	assertArrayEquals(model.entities(), [e0, e1])
+	assertTrue(model.insert(e2));
+	assertArrayEquals(model.entities(), [e0, e2, e1]);
+
+	assertEquals(model.findRowWithValue(2, 32), 0);
+	assertEquals(model.findRowWithValue(2, 34), 1);
+	assertEquals(model.findRowWithValue(2, 50), 2);
+
+	assertEquals(model.findRowWithValue(1, 'Luke'), 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: validateValue
+function test_validateValue() {
+	var model = new MockTableModel();
+
+	// Name - null
+	assertFalse(model.validateValue(null, MockTableModel.Column.NAME));
+	assertTrue(model.invalidFields().hasOwnProperty(MockTableModel.Column.NAME));
+	assertEquals(model.invalidFields()[MockTableModel.Column.NAME], MockTableModel.ErrorStrings.REQUIRED);
+
+	// Name - valid
+	assertTrue(model.validateValue('Bob', MockTableModel.Column.NAME));
+	assertTrue(object.getKeys(model.invalidFields()).length === 0);
+
+	// Age - null
+	assertFalse(model.validateValue(null, MockTableModel.Column.AGE));
+	assertTrue(model.invalidFields().hasOwnProperty(MockTableModel.Column.AGE));
+	assertEquals(model.invalidFields()[MockTableModel.Column.AGE], MockTableModel.ErrorStrings.REQUIRED);
+
+	// Age - string
+	assertFalse(model.validateValue('swine', MockTableModel.Column.AGE));
+	assertTrue(model.invalidFields().hasOwnProperty(MockTableModel.Column.AGE));
+	assertEquals(model.invalidFields()[MockTableModel.Column.AGE], MockTableModel.ErrorStrings.INTEGER);
+
+	// Age - string integer
+	assertFalse(model.validateValue('5', MockTableModel.Column.AGE));
+	assertTrue(model.invalidFields().hasOwnProperty(MockTableModel.Column.AGE));
+	assertEquals(model.invalidFields()[MockTableModel.Column.AGE], MockTableModel.ErrorStrings.INTEGER);
+
+	// Age - negative
+	assertFalse(model.validateValue(-5, MockTableModel.Column.AGE));
+	assertTrue(model.invalidFields().hasOwnProperty(MockTableModel.Column.AGE));
+	assertEquals(model.invalidFields()[MockTableModel.Column.AGE], MockTableModel.ErrorStrings.AGE_GTE_0);
+
+	// Age - valid
+	assertTrue(model.validateValue(34, MockTableModel.Column.AGE));
+	assertTrue(object.getKeys(model.invalidFields()).length === 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: validates
+function test_validates() {
+	var model = new MockTableModel();
+	// Good
+	var e0 = {};
+	e0[MockTableModel.Column.NAME] = 'Luke',
+	e0[MockTableModel.Column.AGE] = 32
+	assertTrue(model.validates(e0));
+	assertTrue(object.getKeys(model.invalidFields()).length === 0);
+
+	// Bad - two things
+	var e1 = {};
+	e1[MockTableModel.Column.NAME] = null;
+	e1[MockTableModel.Column.AGE] = -32;
+	assertFalse(model.validates(e1));
+	assertTrue(object.getKeys(model.invalidFields()).length === 2);
+	assertTrue(model.invalidFields().hasOwnProperty(MockTableModel.Column.NAME));
+	assertEquals(model.invalidFields()[MockTableModel.Column.NAME], MockTableModel.ErrorStrings.REQUIRED);
+	assertTrue(model.invalidFields().hasOwnProperty(MockTableModel.Column.AGE));
+	assertEquals(model.invalidFields()[MockTableModel.Column.AGE], MockTableModel.ErrorStrings.AGE_GTE_0);
+
+	// Bad - one thing
+	var e2 = {};
+	e2[MockTableModel.Column.NAME] = [];
+	e2[MockTableModel.Column.AGE] = 34;
+	assertFalse(model.validates(e2));
+	assertTrue(object.getKeys(model.invalidFields()).length === 1);
+	assertTrue(model.invalidFields().hasOwnProperty(MockTableModel.Column.NAME));
+};
+
+</script>
+</body>
+</html>

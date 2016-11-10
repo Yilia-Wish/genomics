@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - Scaled Text</title>
+    <meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.dom');
+goog.require('ag.painting.CharPixelMetrics');
+</script>
+<body>
+
+<canvas id="canvas" width="500" height="500" style="border: 1px solid green;"></canvas>
+
+<script>
+// Aliases
+var CharPixelMetrics = ag.painting.CharPixelMetrics;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_paint() {
+    var font = "72px Georgia";
+    var cpm = new CharPixelMetrics(font, 1, 'AI');
+    var bw = cpm.blockWidth();
+
+    var canvas = goog.dom.getElement('canvas');
+    var context = canvas.getContext('2d');
+
+    context.translate(.5, .5);
+
+    context.beginPath();
+    context.moveTo(0, 250);
+    context.lineTo(500, 250);
+    context.moveTo(250, 0);
+    context.lineTo(250, 500);
+    context.moveTo(250 + bw, 0);
+    context.lineTo(250 + bw, 500);
+    context.stroke();
+
+    var Asize = cpm.inkSize('A'.charCodeAt(0));
+    var Isize = cpm.inkSize('I'.charCodeAt(0));
+    var Aorigin = cpm.inkOnlyOrigin('A'.charCodeAt(0));
+    var Iorigin = cpm.inkOnlyOrigin('I'.charCodeAt(0));
+    console.log(bw);
+    console.log(Asize);
+    console.log(Isize);
+
+    // 1) Simply stack one letter on top of another
+    context.font = font;
+    context.fillText('A', 250 + Aorigin.x, 250);
+    var topOfA = 250 - Asize.height;
+    context.fillText('I', 250 + (bw - Isize.width) / 2 + Iorigin.x, topOfA);
+
+    // 2) Scale the first letter and then stack another scaled letter on top of it
+    var scales = [.3, .5];
+
+    var x = 300;
+    var y = 250;
+
+    context.save();
+    context.scale(1, scales[0]);
+    context.fillText('A', x + (bw - Asize.width) / 2 + Aorigin.x, y / scales[0]);
+    context.restore();
+
+    y -= (scales[0] * Asize.height);
+    context.save();
+    context.scale(1, scales[1]);
+    context.fillStyle = '#f00';
+    context.fillText('I', x + (bw - Isize.width) / 2 + Iorigin.x, y / scales[1]);
+    context.restore();
+};
+
+</script>
+</body>
+</html>

@@ -1,0 +1,359 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.core.ClosedRealRange</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.math');
+goog.require('goog.math.Coordinate');
+goog.require('goog.math.Size');
+goog.require('ag.core.ClosedRealRange');
+</script>
+<body>
+<script>
+var math = goog.math;
+var ClosedRealRange = ag.core.ClosedRealRange;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_constructor() {
+	var x = new ClosedRealRange(5);
+	assertEquals(x.begin, 5);
+	assertEquals(x.begin, x.end);
+
+	x = new ClosedRealRange(-3, 5);
+	assertEquals(x.begin, -3);
+	assertEquals(x.end, 5);
+
+	x = new ClosedRealRange(10, -10);
+	assertEquals(x.begin, 10);
+	assertEquals(x.end, -10);
+
+	x = new ClosedRealRange(-3);
+	assertEquals(x.begin, -3);
+	assertEquals(x.end, -3);
+
+	x = new ClosedRealRange(0);
+	assertEquals(x.begin, 0);
+	assertEquals(x.end, 0);
+
+	x = new ClosedRealRange(-3.2, -8.9);
+	assertEquals(x.begin, -3.2);
+	assertEquals(x.end, -8.9);
+};
+
+function test_createFromValues() {
+	var x = ClosedRealRange.createUsingLength();
+	assertEquals(x.begin, 0);
+	assertEquals(x.end, 0);
+
+	x = ClosedRealRange.createUsingLength(5);
+	assertEquals(x.begin, 5);
+	assertEquals(x.begin, x.end);
+
+	x = ClosedRealRange.createUsingLength(-3, 5);
+	assertEquals(x.begin, -3);
+	assertEquals(x.end, 2);
+
+	x = ClosedRealRange.createUsingLength(10, -10);
+	assertEquals(x.begin, 10);
+	assertEquals(x.end, 0);
+
+	x = ClosedRealRange.createUsingLength(-3);
+	assertEquals(x.begin, -3);
+	assertEquals(x.end, -3);
+
+	x = ClosedRealRange.createUsingLength(0);
+	assertEquals(x.begin, 0);
+	assertEquals(x.end, 0);
+
+	x = ClosedRealRange.createUsingLength(.3, .5);
+	assertEquals(x.begin, .3);
+	assertEquals(x.end, .8);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// operators
+function test_eq() {
+	var x = ClosedRealRange.createUsingLength();
+	var y = ClosedRealRange.createUsingLength();
+	assertFalse(x === y);
+	assertTrue(x.eq(y));
+
+	x.begin = 5.9;
+	assertFalse(x.eq(y));
+	y.begin = 5.9;
+	assertTrue(x.eq(y));
+
+	x = ClosedRealRange.createUsingLength(1.3, 3.2);
+	y = ClosedRealRange.createUsingLength(4.5, -3.2);
+	assertFalse(x.eq(y));
+};
+
+function test_lt() {
+	var x = ClosedRealRange.createUsingLength();
+	var y = ClosedRealRange.createUsingLength();
+
+	assertFalse(x.lt(y));
+
+	x.begin = -3.9;
+	assertTrue(x.lt(y));
+	assertFalse(y.lt(x));
+
+	y.end = -10.001;
+	assertFalse(x.lt(y));
+	assertTrue(y.lt(x));
+};
+
+function test_ne() {
+	var x = ClosedRealRange.createUsingLength();
+	var y = ClosedRealRange.createUsingLength();
+	assertFalse(x === y);
+	assertFalse(x.ne(y));
+
+	x.begin = 5.99;
+	assertTrue(x.ne(y));
+	y.begin = 5.99;
+	assertFalse(x.ne(y));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_clone() {
+	var x = ClosedRealRange.createUsingLength(3.2, 5.3);
+	var y = x.clone();
+	assertFalse(x === y);
+	assertEquals(y.begin, x.begin);
+	assertEquals(y.end, x.end);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_adjust() {
+	var testRows = [
+		[3.1, 5.0, 8.3],
+		[-3.1, 5.2, -3.5],
+		[5.1, 1.1, 8.7]
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var testRow = testRows[i];
+		var x = ClosedRealRange.createUsingLength(testRow[0], testRow[1]);
+		x.adjust(testRow[2]);
+		assertTrue(math.nearlyEquals(x.begin, testRow[0] + testRow[2]));
+		assertTrue(math.nearlyEquals(x.end, testRow[0] + testRow[1] + testRow[2]));
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_contains() {
+	var x = ClosedRealRange.createUsingLength(3.0, 5.0);
+	var y = new ClosedRealRange(x.end, x.begin);
+	assertTrue(x.contains(3.0));
+	assertTrue(x.contains(8.0));
+	assertTrue(y.contains(3.0));
+	assertTrue(y.contains(8.0));
+	for (var i=0; i<9; i += 1./3.) {
+		assertEquals(x.contains(i), i >= 3.0 && i <= 8.0);
+		assertEquals(y.contains(i), i >= 3.0 && i <= 8.0);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_containsRange() {
+	var x = ClosedRealRange.createUsingLength(0.0, 3.0);
+	assertTrue(x.containsRange(ClosedRealRange.createUsingLength(0.0, 3.0)));	
+	assertTrue(x.containsRange(ClosedRealRange.createUsingLength(1.)));
+
+	assertFalse(x.containsRange(ClosedRealRange.createUsingLength(0.0, 4.0)));
+	assertFalse(x.containsRange(ClosedRealRange.createUsingLength(-1.0, 3.0)));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_difference() {
+	var a = new ClosedRealRange(0.0, 5.0);
+	var testRows = [
+		// Test: no intersection
+		{b: new ClosedRealRange(10.0, 12.0),
+		 expect: [a]},
+
+		// Test: b completely overlaps a
+		{b: a,
+		 expect: []},
+
+		// --------------------------------
+		// Suite: end overlaps - 1 range returned
+		// Test: b overlaps left end
+		{b: new ClosedRealRange(-3.0, 2.0),
+		 expect: [new ClosedRealRange(2.0, 5.0)]},
+
+		// Test: b overlaps right end
+		{b: new ClosedRealRange(3.0, 7.0),
+		 expect: [new ClosedRealRange(0.0, 3.0)]},
+
+		// --------------------------------
+		// Test: b overlaps middle - 2 ranges returned
+		{b: new ClosedRealRange(2.0, 3.0),
+		 expect: [new ClosedRealRange(0.0, 2.0),
+		 		  new ClosedRealRange(3.0, 5.0)]}
+	];
+
+	for (var i=0; i< testRows.length; i++) {
+		var b = testRows[i].b;
+		var expect = testRows[i].expect;
+
+		var result = a.difference(b);
+		assertEquals(result.length, expect.length);
+		for (var j=0; j<result.length; j++)
+			assertTrue(expect[j].eq(result[j]));
+
+		// Non-normal on either side should give the same result
+		// 1) Normal a, inverted b
+		var c = b.clone();
+		var tmp = c.begin;
+		c.begin = c.end;
+		c.end = tmp;
+		result = a.difference(c);
+		assertEquals(result.length, expect.length);
+		for (var j=0; j<result.length; j++)
+			assertTrue(expect[j].eq(result[j]));
+
+		// 2) Inverted a, Normal b
+		var aa = a.clone();
+		tmp = aa.begin;
+		aa.begin = aa.end;
+		aa.end = tmp;
+		result = aa.difference(b);
+		assertEquals(result.length, expect.length);
+		for (var j=0; j<result.length; j++)
+			assertTrue(expect[j].eq(result[j]));
+
+		// 3) Inverted a, inverted b
+		result = aa.difference(c);
+		assertEquals(result.length, expect.length);
+		for (var j=0; j<result.length; j++)
+			assertTrue(expect[j].eq(result[j]));
+	}	
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_intersection() {
+	var baseRange = ClosedRealRange.createUsingLength(0.1, 1.1);
+
+	var testRows = [
+		// Test: two default ranges
+		[baseRange, baseRange, baseRange],
+		[baseRange, ClosedRealRange.createUsingLength(0.1, 3.1), baseRange],
+		// Test: two completely overlapping ranges
+		[ClosedRealRange.createUsingLength(2.1, 3.1), ClosedRealRange.createUsingLength(2.1, 3.1), ClosedRealRange.createUsingLength(2.1, 3.1)],
+		// Test: two touching ranges, but not overlapping
+		[ClosedRealRange.createUsingLength(0.1, 2.1), ClosedRealRange.createUsingLength(2.2, 1.1), ClosedRealRange.createUsingLength(2.2, 0.0)],
+		// Test: overlap by one unit
+		[ClosedRealRange.createUsingLength(0.1, 2.1), ClosedRealRange.createUsingLength(1.1, 2.1), ClosedRealRange.createUsingLength(1.1, 1.1)],
+		// Test: range inside range
+		[ClosedRealRange.createUsingLength(0.1, 10.1), ClosedRealRange.createUsingLength(5.1, 2.1), ClosedRealRange.createUsingLength(5.1, 2.1)],
+
+		// Test: non-normal ranges
+		[ClosedRealRange.createUsingLength(5.1, -3.2), ClosedRealRange.createUsingLength(3.5, 4.5), ClosedRealRange.createUsingLength(3.5, 1.6)]
+	];
+
+	for (var i=0; i<testRows.length; i++) {
+		var testRow = testRows[i];
+		var r1 = testRow[0];
+		var r2 = testRow[1];
+		var r3 = testRow[2];
+
+		// console.log(r1.toString() + '; ' + r2.toString() + '; ' + r3.toString());
+
+		if (r3) {
+			assertTrue(r1.intersection(r2).eq(r3));
+			assertTrue(r2.intersection(r1).eq(r3));			
+		}
+		else {
+			assertNull(r1.intersection(r2));
+			assertNull(r2.intersection(r1));
+		}
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_isNormal() {
+	var x = ClosedRealRange.createUsingLength();
+	assertTrue(x.isNormal());
+
+	x = ClosedRealRange.createUsingLength(0.1);
+	assertTrue(x.isNormal());
+
+	x.end = x.begin - 1.6;
+	assertFalse(x.isNormal());
+
+	x.end = x.begin;
+	assertTrue(x.isNormal());	
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_length() {
+	var x = ClosedRealRange.createUsingLength();
+	assertEquals(x.length(), 0.0);
+
+	x = ClosedRealRange.createUsingLength(3.1, 5.2);
+	assertTrue(math.nearlyEquals(x.length(), 5.2));
+	x.begin = 0.1;
+	assertTrue(math.nearlyEquals(x.length(), 8.2));
+	x.end = 1.1;
+	assertEquals(x.length(), 1.);
+
+	x = ClosedRealRange.createUsingLength(0.1, -2.2);
+	assertEquals(x.length(), -2.2);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_moveBegin() {
+	var x = ClosedRealRange.createUsingLength(0.1, 5.0);
+	x.moveBegin(-2.1);
+	assertEquals(x.begin, -2.1);
+	assertTrue(math.nearlyEquals(x.end, 2.9));
+
+	x.moveBegin(2.2);
+	assertTrue(math.nearlyEquals(x.begin, 2.2));
+	assertTrue(math.nearlyEquals(x.end, 7.2));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_moveEnd() {
+	var x = ClosedRealRange.createUsingLength(0.1, 5.0);
+	x.moveEnd(-2.1);
+	assertTrue(math.nearlyEquals(x.end, -2.1));
+	assertTrue(math.nearlyEquals(x.begin, -7.1));
+
+	x.moveEnd(2.1);
+	assertTrue(math.nearlyEquals(x.end, 2.1));
+	assertTrue(math.nearlyEquals(x.begin, -2.9));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_normalized() {
+	var normalRange = ClosedRealRange.createUsingLength(-1.1, 3.2);
+
+	assertTrue(ClosedRealRange.createUsingLength(2.1, -3.2).normalized().eq(normalRange));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setLength() {
+    var x = ClosedRealRange.createUsingLength();
+
+    for (var i=-50; i< 50; i += 1./3.) {
+    	if (i === 0)
+    		continue;
+        x.setLength(i);
+        assertTrue(math.nearlyEquals(x.length(), i));
+        assertEquals(x.begin, 0);
+        assertTrue(math.nearlyEquals(x.end, i));
+    }	
+};
+
+</script>
+</body>
+</html>

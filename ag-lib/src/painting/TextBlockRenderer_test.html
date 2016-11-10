@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - ag.painting.TextBlockRenderer</title>
+    <meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.dom');
+goog.require('ag.painting.TextBlockRenderer');
+</script>
+<body>
+<canvas id="canvas" width="500" height="500" style="border: 1px solid green;"></canvas>
+
+<script>
+// Aliases
+var TextBlockRenderer = ag.painting.TextBlockRenderer;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+    var x = new TextBlockRenderer('48px monospace');
+
+    var canvas = goog.dom.getElement('canvas');
+    var context = canvas.getContext('2d');
+    var ch = '(';
+    var asciiCh = ch.charCodeAt(0);
+    x.drawChar(context, 0, 0, asciiCh, '0000ffcccccc');
+
+    var str = 'Hj Mg/_';
+    // var str = 'TGCA';
+    // x.setFont('144px Segoe script');
+    x.drawText(context, 20, 200, str, 'fa339acceecc');
+
+    // Test for spaces!
+};
+
+</script>
+</body>
+</html>

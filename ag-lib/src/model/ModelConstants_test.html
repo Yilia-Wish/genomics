@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.model.ModelConstants</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.model.ModelConstants');
+</script>
+<body>
+
+<script>
+var ModelConstants = ag.model.ModelConstants;
+var SelectionFlag = ModelConstants.SelectionFlag;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_SelectionFlag() {
+	assertEquals(SelectionFlag.ClearAndSelect, SelectionFlag.Clear | SelectionFlag.Select);
+	assertEquals(SelectionFlag.SelectCurrent, SelectionFlag.Select | SelectionFlag.Current);
+	assertEquals(SelectionFlag.ToggleCurrent, SelectionFlag.Toggle | SelectionFlag.Current);
+};
+</script>
+</body>
+</html>

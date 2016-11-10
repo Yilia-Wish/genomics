@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.ui.TableView</title>
+	<meta charset="utf-8">
+	<link rel="stylesheet" href="/css/reset/meyer-min.css">
+	<link rel="stylesheet" href="/js/ag/css/ui.css">
+	<link rel="stylesheet" href="/js/ag/css/headerView.css">
+	<link rel="stylesheet" href="/js/ag/css/tableView.css">
+<style type="text/css">
+#testdiv {
+	border: 1px solid black;
+	width: 500px;
+	margin: 1em;
+}
+
+#testdiv .ag-dataView {
+	height: 200px;
+}
+
+#testdiv .ag-dataView .selected {
+	background: rgb(220,235,252); /* Old browsers */
+	background: -moz-linear-gradient(top,  rgba(220,235,252,1) 0%, rgba(193,219,252,1) 100%); /* FF3.6+ */
+	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(220,235,252,1)), color-stop(100%,rgba(193,219,252,1))); /* Chrome,Safari4+ */
+	background: -webkit-linear-gradient(top,  rgba(220,235,252,1) 0%,rgba(193,219,252,1) 100%); /* Chrome10+,Safari5.1+ */
+	background: -o-linear-gradient(top,  rgba(220,235,252,1) 0%,rgba(193,219,252,1) 100%); /* Opera 11.10+ */
+	background: -ms-linear-gradient(top,  rgba(220,235,252,1) 0%,rgba(193,219,252,1) 100%); /* IE10+ */
+	background: linear-gradient(to bottom,  rgba(220,235,252,1) 0%,rgba(193,219,252,1) 100%); /* W3C */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#dcebfc', endColorstr='#c1dbfc',GradientType=0 ); /* IE6-9 */
+}
+
+#testdiv .ag-dataView .current {
+	background: rgb(220,255,220);
+}
+
+</style>
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.dom');
+goog.require('goog.string')
+goog.require('goog.math');
+goog.require('ag.ui.TableView');
+goog.require('ag.core.MockEntity');
+goog.require('ag.model.MockTableModel');
+goog.require('ag.model.SortFilterProxyModel');
+</script>
+<body>
+
+<div id="testdiv"></div>
+
+<script>
+// Aliases
+var dom = goog.dom;
+var MockEntity = ag.core.MockEntity;
+var MockTableModel = ag.model.MockTableModel;
+var SortFilterProxyModel = ag.model.SortFilterProxyModel;
+var TableView = ag.ui.TableView;
+
+var model;
+var sortModel;
+var y;
+
+// --------------------------------------------------------------------------------------------------------------------
+function setUp() {
+	
+}
+
+function tearDown() {
+	
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	var div = dom.getElement('testdiv');
+
+	model = new MockTableModel();
+	for (var i=0; i< 25; i++)
+		model.append(new MockEntity(i + 1, goog.string.getRandomString(), goog.math.randomInt(100)));
+
+	sortModel = new SortFilterProxyModel();
+	sortModel.setSourceModel(model);
+	sortModel.setDynamicSortEnabled();
+
+	y = new TableView();
+	y.horizontalHeader().setSortIndicatorShown(true);
+	y.decorate(div);
+	y.setModel(sortModel);
+};
+
+</script>
+</body>
+</html>

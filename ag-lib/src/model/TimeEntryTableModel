@@ -1,0 +1,133 @@
+goog.provide('timekeeper.model.TimeEntryTableModel');
+
+goog.require('goog.asserts');
+
+goog.require('ag.validation');
+goog.require('ag.model.AbstractTableModel');
+goog.require('ag.model.BinarySearchStrategy');
+
+timekeeper.model.TimeEntryTableModel = function(optParent) {
+	goog.base(this, optParent);
+
+	this.setSearchStrategy(new ag.model.BinarySearchStrategy(timekeeper.model.TimeEntryTableModel.Column.CID, this));
+};
+goog.inherits(timekeeper.model.TimeEntryTableModel, ag.model.AbstractTableModel);
+
+/**********************************************************************************************/ goog.scope(function() {
+// Aliases
+var assert = goog.asserts.assert;
+
+var ruleType = ag.validation.ruleType;
+var SignalType = AbstractTableModel.SignalType;
+var TimeEntryTableModel = timekeeper.model.TimeEntryTableModel;
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Static defines
+/** @enum {number} */
+TimeEntryTableModel.Column = {
+	ID: 0,
+	CID: 1,
+	PROJECT_NAME: 2,
+	ACTIVITY: 3,
+	MINUTES_SPENT: 4,
+	DATE: 5,
+
+	_TOTAL: 6
+};
+
+TimeEntryTableModel.prototype.columnCount = function() {
+	return TimeEntryTableModel.Column._TOTAL;
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Protected methods
+/**
+ * @inheritDoc
+ * @override
+ */
+TimeEntryTableModel.prototype.data_ = function(timeEntry, column, role) {
+	// Ignore the role for now
+	switch (column) {
+	case TimeEntryTableModel.Column.ID:
+		return timeEntry.id;
+	case TimeEntryTableModel.Column.CID:
+		return timeEntry.cid;
+	case TimeEntryTableModel.Column.PROJECT_NAME:
+		return timeEntry.projectName;
+	case TimeEntryTableModel.Column.ACTIVITY:
+		return timeEntry.activty;
+	case TimeEntryTableModel.Column.MINUTES_SPENT:
+		return timeEntry.minutesSpent;
+	case TimeEntryTableModel.Column.DATE:
+		return timeEntry.date;
+
+	default:
+		assert(false);
+	}
+};
+
+TimeEntryTableModel.prototype.setData_ = function(timeEntry, column, newValue) {
+	switch (column) {
+	case TimeEntryTableModel.Column.ID:
+	case TimeEntryTableModel.Column.CID:
+		return false;
+	case TimeEntryTableModel.Column.PROJECT_NAME:
+		timeEntry.projectName = newValue;
+		break;
+	case TimeEntryTableModel.Column.ACTIVITY:
+		timeEntry.activty = newValue;
+		break;
+	case TimeEntryTableModel.Column.MINUTES_SPENT:
+		timeEntry.minutesSpent = newValue;
+		break;
+	case TimeEntryTableModel.Column.DATE:
+		timeEntry.date = newValue;
+		break;
+
+	default:
+		assert(false);
+	}
+
+	return true;
+};
+
+TimeEntryTableModel.prototype.validationRules_ = function() {
+	return {
+		TimeEntryTableModel.Column.PROJECT_NAME: {
+			rule: ruleType.CONTAINS_NON_WHITESPACE,
+			message: 'This field is required.'
+		},
+		TimeEntryTableModel.Column.ACTIVITY: {
+			rule: ruleType.CONTAINS_NON_WHITESPACE,
+			message: 'This field is required.'
+		},
+		TimeEntryTableModel.Column.MINUTES_SPENT: [
+			{
+				rule: ruleType.CONTAINS_NON_WHITESPACE,
+				message: 'This field is required.'
+			},
+			{
+				rule: ruleType.INTEGER,
+				message: 'Value can only contain numbers.'
+			},
+			{
+				rule: [ruleType.NUMERIC_COMPARE, '>=', 0],
+				message: 'Minutes must be greater than or equal to 0.'
+			}
+		],
+		TimeEntryTableModel.Column.DATE: [
+			{
+				rule: ruleType.CONTAINS_NON_WHITESPACE,
+				message: 'This field is required.'
+			},
+			{
+				rule: [ruleType.DATE, 'mdy'],
+				message: 'Invalid date format. Expected value in mm/dd/yyyy.'
+			}
+		]
+	};
+};
+
+/*******************************************************************************************************************/});

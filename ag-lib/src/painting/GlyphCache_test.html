@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.painting.GlyphCache</title>
+	<meta charset="utf-8">
+	<style>
+	canvas {
+		border: 1px solid red;
+	}
+	</style>
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.dom');
+
+goog.require('ag.painting.CharPixelMetrics');
+goog.require('ag.painting.Color');
+goog.require('ag.painting.GlyphCache');
+</script>
+<body>
+<!-- <canvas id="canvas" width="512" height="512"></canvas> -->
+<script>
+// Aliases
+var CharPixelMetrics = ag.painting.CharPixelMetrics;
+var Color = ag.painting.Color;
+var GlyphCache = ag.painting.GlyphCache;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: generic
+function test_generic() {
+	var chars = CharPixelMetrics.VALID_ASCII_CHARACTERS;
+	// var chars = 'AAACGT';
+	// var chars = 'AA';
+	var charsToRender = 'ABGCT';
+
+	var font = '72pt Segoe Script';
+	// var font = '16px monospace';
+	var metrics = new CharPixelMetrics(font, 1, chars);
+	var x = new GlyphCache(metrics, true);
+	for (var i=0; i< charsToRender.length; i++) {
+		var ascii = charsToRender.charCodeAt(i);
+		var bg = Color.random().toHexString().substr(1);
+		var glyph = x.cachedGlyph(ascii, Color.random().toHexString().substr(1) + bg);
+		// var glyph = x.cachedGlyph(ascii, Color.random().toHexString().substr(1));
+	}
+
+	for (var i=0; i< x.canvases_.length; i++)
+		document.body.appendChild(x.canvases_[i]);
+
+	// Render the canvas
+	// var canvas = goog.dom.getElement('canvas');
+	// var context = canvas.getContext('2d');
+	// context.drawImage(x.canvases_[0], 0, 0);
+};
+
+</script>
+</body>
+</html>

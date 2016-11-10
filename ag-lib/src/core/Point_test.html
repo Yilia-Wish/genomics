@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - ag.core.Point</title>
+    <meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.core.Point');
+</script>
+<body>
+<script>
+var Point = ag.core.Point;
+
+var a;
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_constructor() {
+    var p = new Point();
+    assertEquals(0, p.x);
+    assertEquals(0, p.y);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_create() {
+    a = Point.create(3, 5);
+    assertEquals(3, a.x);
+    assertEquals(5, a.y);
+};
+
+</script>
+</body>
+</html>

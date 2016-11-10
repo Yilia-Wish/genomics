@@ -1,0 +1,157 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.ui.TableView</title>
+	<meta charset="utf-8">
+	<link rel="stylesheet" href="/css/reset/meyer-min.css">
+	<link rel="stylesheet" href="/js/ag/css/tableView.css">
+<style type="text/css">
+#mytable {
+	border: 1px solid black;
+	width: 800px;
+	margin: 1em;
+}
+#mytable .ag-tableData {
+	height: 350px;
+}
+#mytable .ag-tableData tbody {
+	outline: 0;
+}
+#mytable th {
+	background: #ffffff; /* Old browsers */
+	background: -moz-linear-gradient(top,  #ffffff 0%, #e5e5e5 100%); /* FF3.6+ */
+	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#ffffff), color-stop(100%,#e5e5e5)); /* Chrome,Safari4+ */
+	background: -webkit-linear-gradient(top,  #ffffff 0%,#e5e5e5 100%); /* Chrome10+,Safari5.1+ */
+	background: -o-linear-gradient(top,  #ffffff 0%,#e5e5e5 100%); /* Opera 11.10+ */
+	background: -ms-linear-gradient(top,  #ffffff 0%,#e5e5e5 100%); /* IE10+ */
+	background: linear-gradient(to bottom,  #ffffff 0%,#e5e5e5 100%); /* W3C */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#ffffff', endColorstr='#e5e5e5',GradientType=0 ); /* IE6-9 */
+	padding: 4px;
+
+	border-right: 1px solid #aaa;
+}
+#mytable th.active:hover {
+	background: #e5e5e5; /* Old browsers */
+	background: -moz-linear-gradient(top, #e5e5e5 0%, #ffffff 100%); /* FF3.6+ */
+	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#e5e5e5), color-stop(100%,#ffffff)); /* Chrome,Safari4+ */
+	background: -webkit-linear-gradient(top, #e5e5e5 0%,#ffffff 100%); /* Chrome10+,Safari5.1+ */
+	background: -o-linear-gradient(top, #e5e5e5 0%,#ffffff 100%); /* Opera 11.10+ */
+	background: -ms-linear-gradient(top, #e5e5e5 0%,#ffffff 100%); /* IE10+ */
+	background: linear-gradient(to bottom, #e5e5e5 0%,#ffffff 100%); /* W3C */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#e5e5e5', endColorstr='#ffffff',GradientType=0 ); /* IE6-9 */
+}
+#mytable td {
+	padding: 4px;
+	border-style: solid;
+	border-color: #fff;
+	border-width: 1px 0;
+}
+#mytable td:first-child {
+	border-left-width: 1px;
+}
+#mytable td:last-child {
+	border-right-width: 1px;
+}
+
+#mytable .ag-tableData tr:hover {
+	background: rgb(255,255,255); /* Old browsers */
+	background: -moz-linear-gradient(top,  rgba(255,255,255,1) 0%, rgba(242,247,254,1) 100%); /* FF3.6+ */
+	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(255,255,255,1)), color-stop(100%,rgba(242,247,254,1))); /* Chrome,Safari4+ */
+	background: -webkit-linear-gradient(top,  rgba(255,255,255,1) 0%,rgba(242,247,254,1) 100%); /* Chrome10+,Safari5.1+ */
+	background: -o-linear-gradient(top,  rgba(255,255,255,1) 0%,rgba(242,247,254,1) 100%); /* Opera 11.10+ */
+	background: -ms-linear-gradient(top,  rgba(255,255,255,1) 0%,rgba(242,247,254,1) 100%); /* IE10+ */
+	background: linear-gradient(to bottom,  rgba(255,255,255,1) 0%,rgba(242,247,254,1) 100%); /* W3C */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#ffffff', endColorstr='#f2f7fe',GradientType=0 ); /* IE6-9 */
+}
+#mytable .ag-tableData tr:hover td {
+	/* http://stackoverflow.com/questions/7942212/css-table-row-border-color-with-border-collapse */
+	border-style: double;
+	border-color: #b8d6fb;
+}
+
+#mytable .ag-tableData tr.selected {
+	background: rgb(220,235,252); /* Old browsers */
+	background: -moz-linear-gradient(top,  rgba(220,235,252,1) 0%, rgba(193,219,252,1) 100%); /* FF3.6+ */
+	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(220,235,252,1)), color-stop(100%,rgba(193,219,252,1))); /* Chrome,Safari4+ */
+	background: -webkit-linear-gradient(top,  rgba(220,235,252,1) 0%,rgba(193,219,252,1) 100%); /* Chrome10+,Safari5.1+ */
+	background: -o-linear-gradient(top,  rgba(220,235,252,1) 0%,rgba(193,219,252,1) 100%); /* Opera 11.10+ */
+	background: -ms-linear-gradient(top,  rgba(220,235,252,1) 0%,rgba(193,219,252,1) 100%); /* IE10+ */
+	background: linear-gradient(to bottom,  rgba(220,235,252,1) 0%,rgba(193,219,252,1) 100%); /* W3C */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#dcebfc', endColorstr='#c1dbfc',GradientType=0 ); /* IE6-9 */
+}
+#mytable .ag-tableData tr.selected td {
+	border-style: double;
+	border-color: #7da2ce;
+}
+#mytable .ag-tableData tr.current td {
+	border-style: double;
+	border-color: #7da2ce;
+}
+
+@-moz-document url-prefix() {
+	#mytable .ag-tableData tr.selected + tr.selected td {
+		padding-top: 5px;
+		border-top-width: 0;
+	}
+}
+
+</style>
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="ui_test-deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.dom');
+goog.require('goog.string')
+goog.require('goog.math');
+goog.require('ag.ui.TableView');
+goog.require('ag.core.MockEntity');
+goog.require('ag.model.MockTableModel');
+goog.require('ag.model.SortFilterProxyModel');
+</script>
+<body>
+
+<div id="mytable"></div>
+
+<script>
+// Aliases
+var dom = goog.dom;
+var MockEntity = ag.core.MockEntity;
+var MockTableModel = ag.model.MockTableModel;
+var SortFilterProxyModel = ag.model.SortFilterProxyModel;
+var TableView = ag.ui.TableView;
+
+var model;
+var y;
+
+// --------------------------------------------------------------------------------------------------------------------
+function setUp() {
+	
+}
+
+function tearDown() {
+	
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	var div = dom.getElement('mytable');
+
+	model = new MockTableModel;
+	for (var i=0; i< 25; i++)
+		model.append(new MockEntity(i + 1, goog.string.getRandomString(), goog.math.randomInt(100)));
+
+	var sortModel = new SortFilterProxyModel();
+	sortModel.setSourceModel(model);
+	sortModel.setDynamicSortEnabled();
+
+	y = new TableView();
+	y.decorate(div);
+	y.setModel(sortModel);
+};
+
+</script>
+</body>
+</html>

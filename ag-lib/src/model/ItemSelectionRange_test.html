@@ -1,0 +1,324 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.model.ItemSelectionRange</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.model.ItemSelectionRange');
+goog.require('ag.model.AbstractItemModel');
+goog.require('ag.model.MockItemModel');
+</script>
+<body>
+<script>
+// Aliases
+var AbstractItemModel = ag.model.AbstractItemModel;
+var ItemSelectionRange = ag.model.ItemSelectionRange;
+var MockItemModel = ag.model.MockItemModel;
+var ModelIndex = ag.model.ModelIndex;
+
+var model;
+var index00;
+var index11;
+var index12;
+
+var x;
+
+
+// --------------------------------------------------------------------------------------------------------------------
+function setUp() {
+	model = new MockItemModel();
+	index00 = model.index(0, 0);
+	index11 = model.index(1, 1);
+	index12 = model.index(1, 2);
+
+	x = new ItemSelectionRange(index00, index12);
+};
+
+function tearDown() {
+	index00 = null;
+	index11 = null;
+	index12 = null;
+
+	x = null;
+
+	model.dispose();
+	model = null;
+};
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	x = new ItemSelectionRange();
+	assertNull(x.model());
+	assertEquals(x.left(), -1);
+	assertEquals(x.top(), -1);
+	assertEquals(x.bottom(), -1);
+	assertEquals(x.right(), -1);
+
+	x = new ItemSelectionRange(new ModelIndex());
+	assertNull(x.model());
+	assertEquals(x.left(), -1);
+	assertEquals(x.top(), -1);
+	assertEquals(x.bottom(), -1);
+	assertEquals(x.right(), -1);
+
+	x = new ItemSelectionRange(new ModelIndex(), new ModelIndex());
+	assertNull(x.model());
+	assertEquals(x.left(), -1);
+	assertEquals(x.top(), -1);
+	assertEquals(x.bottom(), -1);
+	assertEquals(x.right(), -1);
+
+	x = new ItemSelectionRange(index11);
+	assertEquals(x.model(), model);
+	assertEquals(x.left(), 1);
+	assertEquals(x.right(), 1);
+	assertEquals(x.top(), 1);
+	assertEquals(x.bottom(), 1);
+
+	x = new ItemSelectionRange(index00, index12);
+	assertEquals(x.model(), model);
+	assertEquals(x.left(), 0);
+	assertEquals(x.right(), 2);
+	assertEquals(x.top(), 0);
+	assertEquals(x.bottom(), 1);	
+
+	// Check that the rect is normalized even if passed in a non-normal topleft + bottomRight combination.
+	x = new ItemSelectionRange(index12, index00);
+	assertEquals(x.model(), model);
+	assertEquals(x.left(), 0);
+	assertEquals(x.right(), 2);
+	assertEquals(x.top(), 0);
+	assertEquals(x.bottom(), 1);
+
+	// One valid index, the other invalid
+	x = new ItemSelectionRange(index00, new ModelIndex());
+	assertEquals(x.model(), model);
+	assertEquals(x.left(), -1);
+	assertEquals(x.top(), -1);
+	assertEquals(x.bottom(), -1);
+	assertEquals(x.right(), -1);
+
+	// Model is taken from the topleft index, and thus it is null in this last test case.
+	x = new ItemSelectionRange(new ModelIndex(), index00);
+	assertNull(x.model());
+	assertEquals(x.left(), -1);
+	assertEquals(x.top(), -1);
+	assertEquals(x.bottom(), -1);
+	assertEquals(x.right(), -1);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: clone
+function test_clone() {
+	var y = x.clone();
+	assertTrue(x.eq(y));
+	assertTrue(x !== y);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: area
+function test_area() {
+	assertEquals(x.area(), 6);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: eq
+function test_eq() {
+	var y = new ItemSelectionRange();
+	assertFalse(y.eq(x));
+	assertFalse(x.eq(y));
+
+	y = new ItemSelectionRange(index00);
+	assertFalse(y.eq(x));
+	assertFalse(x.eq(y));
+
+	y = new ItemSelectionRange(index00, index12);
+	assertTrue(y.eq(x));
+	assertTrue(x.eq(y));
+
+	y = new ItemSelectionRange(index12, index00);
+	assertTrue(y.eq(x));
+	assertTrue(x.eq(y));
+
+	y = new ItemSelectionRange(index00, index11);
+	assertFalse(y.eq(x));
+	assertFalse(x.eq(y));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: lt
+function test_lt() {
+	var y = new ItemSelectionRange();
+	assertTrue(y.lt(x));
+
+	y = new ItemSelectionRange(index00);
+	assertTrue(y.lt(x));
+	assertFalse(x.lt(y));
+
+	y = new ItemSelectionRange(index00, model.index(3, 2));
+	assertTrue(x.lt(y));
+	assertFalse(y.lt(x));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: ne
+function test_ne() {
+	var y = new ItemSelectionRange();
+	assertTrue(y.ne(x));
+	assertTrue(x.ne(y));
+
+	y = new ItemSelectionRange(index00);
+	assertTrue(y.ne(x));
+	assertTrue(x.ne(y));
+
+	y = new ItemSelectionRange(index00, index12);
+	assertFalse(y.ne(x));
+	assertFalse(x.ne(y));
+
+	y = new ItemSelectionRange(index12, index00);
+	assertFalse(y.ne(x));
+	assertFalse(x.ne(y));
+
+	y = new ItemSelectionRange(index00, index11);
+	assertTrue(y.ne(x));
+	assertTrue(x.ne(y));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: bottomRight
+function test_bottomRight() {
+	assertTrue(x.bottomRight().eq(index12));
+
+	var y = new ItemSelectionRange();
+	assertFalse(y.bottomRight().isValid());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: contains
+function test_contains() {
+	// From the same model
+	for (var i=-2; i<model.rowCount() + 2; i++) {
+		for (var j=-2; j<model.columnCount() + 2; j++) {
+			var index = model.index(i, j);
+			var shouldContain = i >= 0 && i <= 1 && j >= 0 && j <= 2;
+			assertEquals(x.contains(index), shouldContain);
+		}
+	}
+
+	// From different models
+	var model2 = new MockItemModel();
+	var index00_2 = model2.index(0, 0);
+	var index11_2 = model2.index(1, 1);
+
+	assertTrue(x.contains(index00));
+	assertTrue(x.contains(index11));
+
+	assertFalse(x.contains(index00_2));
+	assertFalse(x.contains(index11_2));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: containsSpot
+function test_containsSpot() {
+	// From the same model
+	for (var i=-2; i<model.rowCount() + 2; i++) {
+		for (var j=-2; j<model.columnCount() + 2; j++) {
+			var shouldContain = i >= 0 && i <= 1 && j >= 0 && j <= 2;
+			assertEquals(x.containsSpot(i, j), shouldContain);
+		}
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: indices
+function test_indices() {
+	var y = new ItemSelectionRange();
+	assertTrue(y.indices().length === 0);
+
+	var goodRange = x.indices();
+	assertEquals(goodRange.length, 6);
+	for (var i=0, a=0; i<2; i++) {
+		for (var j=0; j<3; j++, a++) {
+			var index = model.index(i, j);
+			assertTrue(goodRange[a].eq(index));
+		}
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: intersection
+function test_intersection() {
+	var y = new ItemSelectionRange(model.index(1, 1), model.index(3, 1));
+	var z = x.intersection(y);
+	assertEquals(z.top(), 1);
+	assertEquals(z.left(), 1);
+	assertEquals(z.right(), 1);
+	assertEquals(z.bottom(), 1);
+	assertTrue(z.topLeft().eq(index11));
+	assertEquals(z.model(), model);
+
+	// Null intersection
+	y = new ItemSelectionRange(model.index(2, 0), model.index(3, 2));
+	z = x.intersection(y);
+	assertEquals(z.left(), -1);
+	assertEquals(z.top(), -1);
+	assertEquals(z.bottom(), -1);
+	assertEquals(z.right(), -1);
+	assertEquals(z.model(), model);
+
+	// Range from another model
+	var model2 = new MockItemModel();
+	y = new ItemSelectionRange(model2.index(0, 0), model2.index(1, 2));
+	z = x.intersection(y);
+	assertEquals(z.left(), -1);
+	assertEquals(z.top(), -1);
+	assertEquals(z.bottom(), -1);
+	assertEquals(z.right(), -1);
+	assertEquals(z.model(), model);
+
+	z = y.intersection(x);
+	assertEquals(z.model(), model2);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: intersects
+function test_intersects() {
+	var model2 = new MockItemModel();
+	var y = new ItemSelectionRange(model2.index(0, 0), model2.index(1, 2));
+	assertTrue(x.intersects(x));
+	assertFalse(x.intersects(y));
+	assertFalse(y.intersects(x));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: isValid
+function test_isValid() {
+	var y = new ItemSelectionRange(new ModelIndex());
+	assertFalse(y.isValid());
+
+	assertTrue(x.isValid());
+	y = new ItemSelectionRange(index00, new ModelIndex());
+	assertFalse(y.isValid());
+	y = new ItemSelectionRange(new ModelIndex(), index00);
+	assertFalse(y.isValid());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: topLeft
+function test_topLeft() {
+	assertTrue(x.topLeft().eq(index00));
+
+	var y = new ItemSelectionRange();
+	assertFalse(y.topLeft().isValid());
+};
+
+</script>
+</body>
+</html>

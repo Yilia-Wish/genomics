@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.painting.Color</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.painting.Color');
+</script>
+<body>
+<script>
+// Aliases
+var Color = ag.painting.Color;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	var x = new Color();
+	assertEquals(x.r, 0);
+	assertEquals(x.g, 0);
+	assertEquals(x.b, 0);
+
+	x = new Color(256, 256, 256);
+	assertEquals(x.r, 0);
+	assertEquals(x.g, 0);
+	assertEquals(x.b, 0);
+
+	x = new Color(-1, -1, -1);
+	assertEquals(x.r, 0);
+	assertEquals(x.g, 0);
+	assertEquals(x.b, 0);
+
+	x = new Color(0, 64, 255);
+	assertEquals(x.r, 0);
+	assertEquals(x.g, 64);
+	assertEquals(x.b, 255);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: createFromRgbInteger
+function test_createFromRgbInteger() {
+	var x = Color.createFromRgbInteger(Math.pow(2, 24) - 1);
+	assertEquals(x.r, 255);
+	assertEquals(x.g, 255);
+	assertEquals(x.b, 255);
+
+	x = Color.createFromRgbInteger(0);
+	assertEquals(x.r, 0);
+	assertEquals(x.g, 0);
+	assertEquals(x.b, 0);
+
+	var number = 12523933;
+	x = Color.createFromRgbInteger(number);
+	assertEquals(x.r, (number >> 16) & 0xFF);
+	assertEquals(x.g, (number >> 8) & 0xFF);
+	assertEquals(x.b, number & 0xFF);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: toRgbInteger
+function test_toRgbInteger() {
+	var x = new Color(12, 34, 56);
+	assertEquals(x.toRgbInteger(), (12 << 16) + (34 << 8) + 56);
+};
+
+</script>
+</body>
+</html>

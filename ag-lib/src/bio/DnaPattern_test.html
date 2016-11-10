@@ -1,0 +1,285 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.bio.DnaPattern</title>
+	<meta charset='utf-8'>
+</head>
+
+<script src='../goog/base.js'></script>
+<script src='../deps.js'></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.bio.BioString');
+goog.require('ag.bio.DnaPattern');
+</script>
+<body>
+<script>
+// Aliases
+var BioString = ag.bio.BioString;
+var DnaPattern = ag.bio.DnaPattern;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	var x = new DnaPattern();
+
+    assertTrue(x.pattern().length === 0);
+    assertTrue(x.isValid());
+
+    var x2 = new DnaPattern('BLARGH');
+    assertEquals(x2.pattern(), 'BLARGH');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: clear
+function test_clear() {
+	var x = new DnaPattern('DEF');
+
+    assertEquals(x.pattern(), 'DEF');
+    x.clear();
+    assertEquals(x.pattern(), '');
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: isEmpty
+function test_isEmpty() {
+    var x = new DnaPattern();
+
+    assertTrue(x.isEmpty());
+    x.setPattern('ATCG');
+    assertTrue(!x.isEmpty());
+    x.clear();
+    assertTrue(x.isEmpty());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: isValidPattern
+function test_isValidPattern() {
+	var cases = [
+		['', true],
+		[' ', true],
+		['-', true],
+		['AaGg', false]
+	];
+
+	var validChars = 'GATCRYMKSWHBVDN';
+	for (var i=0, z=validChars.length; i<z; i++) {
+		cases.push([validChars.charAt(i), true]);
+		cases.push([validChars.charAt(i).toLowerCase(), false]);
+		cases.push([validChars.charAt(i).repeated(2), true]);
+	}
+
+	var invalidChars = 'abcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()';
+	for (var i=0, z=invalidChars.length; i<z; i++)
+		cases.push([invalidChars.charAt(i), false]);
+
+	for (var i=0; i<cases.length; i++) {
+		assertEquals(DnaPattern.isValidPattern(cases[i][0]), cases[i][1]);
+
+		var x = new DnaPattern(cases[i][0]);
+		assertEquals(x.isValid(), cases[i][1]);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: indexIn
+function test_indexIn() {
+	var pattern = 'AGT';
+    //                             123456789012345678901
+	var bioString = new BioString('AGTAGTAACCGTNACGTAGTG');
+	var cases = [
+		[1, 1],
+		[2, 4],
+		[3, 4],
+		[4, 4],
+		[5, 18],
+		[6, 18],
+		[7, 18],
+		[8, 18],
+		[9, 18],
+		[10, 18],
+		[11, 18],
+		[12, 18],
+		[13, 18],
+		[14, 18],
+		[15, 18],
+		[16, 18],
+		[17, 18],
+		[18, 18],
+		[19, -1],
+		[20, -1],
+		[21, -1]
+	];
+
+	var x = new DnaPattern(pattern);
+	assertTrue(x.isValid());
+	for (var i=0; i< cases.length; i++)
+		assertEquals(x.indexIn(bioString, cases[i][0]), cases[i][1]);
+
+	// Spot check
+	x.clear();
+	assertEquals(x.indexIn(new BioString(), 1), -1);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: length
+function test_length() {
+    var x = new DnaPattern();
+
+    assertEquals(x.length(), 0);
+    x.setPattern('ABC');
+    assertEquals(x.length(), 3);
+    x.clear();
+    assertEquals(x.length(), 0);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: matchesAt
+function build_matchesAtCases() {
+	var cases = [
+		['', new BioString(), 1, false],
+		['', new BioString('ABC'), 1, false]
+	];
+
+	var pattern = 'ACGT';
+	var bioString = new BioString('ACGT');
+	var lowerBioString = new BioString('acgt');
+	for (var i=0; i<pattern.length; i++) {
+		var inputPattern = pattern.charAt(i);
+		cases.push([inputPattern, bioString, i + 1, true]);
+		cases.push([inputPattern, lowerBioString, i + 1, true]);
+	}
+
+	// Test: double characters
+	bioString = new BioString('ACGTacgtBbDdEeFfHhIiJjKkLlMmNnOoPpQqRrSsUuVvWwXxYyZz1234567890~!@#$%^&*()');
+	pattern = 'R'; // AG
+    for (var i=1; i<= bioString.length(); ++i)
+    	cases.push([pattern, bioString, i, (i == 1 || i == 3 || i == 5 || i == 7)]);
+
+	pattern = 'Y'; // CT
+    for (var i=1; i<= bioString.length(); ++i)
+    	cases.push([pattern, bioString, i, (i == 2 || i == 4 || i == 6 || i == 8)]);
+
+    pattern = 'M'; // AC
+    for (var i=1; i<= bioString.length(); ++i)
+    	cases.push([pattern, bioString, i, (i == 1 || i == 2 || i == 5 || i == 6)]);
+
+    pattern = 'K'; // GT
+    for (var i=1; i<= bioString.length(); ++i)
+    	cases.push([pattern, bioString, i, (i == 3 || i == 4 || i == 7 || i == 8)]);
+
+    pattern = 'S'; // CG
+    for (var i=1; i<= bioString.length(); ++i)
+    	cases.push([pattern, bioString, i, (i == 2 || i == 3 || i == 6 || i == 7)]);
+
+    pattern = 'W'; // AT
+    for (var i=1; i<= bioString.length(); ++i)
+    	cases.push([pattern, bioString, i, (i == 1 || i == 4 || i == 5 || i == 8)]);
+
+    pattern = 'H'; // ACT
+    for (var i=1; i<= bioString.length(); ++i)
+    	cases.push([pattern, bioString, i, (i <= 8 && i != 3 && i != 7)]);
+
+    pattern = 'B'; // CTG
+    for (var i=1; i<= bioString.length(); ++i)
+    	cases.push([pattern, bioString, i, (i <= 8 && i != 1 && i != 5)]);
+
+    pattern = 'V'; // ACG
+    for (var i=1; i<= bioString.length(); ++i)
+    	cases.push([pattern, bioString, i, (i <= 8 && i != 4 && i != 8)]);
+
+    pattern = 'D'; // AGT
+    for (var i=1; i<= bioString.length(); ++i)
+    	cases.push([pattern, bioString, i, (i <= 8 && i != 2 && i != 6)]);
+
+    pattern = 'N'; // ACGT
+    for (var i=1; i<= bioString.length(); ++i)
+    	cases.push([pattern, bioString, i, (i <= 8)]);
+
+    // Gaps
+    pattern = '-';
+    bioString = new BioString('A-C-G-T-a.c.g.t.BbDdEeFfHhIiJjKkLlMmNnOoPpQqRrSsUuVvWwXxYyZz1234567890~!@#$%^&*()');
+    for (var i=1; i<= bioString.length(); ++i)
+    	cases.push([pattern, bioString, i, (i % 2 == 0 && i <= 16)]);
+
+    // Space characters
+    pattern = ' ';
+    bioString = new BioString('ABCDEFGHJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_  ')
+    for (var i=1; i<= bioString.length(); ++i)
+    	cases.push([pattern, bioString, i, true]);
+
+    // Two characters in pattern
+    pattern = 'AC';
+    bioString = new BioString('ACATAC');
+    for (var i=1; i<= bioString.length(); ++i)
+    	cases.push([pattern, bioString, i, (i == 1 || i == 5)]);
+
+    pattern = 'A R';
+    for (var i=1; i<= bioString.length(); ++i)
+    	cases.push([pattern, bioString, i, (i == 1 || i == 3)]);
+
+    pattern = 'ADR';
+    for (var i=1; i<= bioString.length(); ++i)
+    	cases.push([pattern, bioString, i, (i == 3)]);
+
+	return cases;	
+};
+
+function test_matchesAt() {
+	var cases = this.build_matchesAtCases();
+
+	for (var i=0; i<cases.length; i++) {
+		var pattern = cases[i][0];
+		var bioString = cases[i][1];
+		var offset = cases[i][2];
+		var matches = cases[i][3];
+
+		var x = new DnaPattern(pattern);
+		assertTrue(x.isValid());
+		assertEquals(x.matchesAt(bioString, offset), matches);
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: matchesAtBeginning
+function test_matchesAtBeginning() {
+    var x = new DnaPattern('AGT');
+    assertTrue(x.isValid());
+    assertEquals(x.matchesAtBeginning(new BioString('AGTACGT')), true);
+    assertEquals(x.matchesAtBeginning(new BioString('ACTACGT')), false);
+
+    x.setPattern('RR -');
+    assertTrue(x.isValid());
+    assertEquals(x.matchesAtBeginning(new BioString('AGT-JUNK')), true);
+    assertEquals(x.matchesAtBeginning(new BioString('rr -')), false);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: matchesAtEnd
+function test_matchesAtEnd() {
+    var x = new DnaPattern('TAA');
+    assertTrue(x.isValid());
+    assertEquals(x.matchesAtEnd(new BioString('AGTATAA')), true);
+    assertEquals(x.matchesAtEnd(new BioString('ACTACGT')), false);
+
+    x.setPattern('RR -');
+    assertTrue(x.isValid());
+    assertEquals(x.matchesAtEnd(new BioString('AGT-JUNKGG*.')), true);
+    assertEquals(x.matchesAtEnd(new BioString('rr -')), false);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: setPattern
+function test_setPattern() {
+    var x = new DnaPattern();
+
+    x.setPattern('BLARGH');
+    assertEquals(x.pattern(), 'BLARGH');
+
+    x.setPattern('');
+    assertEquals(x.pattern(), '');
+};
+
+</script>
+</body>
+</html>

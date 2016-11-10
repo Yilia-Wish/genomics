@@ -1,0 +1,7 @@
+.ag-sequenceTextView .selection {
+    background-color: #a8cdf1;
+}
+.ag-sequenceTextView .numbers {
+    background-color: #ddd;
+    color: #777;
+}

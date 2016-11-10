@@ -1,0 +1,246 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - ag.bio.InfoContentDistribution</title>
+    <meta charset='utf-8'>
+</head>
+
+<script src='../goog/base.js'></script>
+<script src='../deps.js'></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.math');
+goog.require('ag.core.CharCountDistribution');
+goog.require('ag.core.MockCharCountDistribution');
+goog.require('ag.bio.InfoContentDistribution');
+goog.require('ag.meta.MetaObject');
+goog.require('ag.meta.SignalSpy');
+
+</script>
+<script>
+var math = goog.math;
+
+var CharCountDistribution = ag.core.CharCountDistribution;
+var MockCharCountDistribution = ag.core.MockCharCountDistribution;
+var InfoUnit = ag.bio.InfoUnit;
+var InfoContentDistribution = ag.bio.InfoContentDistribution;
+var SignalSpy = ag.meta.SignalSpy;
+
+var metaObject = ag.meta.MetaObject.getInstance();
+
+// --------------------------------------------------------------------------------------------------------------------
+function basicInfoContentDataWithNoErrorCorrection() {
+    // Column 1:
+    // Entropy = .3*(log .3 / log2)+.3*(log .3 / log2)+.4 * (log .4 / log2) = 1.570950594
+    // Total col info = log2(4) + entropy = 0.429049406
+    // Column 2:
+    // completely conserved - all G's
+    // Column 3:
+    // Entropy = 0.832192809
+    // Total col info = 1.167807191
+    return [
+        // Column 1
+        [new InfoUnit('A', .3, 0.128714822),
+         new InfoUnit('T', .3, 0.128714822),
+         new InfoUnit('C', .4, 0.171619762)],
+        // Column 2
+        [new InfoUnit('G', 1, 2)],
+        // Column 3
+        [new InfoUnit('C', .1, 0.116780719),
+         new InfoUnit('A', .5, 0.583903595)]
+    ];
+};
+
+function basicInfoContentDataWithErrorCorrection() {
+    return [
+        // Column 1
+        // Error correction = 3 / (2 * ln(2) * 10) = 0.216404256
+        // Total col info = 0.429049406 (see above) - error correction = 0.21264515
+        [new InfoUnit('A', .3, 0.063793545),
+         new InfoUnit('T', .3, 0.063793545),
+         new InfoUnit('C', .4, 0.08505806)],
+
+        // Column 2
+        // Error correction = 3 / (2 * ln(2) * 10) = 0.216404256
+        // Total col info = 2 - error correction = 1.783595744
+        [new InfoUnit('G', 1, 1.783595744)],
+
+        // Column 3
+        // Error correction = 3 / (2 * ln(2) * 6) = 0.36067376
+        // Total col info = 1.167807191 - error correction = 0.807133431
+        [new InfoUnit('C', .1, 0.080713343),
+         new InfoUnit('A', .5, 0.403566715)]
+    ];
+};
+
+function isEqual(a, b, precision)
+{
+    if (a.length !== b.length)
+        return false;
+
+    var columns = a.length;
+    for (var i=0; i< columns; ++i)
+    {
+        if (a[i].length !== b[i].length)
+            return false;
+
+        var rows = a[i].length;
+        for (var j=0; j<rows; ++j)
+        {
+            var aInfoUnit = a[i][j];
+            var bInfoUnit = b[i][j];
+            if (aInfoUnit.ch != bInfoUnit.ch ||
+                Math.abs(aInfoUnit.percent - bInfoUnit.percent) >= precision ||
+                Math.abs(aInfoUnit.info - bInfoUnit.info) >= precision)
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_constructor() {
+    var distribution = new CharCountDistribution();
+    var x = new InfoContentDistribution(distribution, 4);
+    assertTrue(x.smallSampleErrorCorrection());
+    assertTrue(x.distribution() === distribution);
+    assertEquals(0, x.infoContent().length);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_infoContent() {
+    var fixtures = [
+        // Empty char count distributions
+        [new CharCountDistribution(), 20, 0, 0, 0, [], []],
+        [new CharCountDistribution(), 4, 0, 0, 0, [], []],
+
+        // Non-empty char count distributions, varied number of possible letters
+        [MockCharCountDistribution.distribution1(), 4, 3, 3.12973372, 2.480520952, basicInfoContentDataWithNoErrorCorrection(), basicInfoContentDataWithErrorCorrection()]
+    ];
+
+    for (var i=0; i<fixtures.length; i++) {
+        var fixture = fixtures[i];
+        var charCountDistribution = fixture[0];
+        var possibleLetters = fixture[1];
+        var length = fixture[2];
+        var totalInfoNoErrorCorrection = fixture[3];
+        var totalInfoErrorCorrection = fixture[4];
+        var infoContentNoErrorCorrection = fixture[5];
+        var infoContentErrorCorrection = fixture[6];
+
+        // Test A: no small sample error correction
+        var x = new InfoContentDistribution(charCountDistribution, possibleLetters, false);
+        assertEquals(possibleLetters, x.possibleLetters());
+        assertFalse(x.smallSampleErrorCorrection());
+        assertEquals(length, x.length());
+        assertTrue(math.nearlyEquals(InfoContentDistribution.log2(possibleLetters), x.maxInfo()));
+        assertTrue(Math.abs(x.totalInfo() - totalInfoNoErrorCorrection) < .00001);
+        assertTrue(isEqual(infoContentNoErrorCorrection, x.infoContent(), .00001));
+
+        // Test B: small sample error correction
+        x = new InfoContentDistribution(charCountDistribution, possibleLetters, true);
+        assertEquals(possibleLetters, x.possibleLetters());
+        assertTrue(x.smallSampleErrorCorrection());
+        assertEquals(length, x.length());
+        assertTrue(math.nearlyEquals(InfoContentDistribution.log2(possibleLetters), x.maxInfo()));
+        assertTrue(Math.abs(x.totalInfo() - totalInfoErrorCorrection) < .00001);
+        assertTrue(isEqual(infoContentErrorCorrection, x.infoContent(), .00001));
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_setSmallSampleErrorCorrection() {
+    var dist = new CharCountDistribution();
+    var x = new InfoContentDistribution(dist, 4, true);
+    var spyDataChanged = new SignalSpy(x, InfoContentDistribution.SignalType.DATA_CHANGED);
+    x.setSmallSampleErrorCorrectionEnabled();
+    x.setSmallSampleErrorCorrectionEnabled(false);
+    assertEquals(0, spyDataChanged.size());
+
+    // Test: complex distribution - no small sample error correction
+    dist = MockCharCountDistribution.distribution2();
+    x = new InfoContentDistribution(dist, 4, false);
+    spyDataChanged = new SignalSpy(x, InfoContentDistribution.SignalType.DATA_CHANGED);
+    x.setSmallSampleErrorCorrectionEnabled(false);
+    assertEquals(0, spyDataChanged.size());
+    x.setSmallSampleErrorCorrectionEnabled();
+    assertEquals(1, spyDataChanged.size());
+    assertEquals(1, spyDataChanged.signals()[0][0].begin);
+    assertEquals(dist.length(), spyDataChanged.signals()[0][0].end);
+
+    x = new InfoContentDistribution(dist, 4, true);
+    spyDataChanged = new SignalSpy(x, InfoContentDistribution.SignalType.DATA_CHANGED);
+    x.setSmallSampleErrorCorrectionEnabled();
+    assertEquals(0, spyDataChanged.size());
+    x.setSmallSampleErrorCorrectionEnabled(false);
+    assertEquals(1, spyDataChanged.size());
+    assertEquals(1, spyDataChanged.signals()[0][0].begin);
+    assertEquals(dist.length(), spyDataChanged.signals()[0][0].end);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_dataChangedSignal() {
+    var dist = MockCharCountDistribution.distribution2();
+    var x = new InfoContentDistribution(dist, 4, true);
+    var spyDataChanged = new SignalSpy(x, InfoContentDistribution.SignalType.DATA_CHANGED);
+
+    var addition = new CharCountDistribution([{A: 1}, {C: 1}, {T: 1}]);
+    dist.add(addition, 2);
+    assertEquals(1, spyDataChanged.size());
+    assertEquals(2, spyDataChanged.signals()[0][0].begin);
+    assertEquals(4, spyDataChanged.signals()[0][0].end);
+
+    var y = new InfoContentDistribution(dist, 4);
+    assertTrue(isEqual(y.infoContent(), x.infoContent(), .0001));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_columnsRemovedSignal() {
+    var dist = MockCharCountDistribution.distribution2();
+    var x = new InfoContentDistribution(dist, 4, true);
+    var spyColumnsRemoved = new SignalSpy(x, InfoContentDistribution.SignalType.COLUMNS_REMOVED);
+
+    dist.remove(5, 2);
+    assertEquals(1, spyColumnsRemoved.size());
+    assertEquals(5, spyColumnsRemoved.signals()[0][0].begin);
+    assertEquals(6, spyColumnsRemoved.signals()[0][0].end);
+
+    var y = new InfoContentDistribution(dist, 4);
+    assertTrue(isEqual(y.infoContent(), x.infoContent(), .0001));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_columnsInsertedSignal() {
+    var dist = MockCharCountDistribution.distribution2();
+    var x = new InfoContentDistribution(dist, 4, true);
+    var spyColumnsInserted = new SignalSpy(x, InfoContentDistribution.SignalType.COLUMNS_INSERTED);
+
+    dist.insert(3, 3);
+    assertEquals(1, spyColumnsInserted.size());
+    assertEquals(3, spyColumnsInserted.signals()[0][0].begin);
+    assertEquals(5, spyColumnsInserted.signals()[0][0].end);
+
+    var y = new InfoContentDistribution(dist, 4);
+    assertTrue(isEqual(y.infoContent(), x.infoContent(), .0001));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_totalColumnInfo() {
+    var x = new InfoContentDistribution(MockCharCountDistribution.distribution1(), 4, false);
+    assertTrue(math.nearlyEquals(0.429049406, x.totalColumnInfo(1)));
+    assertTrue(math.nearlyEquals(2, x.totalColumnInfo(2)));
+    assertTrue(math.nearlyEquals(.700684314, x.totalColumnInfo(3)));
+
+    x = new InfoContentDistribution(MockCharCountDistribution.distribution1(), 4, true);
+    assertTrue(math.nearlyEquals(0.21264515, x.totalColumnInfo(1)));
+    assertTrue(math.nearlyEquals(1.783595744, x.totalColumnInfo(2)));
+    assertTrue(math.nearlyEquals(0.484280058, x.totalColumnInfo(3)));
+};
+
+
+</script>
+</body>
+</html>

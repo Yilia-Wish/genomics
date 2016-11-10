@@ -1,0 +1,233 @@
+<!doctype html>
+<html>
+<head>
+    <title>AG JS Library Unit Tests - ag.bio.LiveSymbolString</title>
+    <meta charset='utf-8'>
+</head>
+
+<script src='../goog/base.js'></script>
+<script src='../deps.js'></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('goog.math');
+goog.require('ag.bio.BioSymbol');
+goog.require('ag.bio.BioSymbolGroup');
+goog.require('ag.bio.ObservableMsa');
+goog.require('ag.bio.MsaCharCountDistribution');
+goog.require('ag.bio.Subseq');
+goog.require('ag.service.LiveSymbolString');
+goog.require('ag.service.SymbolStringCalculator');
+goog.require('ag.core.CharCountDistribution');
+goog.require('ag.core.ClosedIntRange');
+goog.require('ag.core.UnitRect');
+goog.require('ag.meta.SignalSpy');
+</script>
+<body>
+<script>
+// Aliases
+var math = goog.math;
+
+var BioSymbol = ag.bio.BioSymbol;
+var BioSymbolGroup = ag.bio.BioSymbolGroup;
+var CharCountDistribution = ag.core.CharCountDistribution;
+var ClosedIntRange = ag.core.ClosedIntRange;
+var LiveSymbolString = ag.service.LiveSymbolString;
+var MsaCharCountDistribution = ag.bio.MsaCharCountDistribution;
+var ObservableMsa = ag.bio.ObservableMsa;
+var SymbolStringCalculator = ag.service.SymbolStringCalculator;
+var Subseq = ag.bio.Subseq;
+var UnitRect = ag.core.UnitRect;
+var SignalSpy = ag.meta.SignalSpy;
+
+var Signals = LiveSymbolString.SignalType;
+
+function createMsa(subseqs) {
+    var msa = new ObservableMsa();
+    for (var i=0; i<subseqs.length; i++)
+        assertTrue(msa.append(new Subseq(subseqs[i])));
+    return msa;
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_constructor() {
+    var bioSymbolGroup = new BioSymbolGroup();
+    bioSymbolGroup.add(new BioSymbol('%', "ACGTN", .5))
+        .add(new BioSymbol('p', "GP", .25));
+
+    var calculator = new SymbolStringCalculator(bioSymbolGroup, '_');
+    var liveDist = new MsaCharCountDistribution();
+    var x = new LiveSymbolString(liveDist, calculator);
+    assertEquals('', x.symbolString());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_symbolString() {
+    var strings = [
+        '--AB--C-DEF',
+        '---B-XC-DE-'
+    ];
+
+    var msa = createMsa(strings);
+    var dist = new MsaCharCountDistribution(msa);
+    var group = new BioSymbolGroup();
+    group.add(new BioSymbol('a', "A", .5))
+        .add(new BioSymbol('b', "B", .5));
+    var calc = new SymbolStringCalculator(group, '_');
+    var x = new LiveSymbolString(dist, calc);
+    var expect = calc.computeSymbolString(dist.divide(2));
+    assertEquals(expect, x.symbolString());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_columnsInserted() {
+    var msa = createMsa([]);
+    var dist = new MsaCharCountDistribution(msa);
+    var group = new BioSymbolGroup();
+    group.add(new BioSymbol('a', "A", .5))
+        .add(new BioSymbol('b', "B", .5));
+    var calc = new SymbolStringCalculator(group, '_');
+    var x = new LiveSymbolString(dist, calc);
+
+    var subseq = new Subseq('ABCD');
+
+    var spySymbolsInserted = new SignalSpy(x, Signals.SYMBOLS_INSERTED);
+
+    // ------------------------------------------------------------------------
+    // Test: should insert columns and update symbol string
+    assertTrue(msa.append(subseq));
+    assertEquals('ab__', x.symbolString());
+    assertEquals(1, spySymbolsInserted.size());
+    assertTrue(new ClosedIntRange(1, 4).eq(spySymbolsInserted.signals()[0][0]));
+    spySymbolsInserted.clear();
+
+    // ------------------------------------------------------------------------
+    // Test: insert gap columns at the end should update the symbol string column count
+    msa.insertGapColumns(5, 2);
+    assertEquals('ab____', x.symbolString());
+    assertEquals(1, spySymbolsInserted.size());
+    assertTrue(new ClosedIntRange(5, 6).eq(spySymbolsInserted.signals()[0][0]));
+    spySymbolsInserted.clear();
+
+    // ------------------------------------------------------------------------
+    // Test: insert gap columns at the beginning should update the symbol string column count
+    msa.insertGapColumns(1, 1);
+    assertEquals('_ab____', x.symbolString());
+    assertEquals(1, spySymbolsInserted.size());
+    assertTrue(new ClosedIntRange(1, 1).eq(spySymbolsInserted.signals()[0][0]));
+    spySymbolsInserted.clear();
+
+    // ------------------------------------------------------------------------
+    // Test: insert gap columns in the msa should update the symbol string column count
+    msa.insertGapColumns(3, 3);
+    assertEquals('_a___b____', x.symbolString());
+    assertEquals(1, spySymbolsInserted.size());
+    assertTrue(new ClosedIntRange(3, 5).eq(spySymbolsInserted.signals()[0][0]));
+
+    // ------------------------------------------------------------------------
+    // Test: insert one before the last
+    msa.clear();
+    subseq = new Subseq('ABCD');
+    msa.append(subseq);
+    spySymbolsInserted.clear();
+    msa.insertGapColumns(4, 2);
+    assertEquals('ab____', x.symbolString());
+    assertEquals(1, spySymbolsInserted.size());
+    assertTrue(new ClosedIntRange(4, 5).eq(spySymbolsInserted.signals()[0][0]));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_columnsRemoved() {
+    var strings = [
+        '-AAB--C--DEF',
+        '--AB-XC--D--',
+        '---B-XC--DE-'
+    ];
+
+    var msa = createMsa(strings);
+    var dist = new MsaCharCountDistribution(msa);
+    var group = new BioSymbolGroup();
+    group.add(new BioSymbol('a', "A", .5))
+        .add(new BioSymbol('b', "B", .5));
+    var calc = new SymbolStringCalculator(group, '_');
+    var x = new LiveSymbolString(dist, calc);
+
+    assertEquals('__ab________', x.symbolString());
+
+    var spySymbolsRemoved = new SignalSpy(x, Signals.SYMBOLS_REMOVED);
+
+    // ------------------------------------------------------------------------
+    // Test: remove gap columns should update symbol string
+    msa.removeGapColumns();
+    assertEquals('_ab_____', x.symbolString());
+    assertEquals(3, spySymbolsRemoved.size());
+    assertTrue(new ClosedIntRange(8, 9).eq(spySymbolsRemoved.signals()[0][0]));
+    assertTrue(new ClosedIntRange(5, 5).eq(spySymbolsRemoved.signals()[1][0]));
+    assertTrue(new ClosedIntRange(1, 1).eq(spySymbolsRemoved.signals()[2][0]));
+    spySymbolsRemoved.clear();
+
+    // ------------------------------------------------------------------------
+    // Test: remove all subseqs, should call symbolsRemoved
+    msa.clear();
+    assertEquals('', x.symbolString());
+    assertEquals(1, spySymbolsRemoved.size());
+    assertTrue(new ClosedIntRange(1, 8).eq(spySymbolsRemoved.signals()[0][0]));
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+function test_dataChanged() {
+    var strings = [
+        '-AAB--',
+        '--AB-X',
+        '---A-X'
+    ];
+
+    var msa = createMsa(strings);
+    var dist = new MsaCharCountDistribution(msa);
+    var group = new BioSymbolGroup();
+    group.add(new BioSymbol('a', "A", .5))
+        .add(new BioSymbol('b', "B", .5));
+    var calc = new SymbolStringCalculator(group, '_');
+    var x = new LiveSymbolString(dist, calc);
+    assertEquals('__ab__', x.symbolString());
+
+    var spyDataChanged = new SignalSpy(x, Signals.DATA_CHANGED);
+    // ------------------------------------------------------------------------
+    // Test: slide a region and it should update the symbol string appropriately
+    //
+    //  -AAB--       -AAB--
+    //  --AB-X  -->  -AB--X
+    //  ---A-X       --A--X
+    msa.slideRect(new UnitRect(3, 2, 2, 2), -1);
+    assertEquals('_aa___', x.symbolString());
+    assertEquals(1, spyDataChanged.size());
+    assertTrue(new ClosedIntRange(2, 4).eq(spyDataChanged.signals()[0][0]));
+    spyDataChanged.clear();
+
+    // ------------------------------------------------------------------------
+    // Test: slide a region and it should update the symbol string appropriately
+    //
+    //  -AAB--       -AAB--
+    //  -AB--X  -->  -A-B-X
+    //  --A--X       ---A-X
+    msa.slideRect(new UnitRect(3, 2, 1, 2), 1);
+    assertEquals('_a_b__', x.symbolString());
+    assertEquals(1, spyDataChanged.size());
+    assertTrue(new ClosedIntRange(3, 4).eq(spyDataChanged.signals()[0][0]));
+    spyDataChanged.clear();
+
+    // ------------------------------------------------------------------------
+    // Test: slide a region and it should update the symbol string appropriately
+    //
+    //  -AAB--       ---AAB
+    //  -A-B-X  -->  -A-B-X
+    //  ---A-X       ---A-X
+    msa.slideRect(new UnitRect(2, 1, 3, 1), 2);
+    assertEquals('___a__', x.symbolString());
+    assertEquals(1, spyDataChanged.size());
+    assertTrue(new ClosedIntRange(2, 6).eq(spyDataChanged.signals()[0][0]));
+    spyDataChanged.clear();
+};
+
+</script>
+</body>
+</html>

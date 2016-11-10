@@ -1,0 +1,135 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.model.AbstractProxyModel</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.model.MockItemModel');
+goog.require('ag.model.MockProxyModel');
+</script>
+<body>
+<script>
+// Aliases
+var AbstractItemModel = ag.model.AbstractItemModel;
+var MockItemModel = ag.model.MockItemModel;
+var MockProxyModel = ag.model.MockProxyModel;
+var ModelIndex = ag.model.ModelIndex;
+
+var Columns = MockItemModel.Columns;
+var DataRole = AbstractItemModel.DataRole;
+
+var sourceModel;
+var x;
+
+// --------------------------------------------------------------------------------------------------------------------
+function setUp() {
+	sourceModel = new MockItemModel();
+	x = new MockProxyModel();
+};
+
+function tearDown() {
+	x.dispose();
+	x = null;
+	sourceModel.dispose();
+	sourceModel = null;
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: data
+function test_data() {
+	x.setSourceModel(sourceModel);
+
+	var y = new ModelIndex();
+	assertNull(x.data(y));
+	assertNull(x.data(y, DataRole.kDisplay));
+	assertNull(x.data(y, DataRole.kEdit));
+
+	var mockData = MockItemModel.mockData().reverse();
+	var columnNames = ['id', 'name', 'age'];
+	for (var i=0; i< mockData.length; i++) {
+		for (var j=0; j<columnNames.length; j++) {
+			var expect = mockData[i][columnNames[j]];
+
+			var index = x.index(i, j);
+			assertTrue(index.isValid());
+
+			assertEquals(x.data(index), expect);
+			assertEquals(x.data(index, DataRole.kDisplay), expect);
+			assertEquals(x.data(index, DataRole.kEdit), 'edit-' + expect);
+		}
+	}
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: headerData
+function test_headerData() {
+	for (var i=-2; i< MockItemModel.mockDataColumnCount + 3; i++)
+		assertNull(x.headerData(i));
+
+	x.setSourceModel(sourceModel);
+
+	assertEquals(x.headerData(Columns.ID), 'ID');
+	assertEquals(x.headerData(Columns.NAME), 'Name');
+	assertEquals(x.headerData(Columns.AGE), 'Age');
+	assertNull(x.headerData(-1));
+	assertNull(x.headerData(4));
+	x.setSourceModel(null);
+	for (var i=-2; i< MockItemModel.mockDataColumnCount + 3; i++)
+		assertNull(x.headerData(i));	
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: setData
+function test_setData() {
+	assertFalse(x.setData(new ModelIndex(), 'blargh', DataRole.kEdit));
+
+	x.setSourceModel(sourceModel);
+
+	var mockData = MockItemModel.mockData();
+	var columnNames = ['id', 'name', 'age'];
+	for (var i=0; i< x.rowCount(); i++) {
+		for (var j=0; j<x.columnCount(); j++) {
+			var index = x.index(i, j);
+			assertTrue(index.isValid());
+
+			var oldData = x.data(index);
+			var newData = mockData[i][columnNames[j]];
+			assertFalse(oldData === newData);
+
+			assertFalse(x.setData(index, newData, DataRole.kDisplay));
+			assertTrue(x.setData(index, newData));
+			assertEquals(x.data(index), newData);
+			assertTrue(x.setData(index, oldData, DataRole.kEdit));
+			assertEquals(x.data(index), oldData);
+		}
+	}
+
+	// Make sure the data is back to what it was
+	test_data();
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: sourceModel
+function test_sourceModel() {
+	assertNull(x.sourceModel());
+	assertEquals(x.sourceModelChanges().length, 0);
+
+	x.setSourceModel(sourceModel);
+	assertEquals(x.sourceModel(), sourceModel);
+
+	x.setSourceModel(null);
+	assertNull(x.sourceModel());
+
+	assertEquals(x.sourceModelChanges().length, 2);
+	assertArrayEquals(x.sourceModelChanges()[0], [sourceModel, null]);
+	assertArrayEquals(x.sourceModelChanges()[1], [null, sourceModel]);
+};
+
+</script>
+</body>
+</html>

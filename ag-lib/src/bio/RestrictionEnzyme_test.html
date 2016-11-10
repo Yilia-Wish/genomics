@@ -1,0 +1,126 @@
+<!doctype html>
+<html>
+<head>
+	<title>AG JS Library Unit Tests - ag.bio.RestrictionEnzyme</title>
+	<meta charset="utf-8">
+</head>
+
+<script src="../goog/base.js"></script>
+<script src="../deps.js"></script>
+<script>
+goog.require('goog.testing.jsunit');
+goog.require('ag.bio.grammar');
+goog.require('ag.bio.BioString');
+goog.require('ag.bio.RestrictionEnzyme');
+</script>
+<body>
+<script>
+// Aliases
+var grammar = ag.bio.grammar;
+
+var BioString = ag.bio.BioString;
+var RestrictionEnzyme = ag.bio.RestrictionEnzyme;
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: constructor
+function test_constructor() {
+	var x = new RestrictionEnzyme();
+
+    assertTrue(x.isEmpty());
+    assertTrue(x.recognitionSite.isEmpty());
+    assertEquals(x.recognitionSite.grammar(), grammar.DNA);
+    assertTrue(x.forwardCuts.length === 0);
+    assertTrue(x.reverseCuts.length === 0);
+    assertEquals(x.isBlunt(), false);
+    assertEquals(x.isSticky(), false);
+    assertEquals(x.name, '');
+    assertEquals(x.numCuts(), 0);
+
+    var bs = new BioString('ACGT', grammar.DNA);
+    var x2 = new RestrictionEnzyme('Bam', bs);
+    assertEquals(x2.recognitionSite, bs);
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: fromToSerialObject
+function test_fromToSerialObject() {
+    var cases = [
+        new RestrictionEnzyme(),
+        new RestrictionEnzyme('BamHI'),
+        new RestrictionEnzyme('BamHI', new BioString('TATA', grammar.DNA)),
+        new RestrictionEnzyme(null, 'TATA', [3, 4], [-8, 10])
+    ];
+
+    for (var i=0; i<cases.length; i++) {
+        var to = cases[i].toSerialObject();
+        var from = RestrictionEnzyme.fromSerialObject(to);
+        assertTrue(cases[i].eq(from));
+    }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: cutsOnlyOneStrand
+function test_cutsOnlyOneStrand() {
+	var re = new RestrictionEnzyme('', 'TTATTA', [3], []);
+    assertTrue(re.cutsOnlyOneStrand());
+
+    var re2 = new RestrictionEnzyme('', 'TTATTA', [3, 1], [-5]);
+    assertTrue(!re2.cutsOnlyOneStrand());	
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: isBlunt
+function test_isBlunt() {
+    // Test: only forward cuts
+    var re = new RestrictionEnzyme('AatI', 'TTATTA', [3, 1, 1], []);
+    assertFalse(re.isBlunt());
+
+    // Test: only reverse cuts
+    var re2 = new RestrictionEnzyme('AatI', 'TTATTA', [], [3, 2, 1]);
+    assertFalse(re2.isBlunt());
+
+    // Test; forward and reverse cuts but not in same position
+    var re3 = new RestrictionEnzyme('AatI', 'TTATTA', [5], [3, 2, 1]);
+    assertFalse(re3.isBlunt());
+
+    // Test: exactly same cuts on both strands
+    var re4 = new RestrictionEnzyme('AatI', 'TTATTA', [-2, 4], [-2, 4]);
+    assertTrue(re4.isBlunt());
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: isSticky
+function test_isSticky() {
+    // Test: only forward cuts
+    var re = new RestrictionEnzyme('AatI', 'TTATTA', [3, 1, 1], []);
+    assertFalse(re.isSticky());
+
+    // Test: only reverse cuts
+    var re2 = new RestrictionEnzyme('AatI', 'TTATTA', [], [3, 2, 1]);
+    assertFalse(re2.isSticky());
+
+    // Test; forward and reverse cuts but not in same position
+    var re3 = new RestrictionEnzyme('AatI', 'TTATTA', [5], [3, 2, 1]);
+    assertTrue(re3.isSticky());
+
+    // Test: exactly same cuts on both strands
+    var re4 = new RestrictionEnzyme('AatI', 'TTATTA', [-2, 4], [-2, 4]);
+    assertFalse(re4.isSticky());	
+};
+
+// --------------------------------------------------------------------------------------------------------------------
+// Method: numCuts
+function test_numCuts() {
+    var re = new RestrictionEnzyme('AatI', 'TTATTA', [3, 1], []);
+    assertEquals(re.numCuts(), 2);
+
+    var re2 = new RestrictionEnzyme('AatI', 'TTATTA', [3], [6]);
+    assertEquals(re2.numCuts(), 2);
+
+    var re3 = new RestrictionEnzyme('AatI', 'TTATTA', [3, -1, -1], [6]);
+    assertEquals(re3.numCuts(), 4);
+};
+
+</script>
+</body>
+</html>
