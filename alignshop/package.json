@@ -1,0 +1,13 @@
+{
+  "name": "alignshop",
+  "version": "1.0.0",
+  "description": "High performance multiple sequence alignment editor in pure JavaScript",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lukeulrich/genomics"
+  },
+  "author": "Luke Ulrich",
+  "dependencies": {
+    "bootstrap-sass": "^3.3.7"
+  }
+}

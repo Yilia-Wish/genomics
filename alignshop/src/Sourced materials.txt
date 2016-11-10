@@ -1,0 +1,10 @@
+o Closure Library
+o Qt documentation
+o http://dailyexhaust.com/2008/09/hand-arrow-icons.html: default cursor (July 2013)
+o Grabbing cursor:  (31 Jul 2013)
+  http://www.jaycodesign.co.nz/css/cross-browser-css-grab-cursors-for-dragging/
+  http://www.jaycodesign.co.nz/wp-content/uploads/2011/01/cursor-grab.png
+o .cur open / closed cursors: (31 July 2013)
+
+  http://www.google.com/intl/en_ALL/mapfiles/openhand.cur
+  http://www.google.com/intl/en_ALL/mapfiles/closedhand.cur

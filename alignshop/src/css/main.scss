@@ -1,0 +1,178 @@
+/* http://paulirish.com/2012/box-sizing-border-box-ftw/
+   http://css-tricks.com/box-sizing/
+*/
+* {
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
+  box-sizing: border-box;
+}
+
+@import 'bootstrap/bootstrap';
+@import 'goog/common';
+@import 'goog/menu';
+@import 'goog/menubar';
+@import 'goog/menubutton';
+@import 'goog/menuitem';
+@import 'goog/menuseparator';
+@import 'goog/submenu';
+@import 'goog/toolbar';
+
+@import 'ag/menu';
+@import 'ag/menuseparator';
+@import 'ag/menuitem';
+@import 'ag/submenu';
+
+// --------------------------------------------------------------------------------------------------------------------
+header {
+    height: 40px;
+    background-color: #3d3d3d;
+    color: #ddd;
+
+    a.brand {
+        color: #ddd;
+        font-size: 20px;
+        text-decoration: none;
+        display: inline-block;
+        margin-top: 9px;
+        padding: 0 20px 0 10px;
+    }
+    a.brand:hover {
+        color: #fff;
+    }
+
+    .dropdown {
+        line-height: 40px;
+        margin-right: 1em;
+    }
+}
+
+#menubar {
+    display: inline-block;
+
+    .goog-menubar, .goog-menu-button {
+        background: transparent;
+    }
+    .goog-menu-button {
+        border: 1px solid transparent;
+    }
+    .goog-menu-button-caption {
+        color: #ddd;
+    }
+    .goog-menu-button-hover {
+        background: #616161;
+        .goog-menu-button-caption {
+            color: #fff;
+        }
+    }
+
+    .goog-menubar .goog-menu-button-open {
+        background: #fff;
+        border: 1px solid rgba(0,0,0,.2);
+        border-bottom-color: #fff;
+        // Place it above the menu (z-index = 20000)
+        z-index: 20001;
+        .goog-menu-button-caption {
+            color: #000;
+        }
+    }
+}
+
+
+#toolbar {
+    .goog-toolbar-button {
+        margin: 0 5px;
+    }
+    .goog-toolbar-separator {
+        font-size: 200%;
+        margin: 0 5px;
+    }
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+// General classes
+.hidden {
+    display: none;
+}
+
+[data-cursor="ew-resize"] {
+    cursor: ew-resize;
+}
+[data-cursor="col-resize"] {
+    cursor: col-resize;
+}
+[data-cursor="closed-hand"] {
+    cursor: url(../img/cursor-closedhand.cur);
+    cursor: url(../img/cursor-closedhand.png) 0 0, auto;
+}
+[data-cursor="open-hand"] {
+    cursor: url(../img/cursor-openhand.cur);
+    cursor: url(../img/cursor-openhand.png) 0 0, auto;
+}
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// Boostrap overrides
+.navbar .nav > li > a {
+    padding: 5px 10px 5px;
+}
+
+.no-radius {
+    border-radius: 0;
+    -webkit-border-radius: 0;
+    -moz-border-radius: 0;
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+.navbar .divider {
+    width: 2px;
+    height: 20px;
+    margin: 5px 9px;
+    overflow: hidden;
+    background-color: #e5e5e5;
+    border-right: 1px solid #fff;
+}
+
+.navbar img {
+    width: 22px;
+    height: 22px;
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+body {
+    overflow: hidden;
+}
+
+#editor {
+    position: relative;
+    // The following keeps scrollbars from appearing and thus causing the viewport to resize twice:
+    // 1) When the window is actually resized
+    // 2) When the scrollbar is removed with the final width
+    //
+    // What is happening is this:
+    // o User resizes window, which triggers a resize
+    // o If the window is smaller, then scrollbars appear, which in turn triggers another resize
+    //
+    // We only want the first resize to happen and removing the scrollbars solves this problem.
+    overflow: hidden;
+
+    :focus {
+        outline: none;
+    }
+}
+#label-view {
+    overflow: hidden;
+}
+#msa-view {
+    font: 14px monospace;
+}
+
+.goog-splitpane-handle {
+    border-left: 1px dotted gray;
+    border-right: 1px dotted gray;
+    position: absolute;
+    background: #eee;
+}
+
+.goog-splitpane-handle-horizontal {
+    cursor: ew-resize;
+}

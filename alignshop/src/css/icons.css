@@ -1,0 +1,51 @@
+/* line 98, icons/*.png */
+.icons-sprite, .icons-action-insert-column-16, .icons-action-remove-column-16, .icons-cursor-arrow-16, .icons-cursor-openhand-16, .icons-document-open-16, .icons-edit-redo-16, .icons-edit-undo-16, .icons-ruler-16 {
+  background: url('/alignshop/img/icons-s91d67103fe.png') no-repeat;
+}
+
+/* line 60, ../../../../../.gem/ruby/1.9.1/gems/compass-0.12.2/frameworks/compass/stylesheets/compass/utilities/sprites/_base.scss */
+.icons-action-insert-column-16 {
+  background-position: 0 -48px;
+}
+
+/* line 60, ../../../../../.gem/ruby/1.9.1/gems/compass-0.12.2/frameworks/compass/stylesheets/compass/utilities/sprites/_base.scss */
+.icons-action-remove-column-16 {
+  background-position: 0 -64px;
+}
+
+/* line 60, ../../../../../.gem/ruby/1.9.1/gems/compass-0.12.2/frameworks/compass/stylesheets/compass/utilities/sprites/_base.scss */
+.icons-cursor-arrow-16 {
+  background-position: 0 -96px;
+}
+
+/* line 60, ../../../../../.gem/ruby/1.9.1/gems/compass-0.12.2/frameworks/compass/stylesheets/compass/utilities/sprites/_base.scss */
+.icons-cursor-openhand-16 {
+  background-position: 0 -112px;
+}
+
+/* line 60, ../../../../../.gem/ruby/1.9.1/gems/compass-0.12.2/frameworks/compass/stylesheets/compass/utilities/sprites/_base.scss */
+.icons-document-open-16 {
+  background-position: 0 -32px;
+}
+
+/* line 60, ../../../../../.gem/ruby/1.9.1/gems/compass-0.12.2/frameworks/compass/stylesheets/compass/utilities/sprites/_base.scss */
+.icons-edit-redo-16 {
+  background-position: 0 -16px;
+}
+
+/* line 60, ../../../../../.gem/ruby/1.9.1/gems/compass-0.12.2/frameworks/compass/stylesheets/compass/utilities/sprites/_base.scss */
+.icons-edit-undo-16 {
+  background-position: 0 0;
+}
+
+/* line 60, ../../../../../.gem/ruby/1.9.1/gems/compass-0.12.2/frameworks/compass/stylesheets/compass/utilities/sprites/_base.scss */
+.icons-ruler-16 {
+  background-position: 0 -80px;
+}
+
+/* line 4, icons.scss */
+.icon {
+  height: 16px;
+  width: 16px;
+  vertical-align: middle;
+}

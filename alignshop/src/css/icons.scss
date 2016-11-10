@@ -1,0 +1,8 @@
+@import "icons/*.png";
+@include all-icons-sprites;
+
+.icon {
+    height: 16px;
+    width: 16px;
+    vertical-align: middle;
+}

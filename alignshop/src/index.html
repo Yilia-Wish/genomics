@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en"> <!--<![endif]-->
+<head>
+    <title>AlignShop</title>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Language" content="en">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="description" content="Powerful, online, multiple sequence alignment editor">
+    <meta name="author" content="Luke Ulrich">
+    <meta name="viewport" content="width=device-width">
+
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/icons.css">
+</head>
+<body>
+    <header>
+        <div id="samples" class="dropdown pull-right">
+            <button class="btn btn-danger dropdown-toggle" data-toggle="dropdown">Sample alignments <span class="caret"></span></button>
+            <ul class="dropdown-menu" role="menu" area-labelledby="dropdownMenu">
+                <li><a tabindex="-1" href="samples/PAS_Aer.aln">PAS Aer</a></li>
+                <li><a tabindex="-1" href="samples/PAS_Cof.aln">PAS Cof</a></li>
+            </ul>
+        </div>
+        <a class="brand" href="#"><img src="img/logo24.png" alt="AlignShop Logo"> AlignShop</a>
+        <div id="menubar"></div>
+    </header>
+
+    <noscript>
+        <div class="alert alert-error">
+            <button type="button" class="close" data-dismiss="alert">&times;</button>
+            <h4>JavaScript Required!</h4>
+            <p>AlignShop heavily uses JavaScript and will not function properly without enabling it in your browser. Please <a target="blank" href="http://enable-javascript.com/">enable JavaScript</a> and reload to continue.</p>
+        </div>
+    </noscript>
+
+    <!--[if lt IE 10]>
+    <div class="alert alert-error chromeframe">
+        <p>Internet Explorer version 9 or less is <strong>incompatible</strong> with this web application.<br>
+        Please <a href="http://browsehappy.com/">upgrade your browser</a> or <a href="http://www.google.com/chromeframe/?redirect=true">activate Google Chrome Frame</a> to improve your experience.</p>
+    </div>
+    <![endif]-->
+
+    <div id="toolbar"></div>
+
+    <section id="filedrop">
+    </section>
+
+    <section id="editor" class="hidden">
+        <div class="goog-splitpane-first-container"><div id="label-view"></div></div>
+        <div class="goog-splitpane-second-container"><div id="msa-view"></div></div>
+        <div class="goog-splitpane-handle"></div>
+    </section>
+
+    <form action="reflect.php" method="POST">
+        <input type="hidden" name="name">
+        <input type="hidden" name="content">
+    </form>
+
+<script src="js/main.js"></script>
+<script>
+var y = new AlignShop();
+y.run();
+</script>
+
+</body>
+</html>
